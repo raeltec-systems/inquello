@@ -1,0 +1,45 @@
+// Temporary test-owned timing only. No arguments, response bodies or credentials.
+import fs from 'node:fs';
+import path from 'node:path';
+import { createRequire } from 'node:module';
+let sequence = 0;
+export function instrument<T extends object>(target: T, names: string[], label: string): T {
+  for (const name of names) {
+    const original = (target as any)[name];
+    if (typeof original !== 'function') continue;
+    (target as any)[name] = function (...args: unknown[]) {
+      const id = ++sequence, started = performance.now();
+      const detail = name === 'request' ? String(args[0]) : name === 'runTool' ? String((args[1] as string[])?.[0]) : '';
+      console.log('POLICY_PHASE', JSON.stringify({id,label,name,detail,event:'start',at:Date.now()}));
+      const end = (value: any, rejected: boolean) => console.log('POLICY_PHASE',JSON.stringify({
+        id,label,name,detail,event:'end',at:Date.now(),ms:Math.round(performance.now()-started),
+        rejected,ok:typeof value?.ok==='boolean'?value.ok:undefined,code:typeof value?.code==='string'?value.code:undefined,
+      }));
+      try {
+        const result = original.apply(target,args);
+        if(result && typeof result.then === 'function') result.then((v: unknown)=>end(v,false),()=>end(undefined,true));
+        else end(result,false);
+        return result;
+      } catch(error) { end(undefined,true);throw error; }
+    };
+  }
+  return target;
+}
+export function retainNativeTimings(home: string, label: string): void {
+  const file=path.join(home,'logs_2.sqlite');
+  if(!fs.existsSync(file))return;
+  const {DatabaseSync}=createRequire(import.meta.url)('node:sqlite');
+  const db=new DatabaseSync(file,{readOnly:true});
+  try {
+    const rows=db.prepare("SELECT ts,ts_nanos,level,target,feedback_log_body FROM logs WHERE target LIKE 'codex_app_server%' ORDER BY ts,ts_nanos").all();
+    const events=rows.flatMap((row: any)=>{
+      const request=/app-server request: ([A-Za-z0-9_/-]+).*request_id=(Integer\(\d+\))/.exec(row.feedback_log_body);
+      const response=/<- response: ([A-Za-z0-9_]+)/.exec(row.feedback_log_body);
+      if(!request&&!response&&row.level!=='WARN'&&row.level!=='ERROR')return [];
+      return [{ts:row.ts,ns:row.ts_nanos,level:row.level,target:row.target,request:request?.[1],requestId:request?.[2],response:response?.[1]}];
+    });
+    const out=path.resolve('..','_bmad-output','implementation-artifacts','verification-2026-11-05',label+'-native-events.json');
+    fs.writeFileSync(out,JSON.stringify(events,null,2),{flag:'wx'});
+    console.log('POLICY_NATIVE_TIMINGS',JSON.stringify({out,count:events.length}));
+  } finally {db.close();}
+}

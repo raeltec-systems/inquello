@@ -1,0 +1,258 @@
+{
+  "today": "2026-11-05",
+  "claims": [
+    {
+      "id": 1001,
+      "claim": "GIAS distinguishes mandatory Requirements, nonmandatory implementation considerations and nonexclusive evidence examples.",
+      "class": "professional-standard",
+      "pub_date": "2024-01-09",
+      "status": "verified",
+      "last_verified": "2026-11-05",
+      "recheck": "2024-01-09",
+      "stale": true
+    },
+    {
+      "id": 1002,
+      "claim": "The audit plan is based on documented at-least-annual organisational risk assessment, remains dynamic, and its significant changes require board approval.",
+      "class": "professional-standard",
+      "pub_date": "2024-01-09",
+      "status": "verified",
+      "last_verified": "2026-11-05",
+      "recheck": "2024-01-09",
+      "stale": true
+    },
+    {
+      "id": 1003,
+      "claim": "Coordination and consideration of reliance are required; actual reliance is conditional and documented.",
+      "class": "professional-standard",
+      "pub_date": "2024-01-09",
+      "status": "verified",
+      "last_verified": "2026-11-05",
+      "recheck": "2024-01-09",
+      "stale": true
+    },
+    {
+      "id": 1004,
+      "claim": "CAE establishes and updates methodologies; their form can vary and no particular software is mandated.",
+      "class": "professional-standard",
+      "pub_date": "2024-01-09",
+      "status": "verified",
+      "last_verified": "2026-11-05",
+      "recheck": "2024-01-09",
+      "stale": true
+    },
+    {
+      "id": 1005,
+      "claim": "Engagement work can overlap and iterate; appropriate supervision/responsibilities may be delegated with CAE accountability retained.",
+      "class": "professional-standard",
+      "pub_date": "2024-01-09",
+      "status": "verified",
+      "last_verified": "2026-11-05",
+      "recheck": "2024-01-09",
+      "stale": true
+    },
+    {
+      "id": 1006,
+      "claim": "Specific advisory exceptions qualify formal risk assessment, criteria and evidence-for-findings obligations, without blanket exemption.",
+      "class": "professional-standard",
+      "pub_date": "2024-01-09",
+      "status": "verified",
+      "last_verified": "2026-11-05",
+      "recheck": "2024-01-09",
+      "stale": true
+    },
+    {
+      "id": 1007,
+      "claim": "Engagement objectives, scope, criteria and resources have documented, contextual requirements and change/approval duties.",
+      "class": "professional-standard",
+      "pub_date": "2024-01-09",
+      "status": "verified",
+      "last_verified": "2026-11-05",
+      "recheck": "2024-01-09",
+      "stale": true
+    },
+    {
+      "id": 1008,
+      "claim": "A documented work programme identifies criteria, tasks, methods/tools and assigned auditors, with prior and prompt change approval under 13.6.",
+      "class": "professional-standard",
+      "pub_date": "2024-01-09",
+      "status": "verified",
+      "last_verified": "2026-11-05",
+      "recheck": "2024-01-09",
+      "stale": true
+    },
+    {
+      "id": 1009,
+      "claim": "Information must be relevant, reliable and sufficient; inadequacy can require further collection or affect findings/conclusions.",
+      "class": "professional-standard",
+      "pub_date": "2024-01-09",
+      "status": "verified",
+      "last_verified": "2026-11-05",
+      "recheck": "2024-01-09",
+      "stale": true
+    },
+    {
+      "id": 1010,
+      "claim": "Potential findings require evaluation; root-cause identification is qualified by feasibility, with recommendation/action-plan alternatives.",
+      "class": "professional-standard",
+      "pub_date": "2024-01-09",
+      "status": "verified",
+      "last_verified": "2026-11-05",
+      "recheck": "2024-01-09",
+      "stale": true
+    },
+    {
+      "id": 1011,
+      "claim": "Conclusions address objectives and aggregate significance; assurance adds effectiveness considerations.",
+      "class": "professional-standard",
+      "pub_date": "2024-01-09",
+      "status": "verified",
+      "last_verified": "2026-11-05",
+      "recheck": "2024-01-09",
+      "stale": true
+    },
+    {
+      "id": 1012,
+      "claim": "Engagement documentation supports informed repetition and results, review and retention; software/template choices vary.",
+      "class": "professional-standard",
+      "pub_date": "2024-01-09",
+      "status": "verified",
+      "last_verified": "2026-11-05",
+      "recheck": "2024-01-09",
+      "stale": true
+    },
+    {
+      "id": 1013,
+      "claim": "Final communication has content, quality, approval and appropriate-recipient requirements, with assurance-specific additions.",
+      "class": "professional-standard",
+      "pub_date": "2024-01-09",
+      "status": "verified",
+      "last_verified": "2026-11-05",
+      "recheck": "2024-01-09",
+      "stale": true
+    },
+    {
+      "id": 1014,
+      "claim": "Follow-up confirms implementation risk-basedly; management risk acceptance and CAE escalation are distinct from remediation.",
+      "class": "professional-standard",
+      "pub_date": "2024-01-09",
+      "status": "verified",
+      "last_verified": "2026-11-05",
+      "recheck": "2024-01-09",
+      "stale": true
+    },
+    {
+      "id": 1015,
+      "claim": "Skepticism and information-use/confidentiality duties apply; they do not by themselves prescribe a security architecture.",
+      "class": "professional-standard",
+      "pub_date": "2024-01-09",
+      "status": "verified",
+      "last_verified": "2026-11-05",
+      "recheck": "2024-01-09",
+      "stale": true
+    },
+    {
+      "id": 1016,
+      "claim": "The 12-month presumption concerns prior responsibility; prior advisory service has separate objectivity assessment provisions.",
+      "class": "professional-standard",
+      "pub_date": "2024-01-09",
+      "status": "verified",
+      "last_verified": "2026-11-05",
+      "recheck": "2024-01-09",
+      "stale": true
+    },
+    {
+      "id": 1017,
+      "claim": "DomainIII Essential Conditions require actor-specific treatment including CAE discussion and documented alternatives, not blanket optionality.",
+      "class": "professional-standard",
+      "pub_date": "2024-01-09",
+      "status": "verified",
+      "last_verified": "2026-11-05",
+      "recheck": "2024-01-09",
+      "stale": true
+    },
+    {
+      "id": 1020,
+      "claim": "SR 26-2 and OCC 2026-13 were issued 2026-04-17 and updated earlier model-risk supervisory guidance.",
+      "class": "regulatory-guidance",
+      "pub_date": "2026-04-17",
+      "status": "verified",
+      "last_verified": "2026-11-05",
+      "recheck": "2026-04-17",
+      "stale": true
+    },
+    {
+      "id": 1021,
+      "claim": "Joint model-risk guidance excludes generative/agentic AI and is nonprescriptive, but does not exempt tools from all applicable governance/law.",
+      "class": "regulatory-guidance",
+      "pub_date": "2026-04-17",
+      "status": "verified",
+      "last_verified": "2026-11-05",
+      "recheck": "2026-04-17",
+      "stale": true
+    },
+    {
+      "id": 1022,
+      "claim": "GIAS was issued 2024-01-09 and effective 2025-01-09.",
+      "class": "professional-standard",
+      "pub_date": "2024-01-09",
+      "status": "verified",
+      "last_verified": "2026-11-05",
+      "recheck": "2024-01-09",
+      "stale": true
+    },
+    {
+      "id": 1023,
+      "claim": "Three-cycle/six-stage and three/four-layer maps are useful analytical arrangements, not demonstrated universal practitioner taxonomies.",
+      "class": "analytical-framework",
+      "pub_date": "2026-11-05",
+      "status": "unverified",
+      "last_verified": "2026-11-05",
+      "recheck": "2029-11-05",
+      "stale": false
+    },
+    {
+      "id": 1024,
+      "claim": "GIAS imposes a universal 5ΓÇô20% sample norm or fixed 25/40 sample size.",
+      "class": "professional-standard",
+      "pub_date": "2024-01-09",
+      "status": "overturned",
+      "last_verified": "2026-11-05",
+      "recheck": "2024-01-09",
+      "stale": true
+    },
+    {
+      "id": 1025,
+      "claim": "GIAS mandates a universal RCM or five-Cs template.",
+      "class": "professional-standard",
+      "pub_date": "2024-01-09",
+      "status": "overturned",
+      "last_verified": "2026-11-05",
+      "recheck": "2024-01-09",
+      "stale": true
+    },
+    {
+      "id": 1026,
+      "claim": "GIAS requires the CAE personally to click every digital approval gate.",
+      "class": "professional-standard",
+      "pub_date": "2024-01-09",
+      "status": "overturned",
+      "last_verified": "2026-11-05",
+      "recheck": "2024-01-09",
+      "stale": true
+    },
+    {
+      "id": 1027,
+      "claim": "Every finding must have a known root cause without feasibility qualification.",
+      "class": "professional-standard",
+      "pub_date": "2024-01-09",
+      "status": "overturned",
+      "last_verified": "2026-11-05",
+      "recheck": "2024-01-09",
+      "stale": true
+    }
+  ],
+  "stale_count": 24,
+  "earliest_recheck": "2024-01-09",
+  "no_window_classes": []
+}

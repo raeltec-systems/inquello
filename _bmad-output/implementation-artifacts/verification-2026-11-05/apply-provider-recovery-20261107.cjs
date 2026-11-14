@@ -1,0 +1,11 @@
+const fs=require('node:fs');
+const p='D:/Projects/inquello/desktop/src/renderer/Providers.tsx';
+let s=fs.readFileSync(p,'utf8');
+const start=s.indexOf('    let call: Promise<unknown>;');
+const marker='    try {\n      const result = parseProviderAction(await call);';
+const end=s.indexOf(marker,start);
+if(start<0||end<0)throw Error('Unexpected provider action source');
+const dispatch=s.slice(start,end).trimEnd().split('\n').map(line=>'  '+line).join('\n');
+s=s.slice(0,start)+'    try {\n'+dispatch+'\n'+s.slice(end+'    try {\n'.length);
+fs.writeFileSync(p,s);
+console.log('Provider dispatch now shares its exception handler and finally cleanup.');

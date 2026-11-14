@@ -1,0 +1,25 @@
+[33m(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (vitest.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.[39m
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.5 [39m[90mD:/Projects/inquello/desktop[39m
+
+ [32m✓[39m test/providers-action-recovery.test.tsx [2m([22m[2m10 tests[22m[2m)[22m[33m 905[2mms[22m[39m
+   [32m✓[39m provider action recovery after synchronous throw [2m(5)[22m
+     [33m[2m✓[22m[39m Claude store releases pending controls, protects input and allows a deliberate retry[33m 318[2mms[22m[39m
+ [32m✓[39m test/settings-route.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 797[2mms[22m[39m
+   [33m[2m✓[22m[39m reconnect provider-claude-key mounts and focuses its actual provider control without actions[33m 568[2mms[22m[39m
+ [32m✓[39m test/providers-block.test.tsx [2m([22m[2m22 tests[22m[2m)[22m[33m 1308[2mms[22m[39m
+   [32m✓[39m Providers block [2m(6)[22m
+     [33m[2m✓[22m[39m hands the Claude key to main once, clears the field, and never shows the key again (matrix: Store Claude key)[33m 304[2mms[22m[39m
+ [32m✓[39m test/provider-consent-ui.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[33m 448[2mms[22m[39m
+ [32m✓[39m test/provider-consent-renderer.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[33m 355[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m5 passed[39m[22m[90m (5)[39m
+[2m      Tests [22m [1m[32m50 passed[39m[22m[90m (50)[39m
+[2m   Start at [22m 20:15:50
+[2m   Duration [22m 15.07s[2m (environment 55%, tests 27%, import 14%, transform 3%)[22m
+
+[2m    Isolate [22m [33m5 workers spawned[39m[2m · ~1.75s startup each (spawn + environment, per file)[22m
+[2m            [22m [2mat least ~6.98s faster with [22m[33misolate: false[39m[2m — reuses workers across files instead of one per file[22m
+

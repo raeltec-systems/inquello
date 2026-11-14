@@ -1,0 +1,16 @@
+Smoke logs: D:\Inquello\tmp\inquello-seeded-smoke-jt7vEs
+2026-11-05T16:16:14.410691Z  INFO inquello_service::test_provider: synthetic OIDC provider listening issuer="https://127.0.0.1:59803"
+2026-11-05T16:16:14.768198Z  INFO inquello_service::server: inquello service listening local_addr=127.0.0.1:59809 https=true
+2026-11-05T16:16:14.891910Z  INFO sqlx::postgres::notice: relation "_sqlx_migrations" already exists, skipping
+2026-11-05T16:16:14.944876Z  INFO inquello_service::admin: workspace created by operator workspace_id=4d60b134-e720-4fcf-ae20-44e78aa315c7 receipt_id=715afbfe-029c-44d6-ad4d-0143ef43dc1c
+2026-11-05T16:16:33.636267Z  INFO inquello_service::login: login transaction created login_transaction_id=ffe05868-d598-472d-9d0a-c75ba16aa86a
+2026-11-05T16:16:33.645033Z  INFO inquello_service::test_provider: authorization code issued for the synthetic subject
+2026-11-05T16:16:33.660259Z  INFO inquello_service::test_provider: ID token issued for the synthetic subject
+2026-11-05T16:16:33.720786Z  INFO inquello_service::login: session created principal_id=882d27a9-6bff-4a1c-a97c-628fcba743be session_id=580385de-613e-4f07-b856-3173b9e0ec19
+2026-11-05T16:16:34.831790Z  INFO inquello_service::workspaces: invite accepted principal_id=882d27a9-6bff-4a1c-a97c-628fcba743be workspace_id=4d60b134-e720-4fcf-ae20-44e78aa315c7
+2026-11-05T16:18:15.542685Z  INFO inquello_service::sessions: refresh family revoked principal_id=882d27a9-6bff-4a1c-a97c-628fcba743be family_id=4f877259-4cd1-4571-9736-3a3e5f1c8652 reason="logout"
+2026-11-05T16:18:15.573466Z  INFO inquello_service::commands: command applied principal_id=882d27a9-6bff-4a1c-a97c-628fcba743be operation_id=logout-d75b3015-1f91-419a-9200-14d67d6a57d4 receipt_id=c5c3adc5-01c3-48c2-b825-9bebdf9168f8
+{"phase":"visual","exitCode":1,"required":1,"missingOrFailed":["visual-conversation"],"zeroFixtureCalls":true,"localSyntheticCalls":3,"invalidFixtureCalls":0}
+2026-11-05T16:18:18.942728Z  INFO inquello_dev_topology: dev topology stopping
+{"phase":"visual","phaseResult":{"ok":false,"missing":["visual-conversation"],"events":[],"cleanupErrors":[]}}
+{"ok":false,"isolatedPhase":"visual","required":1,"missingOrFailed":["visual-conversation"],"cleanupErrors":[]}

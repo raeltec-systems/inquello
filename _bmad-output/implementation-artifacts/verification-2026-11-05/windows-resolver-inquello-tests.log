@@ -1,0 +1,244 @@
+warning: fields `cwd` and `search_path` are never read
+    --> app-server\src\request_processors\inquello_processor.rs:1270:16
+     |
+1269 | pub(crate) struct ExecLookup<'a> {
+     |                   ---------- fields in this struct
+1270 |     pub(crate) cwd: Option<&'a std::path::Path>,
+     |                ^^^
+1271 |     pub(crate) search_path: Option<&'a std::ffi::OsStr>,
+     |                ^^^^^^^^^^^
+     |
+     = note: `ExecLookup` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `codex-app-server` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized] target(s) in 4.96s
+     Running unittests src\lib.rs (D:\Inquello\cache\fixture-20261105\debug\deps\codex_app_server-b1a408872b69444d.exe)
+
+running 181 tests
+test request_processors::inquello_processor::paid_session_counter_tests::method_gate_keeps_safe_lifecycle_and_usage_reads_without_alternate_dispatch ... ok
+test inquello_wsl::inquello_lock_release_probe_tests::bounded_probe_wait_preserves_confirmation_and_io_failure ... ok
+test inquello_wsl::inquello_lock_release_probe_tests::connect_validation_failure_preserves_proven_no_process_phase ... ok
+test request_processors::inquello_processor::paid_session_counter_tests::launch_environment_rejects_ambiguous_aliases_without_reading_credentials ... ok
+test request_processors::inquello_processor::reviewer::observed_disclosure_invalidation_tests::task_invalidation_is_scoped_and_identity_revokes_all_principal_payloads ... ok
+test request_processors::inquello_processor::paid_session_counter_tests::two_total_reservations_never_refund_and_cannot_rearm ... ok
+test inquello_program::tests::a_relative_guest_path_without_a_known_guest_folder_is_unresolved ... ok
+test inquello_program::tests::different_programs_of_one_name_on_the_guest_path_stay_unresolved ... ok
+test request_processors::inquello_processor::reviewer::cache_counter_tests::positive_is_reported_but_default_zero_and_negative_are_unknown ... ok
+test inquello_program::tests::guest_paths_resolve_through_the_guest_path_cwd_and_symlinks ... ok
+test inquello_program::tests::one_failed_guest_query_leaves_every_word_unresolved ... ok
+test inquello_wsl::inquello_lock_release_probe_tests::total_cleanup_envelope_expires_without_confirming_retirement ... ok
+test request_processors::inquello_processor::paid_session_counter_tests::concurrent_reservations_cannot_exceed_two ... ok
+test request_processors::inquello_processor::reviewer::tests::bounded_reviewer_delivery_cancels_without_emitting_late_event ... ok
+test inquello_wsl::inquello_lock_release_probe_tests::bounded_probe_wait_drops_owned_future_on_expiry ... ok
+test inquello_program::tests::an_unreachable_or_slow_guest_leaves_every_word_unresolved ... ok
+test inquello_wsl::inquello_lock_release_probe_tests::setup_probe_actual_spawn_exit_and_cancellation_classify_retirement ... ok
+test request_processors::inquello_processor::reviewer::tests::cross_principal_unknown_and_private_secret_never_in_view_or_debug ... ok
+test request_processors::inquello_processor::reviewer::tests::api_key_quota_is_unsupported_without_chatgpt_read_and_binding_is_generation_scoped ... ok
+test request_processors::inquello_processor::reviewer::tests::atomic_store_checks_changed_local_rule_revision_before_verdict_commit ... ok
+test request_processors::inquello_processor::reviewer::tests::permission_verdict_schema_and_no_widening ... ok
+test request_processors::inquello_processor::reviewer::tests::configuration_check_under_lifecycle_lock_never_refreshes_auth_or_blocks_revocation ... ok
+test request_processors::inquello_processor::reviewer::tests::classification_loss_with_fresh_forbid_refuses_instead_of_asking ... ok
+test request_processors::inquello_processor::reviewer::tests::actual_responses_body_uses_snapshot_resolved_and_explicit_choices ... ok
+test request_processors::inquello_processor::reviewer::tests::failed_review_preparation_releases_pending_and_explicit_retry_works ... ok
+test request_processors::inquello_processor::reviewer::tests::missing_inherited_auth_refuses_instead_of_inventing_api_key_or_codex_quota ... ok
+test request_processors::inquello_processor::reviewer::tests::public_automated_actor_cannot_spoof_a_trusted_invocation ... ok
+test request_processors::inquello_processor::reviewer::tests::responses_review_outgoing_body_is_exact_bounded_and_has_no_tools ... ok
+test request_processors::inquello_processor::reviewer::tests::partial_failure_keeps_native_usage_and_does_not_retry ... ok
+test request_processors::inquello_processor::reviewer::tests::credential_presence_unverified_route_and_disabled_switch_never_dispatch ... ok
+test request_processors::inquello_processor::route_bridge::model_binding_tests::inquello_disclosure_dependencies_are_complete_or_refused_at_the_bound ... ok
+test request_processors::inquello_processor::reviewer::tests::other_boot_inspection_is_uncertain_without_finalizing_concurrent_owner ... ok
+test request_processors::inquello_processor::reviewer::tests::inflight_cancellation_discards_late_fixture_verdict_for_both_routes ... ok
+test request_processors::inquello_processor::reviewer::tests::both_route_fixtures_require_runtime_provenance_and_apply_once_without_state_bleed ... ok
+test request_processors::inquello_processor::reviewer::tests::selecting_another_task_does_not_cancel_staged_review_or_rebind_credentials ... ok
+test request_processors::inquello_processor::reviewer::tests::settings_capabilities_cannot_cross_route_revision_during_wait ... ok
+test request_processors::inquello_processor::search_bridge::tests::exact_retained_message_preserves_markdown_while_matching_visible_text ... ok
+test request_processors::inquello_processor::search_bridge::tests::final_disclosure_rejects_removed_rotated_or_changed_prior_lineage ... ok
+test request_processors::inquello_processor::search_bridge::tests::saved_response_fence_never_crosses_wire ... ok
+test request_processors::inquello_processor::reviewer::tests::reviewer_attempts_keep_changed_settings_and_uncertain_failures ... ok
+test request_processors::inquello_processor::search_bridge::tests::saved_search_cursor_is_query_scope_and_snapshot_bound ... ok
+test request_processors::inquello_processor::search_bridge::tests::saved_search_only_user_assistant_text ... ok
+test request_processors::inquello_processor::search_bridge::tests::saved_search_bounds_and_unicode ... ok
+test request_processors::inquello_processor::tasks_bridge::bootstrap_order_tests::bootstrap_admission_is_blocked_while_same_principal_reset_waits_on_routes ... ok
+test request_processors::inquello_processor::tasks_bridge::bootstrap_order_tests::closed_connection_latch_rejects_bootstrap_even_after_late_identity_reset ... ok
+test request_processors::inquello_processor::tasks_bridge::bootstrap_order_tests::delayed_bootstrap_cannot_replace_newer_native_session ... ok
+test request_processors::inquello_processor::tasks_bridge::bootstrap_order_tests::dropped_saved_admission_cleanup_removes_native_callback_and_ignores_late_reply ... ok
+test request_processors::inquello_processor::reviewer::tests::both_routes_persist_valid_deny_as_automated_permission_decision ... ok
+test request_processors::inquello_processor::reviewer::tests::inherited_limit_and_unknown_required_check_dispatch_nothing ... ok
+test request_processors::inquello_processor::reviewer::tests::settings_change_affects_next_attempt_not_inflight_snapshot ... ok
+test request_processors::inquello_processor::reviewer::tests::tool_manager_setup_error_is_durable_before_error_response ... ok
+test request_processors::inquello_processor::reviewer::tests::tool_usage_rejects_same_principal_after_authority_generation_changes ... ok
+test request_processors::inquello_processor::reviewer::tests::tool_observer_rechecks_identity_after_wait_and_commits_before_completion ... ok
+test request_processors::inquello_processor::route_bridge::model_binding_tests::inquello_resolve_replays_after_credential_loss_and_catalog_change_without_new_configuration ... ok
+test request_processors::inquello_processor::route_bridge::model_binding_tests::inquello_one_choice_refuses_credential_change_during_capability_wait ... ok
+test request_processors::inquello_processor::tasks_bridge::bootstrap_order_tests::identity_reset_and_close_fence_bootstrap_already_waiting_on_authority ... ok
+test request_processors::inquello_processor::tasks_bridge::bootstrap_order_tests::inquello_real_session_current_approval_all_protected_actions_default_features ... ok
+test request_processors::inquello_processor::tasks_bridge::bootstrap_order_tests::final_scope_rechecks_owned_task_provenance_after_workspace_authority_wait ... ok
+test request_processors::inquello_processor::tasks_bridge::bootstrap_order_tests::overlapping_identity_transitions_and_cancellation_do_not_reopen_admission ... ok
+test request_processors::inquello_processor::route_bridge::model_binding_tests::inquello_same_provider_creation_preserves_a_and_revoke_fences_only_exact_dependents ... ok
+test request_processors::inquello_processor::route_bridge::model_binding_tests::inquello_one_choice_aligns_native_dispatch_and_replays_without_catalog ... ok
+test request_processors::inquello_processor::route_bridge::model_binding_tests::inquello_model_select_and_route_set_keep_exact_response_variants ... ok
+test request_processors::inquello_processor::tasks_bridge::bootstrap_order_tests::inquello_real_session_withdrawal_and_late_authority_default_features ... ok
+test request_processors::inquello_processor::tasks_bridge::bootstrap_order_tests::fixture_status_rejects_missing_marker_and_nonloopback_transport ... ok
+test request_processors::inquello_processor::tasks_bridge::accounting_lifecycle_tests::undispatched_attempts_close_and_provider_completion_never_finishes_the_turn ... ok
+test request_processors::inquello_processor::tasks_bridge::bootstrap_order_tests::recovery_binding_never_switches_owner_workspace_root_or_data_tier ... ok
+test request_processors::inquello_processor::tasks_bridge::bootstrap_order_tests::recovery_bootstrap_denied_fresh_authority_preserves_cancelled_binding ... ok
+test request_processors::inquello_processor::tasks_bridge::bootstrap_order_tests::fixture_status_rejects_replaced_or_additional_credentials ... ok
+test request_processors::inquello_processor::tasks_bridge::bootstrap_order_tests::recovery_bootstrap_fresh_authority_repairs_only_cancelled_matching_binding ... ok
+test request_processors::inquello_processor::tasks_bridge::bootstrap_order_tests::recovery_bootstrap_rechecks_authority_generation_at_commit ... ok
+test request_processors::inquello_processor::tasks_bridge::lifecycle_wire_tests::lifecycle_wire_is_bounded_and_guidance_redacted ... ok
+test request_processors::inquello_processor::tasks_bridge::lifecycle_wire_tests::pre_effect_refusals_have_a_parseable_bounded_kind ... ok
+test request_processors::inquello_processor::tasks_bridge::bootstrap_order_tests::recovery_bootstrap_synthetic_also_requires_fresh_authority ... ok
+test request_processors::inquello_processor::tasks_bridge::lifecycle_wire_tests::runtime_lease_is_exclusive_and_survives_processor_lifetime ... ok
+test request_processors::inquello_processor::tasks_bridge::lifecycle_wire_tests::runtime_lease_subprocess_child ... ok
+test request_processors::inquello_processor::tasks_bridge::lifecycle_wire_tests::terminal_reconciliation_is_not_adaptation_or_rollback ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::actual_empty_refs_establish_absence_but_unresolved_refs_do_not ... ok
+test request_processors::inquello_processor::tasks_bridge::lifecycle_wire_tests::runtime_lease_process_death_releases_os_lock_not_lineage ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::an_unrelated_human_instruction_is_not_decision_authority ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::analytical_snapshot_ignores_uncited_stream_but_observes_older_cited_evidence ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::authorized_cross_turn_revisions_preserve_unaffected_findings_and_history ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::canonical_cache_reuse_requires_output_lineage_policy_and_live_session ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::canonical_live_agent_text_projects_running_and_durable_completion_wins ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::all_current_and_historical_results_are_retrievable_in_bounded_pages ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::command_display_keeps_failure_diagnostic_tail_and_bounds_sanitized_allocation ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::completed_commands_require_success_and_exact_work_scope ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::canonical_plan_revision_comparison_precedes_display_budget ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::display_controls_are_removed_without_poisoning_progress ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::duplicate_identity_and_clipping_disclose_incomplete_history ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::cumulative_plan_keeps_recent_ids_without_forgetting_canonical_revisions ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::failed_actions_and_retained_messages_are_citations_not_completion_proof ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::endpoint_paging_reads_canonical_history_before_bounding_activity ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::first_seen_later_revision_is_useful_but_not_complete_history ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::forged_checks_do_not_become_structured_labels ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::hidden_reasoning_and_foreign_turns_never_project ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::historical_revision_keeps_its_own_reason_when_superseded ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::latest_structured_result_is_not_starved_by_old_fallback_content ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::live_commands_are_bounded_filtered_and_never_copy_output ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::live_display_bounds_refuse_history_but_allow_explicit_incomplete_activity ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::live_merge_refuses_listener_lag_instead_of_inventing_order ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::live_merge_requires_canonical_user_identity_and_preserves_start_order ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::live_message_overflow_marker_changes_the_final_activity_fence ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::live_running_evidence_changes_on_completion_without_reordering_or_duplicate ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::live_scope_rejects_old_runtime_listener_turn_and_terminal_state ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::native_pre_execution_failure_is_visible_but_printed_refusal_is_not_status ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::nonadvancing_history_cursor_refuses_instead_of_disclosing_partial_findings ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::old_findings_and_withdrawal_predecessors_survive_the_activity_window ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::omitted_plan_steps_remain_cumulative_not_withdrawn ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::only_exact_retained_human_instruction_ids_resolve_decision_basis ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::paging_preserves_long_creation_and_supersession_reasons_exactly ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::pre_execution_refusal_matches_shared_renderer_projection ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::progress_read_cannot_accept_renderer_binding_or_principal ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::projection_without_plan_does_not_invent_steps ... ok
+test request_processors::inquello_processor::tasks_bridge::bootstrap_order_tests::fixture_status_rejects_scope_and_caller_assertion_mismatches ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::same_revision_rewrite_and_unlinked_turn_cannot_replace_current_result ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::source_role_delimiters_and_forged_approval_remain_command_data ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::stale_revisions_and_same_revision_rewrites_are_not_replayed ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::structured_result_overflow_keeps_exact_order_and_exposes_bounded_continuation ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::terminal_execution_never_completes_pending_or_agent_only_steps ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::terminal_runs_stop_unconfirmed_running_steps_without_marking_them_done ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::unresolved_initial_publication_references_disclose_incomplete_history ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::unstructured_and_malformed_outputs_remain_unchecked ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::unsupported_revision_reason_controls_never_become_structured_findings ... ok
+test request_processors::inquello_processor::tasks_bridge::bootstrap_order_tests::fixture_status_rejects_session_replacement_and_real_data ... ok
+test request_processors::inquello_processor::tasks_bridge::tests::generic_private_history_list_and_turn_start_cannot_bypass_binding ... ok
+test request_processors::inquello_processor::tasks_bridge::bootstrap_order_tests::fixture_status_requires_fresh_authority ... ok
+test request_processors::inquello_processor::tasks_bridge::tests::private_fence_capture_preserves_principal_revocation_while_waiting ... ok
+test request_processors::inquello_processor::tasks_bridge::bootstrap_order_tests::fixture_status_returns_only_current_owned_proof_and_cleans_up ... ok
+test request_processors::inquello_processor::tasks_bridge::tests::private_fence_capture_preserves_session_revocation_while_waiting ... ok
+test request_processors::inquello_processor::tasks_bridge::tests::private_fence_capture_rejects_identity_change_while_waiting ... ok
+test request_processors::inquello_processor::tasks_bridge::tests::private_fence_capture_replacement_keeps_old_generation_revoked ... ok
+test request_processors::inquello_processor::tasks_bridge::tests::private_fence_capture_timeout_remains_denied ... ok
+test request_processors::inquello_processor::tasks_bridge::tests::private_fence_capture_waits_for_unchanged_session_reader ... ok
+test request_processors::inquello_processor::tasks_bridge::tests::progress_read_authority_loss_is_strict_even_when_the_snapshot_changed ... ok
+test request_processors::inquello_processor::tasks_bridge::tests::progress_read_foreign_or_changed_authorization_binding_is_not_snapshot_churn ... ok
+test request_processors::inquello_processor::tasks_bridge::tests::progress_read_status_and_run_evolution_refuse_only_the_snapshot ... ok
+test request_processors::inquello_processor::tasks_bridge::tests::start_wire_rejects_renderer_thread_and_classification_and_redacts_debug ... ok
+test request_processors::inquello_processor::tasks_bridge::bootstrap_order_tests::fixture_transport_refuses_existing_ordinary_provider_credential ... ok
+test request_processors::inquello_processor::tasks_bridge::bootstrap_order_tests::quota_fixture_status_rechecks_fixture_after_fresh_authority_await ... ok
+test request_processors::inquello_processor::tasks_bridge::bootstrap_order_tests::quota_fixture_status_returns_only_current_bound_proof_and_refuses_clear ... ok
+test request_processors::inquello_processor::tests::a_store_inside_the_runtime_home_is_refused ... ok
+test request_processors::inquello_processor::tasks_bridge::bootstrap_order_tests::quota_fixture_status_refuses_revoked_authority ... ok
+test request_processors::inquello_processor::tasks_bridge::bootstrap_order_tests::quota_fixture_status_rejects_real_task_classification ... ok
+test request_processors::inquello_processor::tests::calls_before_set_principal_are_unauthenticated ... ok
+test request_processors::inquello_processor::tests::command_rules_match_the_program_resolved_inside_the_guest ... ok
+test request_processors::inquello_processor::tasks_bridge::tests::identity_reset_revokes_same_principal_session_and_unknown_threads ... ok
+test request_processors::inquello_processor::tasks_bridge::tests::classification_refusal_creates_no_private_task ... ok
+test request_processors::inquello_processor::tests::a_permitted_full_access_profile_states_no_filesystem_limits ... FAILED
+test request_processors::inquello_processor::tests::a_broad_mode_is_explicit_permitted_per_task_and_suspended_by_policy ... ok
+test request_processors::inquello_processor::tests::a_prompt_rule_needs_one_allowed_request_for_exactly_that_command ... FAILED
+test request_processors::inquello_processor::tests::the_effective_policy_lists_rules_and_the_reviewer_state ... ok
+test request_processors::inquello_processor::tests::the_effective_policy_names_its_sources_and_the_capability_contract ... ok
+test request_processors::inquello_processor::tests::a_standard_task_profile_names_its_boundaries_and_runtime_form ... ok
+test request_processors::inquello_processor::tests::organise_engagement_folder_and_task_then_move_it ... ok
+test request_processors::inquello_processor::tests::actual_native_create_keeps_draft_and_mixed_tree_projection_never_exposes_foreign_ids ... ok
+test request_processors::inquello_processor::tests::windows_host_resolution_accepts_only_existing_drive_rooted_executables ... ok
+test request_processors::inquello_processor::tests::windows_host_forbid_matches_canonical_case_and_symlink_aliases ... ok
+test request_processors::inquello_processor::tests::without_a_store_path_methods_answer_store_not_configured ... ok
+test request_processors::inquello_processor::usage_bridge::tests::account_bound_explicit_permission_only_no_reset_recovery ... ok
+test request_processors::inquello_processor::tests::windows_host_resolution_rejects_broken_links_and_non_executable_targets ... ok
+test request_processors::inquello_processor::usage_bridge::tests::fixture_usage_requires_native_synthetic_and_exact_authoritative_policy ... ok
+test request_processors::thread_processor::thread_processor_tests::inquello_executor_retirement_tests::proven_pre_spawn_validation_failure_releases_only_its_generation ... ok
+test request_processors::thread_processor::thread_processor_tests::inquello_executor_retirement_tests::setup_cancellation_and_probe_outcomes_preserve_retirement_proof ... ok
+test request_processors::thread_processor::thread_processor_tests::inquello_executor_retirement_tests::timeout_and_revocation_retain_pending_cleanup_and_never_admit ... ok
+test request_processors::thread_processor::thread_processor_tests::inquello_executor_retirement_tests::captured_cleanup_blocks_successor_but_not_an_unrelated_task ... ok
+test request_processors::thread_processor::thread_processor_tests::inquello_executor_retirement_tests::wrong_identity_and_unconfirmed_or_abandoned_cleanup_fail_closed ... ok
+test request_processors::inquello_processor::tests::an_untrusted_asking_behaviour_asks_before_an_unmatched_command ... ok
+test request_processors::thread_processor::thread_processor_tests::inquello_executor_retirement_tests::two_successors_cannot_replace_the_same_completed_generation ... ok
+test request_processors::inquello_processor::tests::refusals_carry_kinds_stale_revisions_and_replays ... ok
+test request_processors::inquello_processor::tests::state_refusals_carry_their_kinds ... ok
+test request_processors::inquello_processor::tests::task_states_are_recorded_and_listed_by_dimension ... ok
+test request_processors::inquello_processor::tests::tasks_are_listed_only_for_their_creator ... ok
+test request_processors::inquello_processor::tests::tools_exec_plans_the_bounded_profile_for_the_creator_only ... FAILED
+test request_processors::inquello_processor::tests::user_rules_only_ask_or_forbid_and_win_over_a_workspace_allow ... FAILED
+test request_processors::inquello_processor::reviewer::tests::fresh_unknown_real_or_policy_off_discards_staged_review_without_authorizing ... ok
+test request_processors::inquello_processor::tasks_bridge::bootstrap_order_tests::quota_fixture_status_rejects_other_connection_owner_and_session ... ok
+test request_processors::inquello_processor::tasks_bridge::bootstrap_order_tests::quota_fixture_status_rejects_generation_additional_credential_and_route_revision ... ok
+test request_processors::inquello_processor::reviewer::tests::malformed_verdict_is_not_an_authorization_and_real_data_never_enabled ... ok
+test request_processors::inquello_processor::reviewer::tests::key_policy_and_logout_invalidate_staged_verdicts_and_pending_route_switch_is_denied ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::result_pagination_preserves_every_citation_across_item_and_payload_limits ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::final_serialized_ceiling_includes_maximum_escaping_references_and_basis ... ok
+
+failures:
+
+---- request_processors::inquello_processor::tests::a_permitted_full_access_profile_states_no_filesystem_limits stdout ----
+
+thread 'request_processors::inquello_processor::tests::a_permitted_full_access_profile_states_no_filesystem_limits' (1064) panicked at app-server\src\request_processors\inquello_processor_tests.rs:1444:33:
+JSONRPCErrorError { code: -32600, data: Some(Object {"inquello": Object {"evaluation": Object {"analysis": String("`true` could not be resolved to one executable on this device, so no allow applies. Runs `true` without sandbox limits on this device."), "cannotAsk": Bool(true), "command": Array [String("true")], "commandText": String("true"), "consequence": String("It can change anything this account can change on this device, and Inquello cannot undo those changes. Allowing it runs this one request once and adds no rule."), "controllingRule": Null, "decision": String("forbid"), "destination": String("This device, without sandbox limits"), "ruleText": String("No command rule matches; decided by this Task's asking behaviour (never asks)"), "source": Object {"behaviour": String("never"), "kind": String("approval_behaviour"), "label": String("this Task's asking behaviour (never asks)"), "revision": Null}}, "kind": String("command_forbidden")}}), message: "this command is forbidden by a command rule" }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- request_processors::inquello_processor::tests::a_prompt_rule_needs_one_allowed_request_for_exactly_that_command stdout ----
+
+thread 'request_processors::inquello_processor::tests::a_prompt_rule_needs_one_allowed_request_for_exactly_that_command' (29240) panicked at app-server\src\request_processors\inquello_processor_tests.rs:2418:5:
+assertion failed: plan(&processor, DESKTOP,
+            exec_params(policy(), &task_id, &folder, &["ls"])).await.is_ok()
+
+---- request_processors::inquello_processor::tests::tools_exec_plans_the_bounded_profile_for_the_creator_only stdout ----
+
+thread 'request_processors::inquello_processor::tests::tools_exec_plans_the_bounded_profile_for_the_creator_only' (19800) panicked at app-server\src\request_processors\inquello_processor_tests.rs:1475:5:
+assertion failed: `(left == right)`
+
+[1mDiff[0m [31m< left[0m / [32mright >[0m :
+ Some(
+[31m<    String("[0m[1;48;5;52;31mp[0m[31mermissi[0m[1;48;5;52;31mo[0m[31mn[0m[1;48;5;52;31m_required[0m[31m"),[0m
+[32m>    String("[0m[1;48;5;22;32mtask_fold[0m[32mer[0m[1;48;5;22;32m_[0m[32mmissin[0m[1;48;5;22;32mg[0m[32m"),[0m
+ )
+
+
+
+---- request_processors::inquello_processor::tests::user_rules_only_ask_or_forbid_and_win_over_a_workspace_allow stdout ----
+
+thread 'request_processors::inquello_processor::tests::user_rules_only_ask_or_forbid_and_win_over_a_workspace_allow' (12652) panicked at app-server\src\request_processors\inquello_processor_tests.rs:2465:5:
+assertion failed: plan(&processor, DESKTOP,
+            exec_params(policy(), &task_id, &folder,
+                &["curl", "https://example.com/"])).await.is_ok()
+
+
+failures:
+    request_processors::inquello_processor::tests::a_permitted_full_access_profile_states_no_filesystem_limits
+    request_processors::inquello_processor::tests::a_prompt_rule_needs_one_allowed_request_for_exactly_that_command
+    request_processors::inquello_processor::tests::tools_exec_plans_the_bounded_profile_for_the_creator_only
+    request_processors::inquello_processor::tests::user_rules_only_ask_or_forbid_and_win_over_a_workspace_allow
+
+test result: FAILED. 177 passed; 4 failed; 0 ignored; 0 measured; 420 filtered out; finished in 22.17s
+
+error: test failed, to rerun pass `-p codex-app-server --lib`

@@ -1,0 +1,42 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.5 [39m[90mD:/Projects/inquello/desktop[39m
+
+2026-11-06T04:28:21.029694Z  INFO inquello_service::test_provider: synthetic OIDC provider listening issuer="https://127.0.0.1:65501"
+2026-11-06T04:28:21.301558Z  INFO inquello_service::server: inquello service listening local_addr=127.0.0.1:65504 https=true
+2026-11-06T04:28:21.411897Z  INFO sqlx::postgres::notice: relation "_sqlx_migrations" already exists, skipping
+2026-11-06T04:28:21.456443Z  INFO inquello_service::admin: workspace created by operator workspace_id=5b1fb7d7-3029-4ab7-9c56-dfe8ac9daefd receipt_id=ec2c2fb8-02a8-47ec-8c9b-b8227e5563db
+2026-11-06T04:28:22.612678Z  INFO inquello_service::login: login transaction created login_transaction_id=1e563173-2bfd-4021-99d2-7b9ae93d6350
+2026-11-06T04:28:22.622391Z  INFO inquello_service::test_provider: authorization code issued for the synthetic subject
+2026-11-06T04:28:22.637889Z  INFO inquello_service::test_provider: ID token issued for the synthetic subject
+2026-11-06T04:28:22.699874Z  INFO inquello_service::login: session created principal_id=4abd3778-8d1b-462e-afce-feea5f131c3d session_id=3da6a830-fe63-4e4f-b0e8-1e4efbb12e45
+2026-11-06T04:28:23.574429Z  INFO inquello_service::workspaces: invite accepted principal_id=4abd3778-8d1b-462e-afce-feea5f131c3d workspace_id=5b1fb7d7-3029-4ab7-9c56-dfe8ac9daefd
+2026-11-06T04:29:03.243323Z  INFO inquello_dev_topology: dev topology stopping
+ [31m❯[39m test/policy-integration.test.ts [2m([22m[2m2 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[33m 46096[2mms[22m[39m
+   [31m❯[39m the effective policy against the real runtime and a permissive seeded Workspace [2m(2)[22m
+     [32m✓[39m shows the seeded Workspace policy in S07 with its revision, no device requirements and the contract[32m 169[2mms[22m[39m
+[31m     [31m×[31m turns Full access on for one Task only after its confirmation, and derives the thread settings from it[39m[33m 39432[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m test/policy-integration.test.ts[2m > [22mthe effective policy against the real runtime and a permissive seeded Workspace[2m > [22mturns Full access on for one Task only after its confirmation, and derives the thread settings from it
+[31m[1mOverloadedError[22m: app-server inquello/policy/effective failed (-32001): Private work unavailable[39m
+[36m [2m❯[22m src/main/runtime/rpc.ts:[2m235:15[22m[39m
+    [90m233|[39m         entry.reject(
+    [90m234|[39m           body.code === OVERLOADED_ERROR_CODE
+    [90m235|[39m             ? new OverloadedError(entry.method, body.message, body.dat…
+    [90m   |[39m               [31m^[39m
+    [90m236|[39m             : new RpcResponseError(entry.method, body.code, body.messa…
+    [90m237|[39m         );
+[90m [2m❯[22m RpcConnection.settle src/main/runtime/rpc.ts:[2m296:5[22m[39m
+[90m [2m❯[22m RpcConnection.handleLine src/main/runtime/rpc.ts:[2m232:12[22m[39m
+[90m [2m❯[22m RpcConnection.handleChunk src/main/runtime/rpc.ts:[2m198:12[22m[39m
+[90m [2m❯[22m Socket.onData src/main/runtime/rpc.ts:[2m74:53[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m1 passed[39m[22m[90m (2)[39m
+[2m   Start at [22m 04:28:20
+[2m   Duration [22m 46.82s[2m (tests 99%, transform 1%)[22m
+

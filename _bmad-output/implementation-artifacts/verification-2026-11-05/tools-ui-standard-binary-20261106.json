@@ -1,0 +1,7 @@
+﻿{
+    "sourceHead":  "c79147358cfc10dc5724ff115c64ceda141d5f4d",
+    "selection":  "standard default app-server; tools phase never selects inference fixture",
+    "sha256":  "002865a3eaac4dbb22f82bac652046feab220607f0fc1c3db2c569e429d70bc3",
+    "atUtc":  "2026-11-06T17:21:46.7572288Z",
+    "binary":  "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\codex-app-server.exe"
+}

@@ -1,0 +1,19 @@
+﻿{
+    "date":  "2026-11-05",
+    "scope":  "PRD and addendum document consistency only; no runtime tests",
+    "fr_count":  45,
+    "fr_ids_unique":  true,
+    "fr_ids_1_through_45":  true,
+    "oq6_exact_preserved":  true,
+    "fixtures_exact_preserved":  {
+                                     "W1":  true,
+                                     "W3":  true,
+                                     "M1":  true,
+                                     "W2":  true
+                                 },
+    "links_checked":  30,
+    "missing_links":  [
+
+                      ],
+    "implementation_or_runtime_verified":  false
+}

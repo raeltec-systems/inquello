@@ -1,0 +1,452 @@
+source-sha256:87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41
+da492069dc9ba1dc01932a6ed080c7ad7741c711a28c9b781f1dcc4619581563  Cargo.lock
+rustc 1.99.1 (58cf8f9c3 2026-10-13)
+cargo 1.99.1 (5f94df478 2026-08-27)
+   Compiling codex-utils-absolute-path v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/utils/absolute-path)
+   Compiling codex-utils-rustls-provider v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/utils/rustls-provider)
+   Compiling codex-utils-cache v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/utils/cache)
+   Compiling codex-utils-redacted-string v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/utils/redacted-string)
+   Compiling codex-http-client v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/http-client)
+   Compiling codex-utils-home-dir v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/utils/home-dir)
+   Compiling codex-utils-path-uri v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/utils/path-uri)
+   Compiling codex-execpolicy v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/execpolicy)
+   Compiling codex-extension-items v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/ext/items)
+   Compiling codex-network-proxy v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/network-proxy)
+   Compiling codex-utils-image v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/utils/image)
+   Compiling codex-utils-string v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/utils/string)
+   Compiling codex-async-utils v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/async-utils)
+   Compiling codex-client v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/codex-client)
+   Compiling codex-utils-pty v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/utils/pty)
+   Compiling codex-utils-process v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/utils/process)
+   Compiling codex-websocket-client v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/websocket-client)
+   Compiling codex-utils-stream-parser v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/utils/stream-parser)
+   Compiling codex-utils-path v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/utils/path-utils)
+   Compiling codex-install-context v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/install-context)
+   Compiling codex-windows-sandbox v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/windows-sandbox-rs)
+   Compiling codex-skills v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/skills)
+   Compiling codex-keyring-store v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/keyring-store)
+   Compiling codex-uds v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/uds)
+   Compiling codex-linux-sandbox v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/linux-sandbox)
+   Compiling codex-build-info v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/build-info)
+   Compiling codex-process-hardening v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/process-hardening)
+   Compiling codex-file-watcher v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/file-watcher)
+   Compiling codex-websocket-auth v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/websocket-auth)
+   Compiling codex-core-plugin-common v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/core-plugin-common)
+   Compiling codex-utils-template v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/utils/template)
+   Compiling codex-workload-identity v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/workload-identity)
+   Compiling codex-terminal-detection v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/terminal-detection)
+   Compiling codex-file-search v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/file-search)
+   Compiling codex-code-mode-protocol v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/code-mode-protocol)
+   Compiling codex-collaboration-mode-templates v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/collaboration-mode-templates)
+   Compiling codex-aws-auth v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/aws-auth)
+   Compiling codex-attachment-store v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/attachment-store)
+   Compiling codex-diagnostics v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/diagnostics)
+   Compiling codex-experimental-api-macros v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/codex-experimental-api-macros)
+   Compiling codex-app-server-protocol-noop-macros v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/app-server-protocol-noop-macros)
+   Compiling inquello-domain v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/inquello-domain)
+   Compiling codex-utils-cargo-bin v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/utils/cargo-bin)
+   Compiling inquello-protocol v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/inquello-protocol)
+   Compiling inquello-adapters v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/inquello-adapters)
+   Compiling codex-protocol v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/protocol)
+   Compiling codex-file-system v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/file-system)
+   Compiling codex-api v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/codex-api)
+   Compiling codex-model-provider-info v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/model-provider-info)
+   Compiling codex-git-utils v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/git-utils)
+   Compiling codex-features v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/features)
+   Compiling codex-config v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/config)
+   Compiling codex-shell-command v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/shell-command)
+   Compiling codex-otel v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/otel)
+   Compiling codex-history v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/history)
+   Compiling codex-secrets v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/secrets)
+   Compiling codex-mxc-sandbox v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/mxc-sandbox)
+   Compiling codex-exec-server-protocol v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/exec-server-protocol)
+   Compiling codex-sandboxing v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/sandboxing)
+   Compiling codex-utils-output-truncation v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/utils/output-truncation)
+   Compiling codex-state v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/state)
+   Compiling codex-agent-identity v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/agent-identity)
+   Compiling codex-context-fragments v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/context-fragments)
+   Compiling codex-guardian-context v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/guardian-context)
+   Compiling codex-rollout v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/rollout)
+   Compiling codex-exec-server v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/exec-server)
+   Compiling codex-login v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/login)
+   Compiling codex-prompts v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/prompts)
+   Compiling codex-models-manager v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/models-manager)
+   Compiling codex-feedback v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/feedback)
+   Compiling codex-code-mode v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/code-mode)
+   Compiling codex-response-debug-context v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/response-debug-context)
+   Compiling codex-model-provider v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/model-provider)
+   Compiling codex-utils-plugins v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/utils/plugins)
+   Compiling codex-plugin v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/plugin)
+   Compiling codex-rmcp-client v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/rmcp-client)
+   Compiling codex-connectors v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/connectors)
+   Compiling codex-app-server-protocol v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/app-server-protocol)
+   Compiling codex-tools v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/tools)
+   Compiling codex-message-board v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/message-board)
+   Compiling codex-mcp v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/codex-mcp)
+   Compiling codex-hooks v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/hooks)
+   Compiling codex-apply-patch v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/apply-patch)
+   Compiling codex-rollout-trace v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/rollout-trace)
+   Compiling codex-agent-roles v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/agent-roles)
+   Compiling codex-agent-graph-store v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/agent-graph-store)
+   Compiling codex-extension-api v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/ext/extension-api)
+   Compiling codex-memories-read v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/memories/read)
+   Compiling codex-utils-git-discovery v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/utils/git-discovery)
+   Compiling codex-agent-message-board-client v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/agent-message-board-client)
+   Compiling codex-agent-message-board-extension v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/ext/agent-message-board)
+   Compiling codex-utils-audio v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/utils/audio)
+   Compiling codex-analytics v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/analytics)
+   Compiling codex-thread-store v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/thread-store)
+   Compiling codex-guardian-reviewer v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/ext/guardian-reviewer)
+   Compiling codex-core-plugins v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/core-plugins)
+   Compiling codex-skills-extension v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/ext/skills)
+   Compiling codex-core v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/core)
+    Finished `test` profile [unoptimized] target(s) in 6m 07s
+     Running unittests src/lib.rs (/opt/inquello/build/offline-20261105-1752/target/debug/deps/codex_linux_sandbox-94a8afb7ef31dabc)
+
+running 161 tests
+test bundled_bwrap::tests::parses_sha256_hex_digest ... ok
+test bwrap::tests::default_unreadable_glob_scan_has_no_depth_cap ... ok
+test bwrap::tests::full_disk_write_full_network_returns_unwrapped_command ... ok
+test bwrap::tests::full_disk_write_proxy_only_keeps_full_filesystem_but_unshares_network ... ok
+test bundled_bwrap::tests::digest_verification_rejects_mismatched_digest ... ok
+test bundled_bwrap::tests::digest_verification_skips_missing_expected_digest ... ok
+test bundled_bwrap::tests::digest_verification_accepts_matching_digest ... ok
+test bwrap::tests::full_disk_write_with_unreadable_glob_still_wraps_and_masks_match ... ok
+test bwrap::tests::merged_usr_aliases_require_exact_known_targets_and_existing_usr_access ... ok
+test bwrap::tests::pid_inheritance_and_legacy_proc_modes_full_filesystem ... ok
+test bwrap::tests::non_utf8_daemon_socket_mask_path_is_rejected ... ok
+test bundled_bwrap::tests::finds_package_layout_bwrap_from_install_context ... ok
+test bwrap::tests::pid_inheritance_and_legacy_proc_modes_read_only ... ok
+test bwrap::tests::restricted_read_only_uses_scoped_read_roots_instead_of_erroring ... ok
+test bwrap::tests::read_only_tmp_carveout_keeps_daemon_sockets_masked ... ok
+test bwrap::tests::restricted_platform_roots_preserve_merged_usr_links_and_deny_targets ... ok
+test bwrap::tests::missing_project_root_metadata_carveouts_use_metadata_path_masks ... ok
+test bwrap::tests::missing_child_git_under_parent_repo_is_mounted_read_only ... ok
+test bwrap::tests::missing_read_only_subpath_uses_empty_file_bind_data ... ok
+test bwrap::tests::restricted_read_only_with_platform_defaults_includes_usr_when_present ... ok
+test bwrap::tests::missing_user_project_root_subpath_rules_are_still_enforced ... ok
+test bundled_bwrap::tests::finds_legacy_standalone_bundled_bwrap_next_to_exe_resources ... ok
+test bundled_bwrap::tests::finds_adjacent_dev_bwrap ... ok
+test bwrap::tests::protected_symlinked_directory_subpaths_fail_closed ... ok
+test bwrap::tests::registry_protection_precedes_denied_parent_mask ... ok
+test bwrap::tests::root_prefix_unreadable_globs_fail_closed_on_linux ... ok
+test bwrap::tests::restricted_policy_chdirs_to_canonical_command_cwd ... ok
+test bwrap::tests::split_policy_masks_root_read_directory_carveouts ... ok
+test bwrap::tests::split_policy_masks_root_read_file_carveouts ... ok
+test bundled_bwrap::tests::finds_npm_bundled_bwrap_next_to_target_vendor_dir ... ok
+test bwrap::tests::unclosed_character_classes_are_escaped_for_ripgrep ... ok
+test bwrap::wslg_tests::explicit_wslg_alias_paths_are_rejected::executable ... ok
+test bwrap::tests::unreadable_globs_add_canonical_targets_for_symlink_matches ... ok
+test bwrap::wslg_tests::explicit_wslg_alias_paths_are_rejected::command_cwd ... ok
+test bwrap::tests::unreadable_globs_expand_existing_matches_with_configured_depth ... ok
+test bwrap::wslg_tests::explicit_wslg_alias_paths_are_rejected::policy_cwd ... ok
+test bwrap::wslg_tests::unrestricted_filesystem_preserves_wslg_with_or_without_network_isolation ... ok
+test bwrap::tests::mounts_dev_before_writable_dev_binds ... ok
+test bwrap::wslg_tests::explicit_wslg_alias_paths_are_rejected::read_grant ... ok
+test bwrap::wslg_tests::explicit_wslg_alias_paths_are_rejected::write_grant ... ok
+test daemon_mounts::tests::accepts_only_mounts_that_can_keep_the_directory_masked::ancestor_alias ... ok
+test daemon_mounts::tests::accepts_only_mounts_that_can_keep_the_directory_masked::directory_alias ... ok
+test daemon_mounts::tests::accepts_only_mounts_that_can_keep_the_directory_masked::escaped_alias ... ok
+test daemon_mounts::tests::accepts_only_mounts_that_can_keep_the_directory_masked::nested_mount ... ok
+test bwrap::tests::split_policy_reapplies_unreadable_carveouts_after_writable_binds ... ok
+test bwrap::tests::symlinked_writable_roots_nested_symlink_escape_paths_fail_closed ... ok
+test bwrap::tests::transient_empty_preserved_file_uses_empty_file_bind_data ... ok
+test bwrap::tests::symlinked_writable_roots_bind_real_target_and_remap_carveouts ... ok
+test bwrap::tests::split_policy_reenables_writable_subpaths_after_unreadable_parent ... ok
+test bwrap::tests::writable_roots_under_symlinked_ancestors_bind_real_target ... ok
+test bwrap::tests::split_policy_reenables_nested_writable_roots_after_unreadable_parent ... ok
+test bwrap::tests::split_policy_reenables_nested_writable_subpaths_after_read_only_parent ... ok
+test bwrap::tests::split_policy_reenables_writable_files_after_unreadable_parent ... ok
+test bwrap::tests::symlinked_missing_child_git_under_parent_repo_mounts_effective_path_read_only ... ok
+test daemon_mounts::tests::accepts_only_mounts_that_can_keep_the_directory_masked::unrelated_project_bind ... ok
+test daemon_mounts::tests::accepts_only_mounts_that_can_keep_the_directory_masked::same_location ... ok
+test daemon_mounts::tests::accepts_only_mounts_that_can_keep_the_directory_masked::root_alias ... ok
+test daemon_mounts::tests::accepts_only_mounts_that_can_keep_the_directory_masked::socket_alias ... ok
+test daemon_mounts::tests::accepts_private_tmp_bind_and_maskable_aliases::tmp_on_root_filesystem ... ok
+test daemon_mounts::tests::accepts_private_tmp_bind_and_maskable_aliases::tmp_on_separate_filesystem ... ok
+test daemon_mounts::tests::accepts_private_tmp_filesystem_and_resolves_stacked_mounts ... ok
+test bwrap::tests::ignores_missing_writable_roots ... ok
+test daemon_mounts::tests::btrfs_device_mismatch_rejects_duplicate_mount_id ... ok
+test daemon_mounts::tests::btrfs_bind_mount_masks_aliases_for_both_device_numbers ... ok
+test daemon_mounts::tests::device_mismatch_requires_verified_btrfs_mount::inconsistent_mount_filesystem ... ok
+test daemon_mounts::tests::btrfs_device_mismatch_still_rejects_unsafe_mounts::mount_device_directory_alias ... ok
+test daemon_mounts::tests::btrfs_device_mismatch_still_rejects_unsafe_mounts::stat_device_socket_alias ... ok
+test daemon_mounts::tests::device_mismatch_requires_verified_btrfs_mount::missing_mount_id ... ok
+test daemon_mounts::tests::device_mismatch_requires_verified_btrfs_mount::unavailable_mount_id ... ok
+test daemon_mounts::tests::device_mismatch_requires_verified_btrfs_mount::unverified_descriptor_filesystem ... ok
+test daemon_mounts::tests::masked_wslg_alias_does_not_skip_other_socket_masks ... ok
+test bwrap::wslg_tests::wslg_mask_is_omitted_when_policy_already_hides_an_ancestor ... ok
+test daemon_mounts::tests::masks_alias_when_tmp_is_itself_a_bind_mount ... ok
+test daemon_mounts::tests::rejects_mount_hidden_by_an_ancestor_overmount ... ok
+test daemon_mounts::tests::rejects_open_mount_that_has_been_covered ... ok
+test daemon_mounts::tests::unrelated_namespace_mount_does_not_hide_a_socket_alias ... ok
+test daemon_mounts::tests::validates_namespace_mounts_by_device_and_destination::invalid_destination_escape ... ok
+test daemon_mounts::tests::validates_namespace_mounts_by_device_and_destination::nested_namespace_mount ... ok
+test daemon_mounts::tests::validates_namespace_mounts_by_device_and_destination::non_path_root_on_socket_filesystem ... ok
+test daemon_mounts::tests::validates_namespace_mounts_by_device_and_destination::relative_destination ... ok
+test daemon_mounts::tests::validates_namespace_mounts_by_device_and_destination::unrelated_mount_namespace ... ok
+test daemon_mounts::tests::validates_namespace_mounts_by_device_and_destination::unrelated_network_namespace ... ok
+test exec_util::tests::preserved_files_are_made_inheritable ... ok
+test bwrap::wslg_tests::glob_ancestor_mask_in_no_rg_fallback ... ok
+test fd_mount::tests::duplicate_mount_descriptors_are_rejected ... ok
+test fd_mount::tests::matching_mount_closes_inherited_descriptor ... ok
+test fd_mount::tests::malformed_mount_markers_are_rejected ... ok
+test launcher::tests::ignores_system_bwrap_when_system_bwrap_is_missing ... ok
+test launcher::tests::rejects_duplicate_legacy_bubblewrap_fd_mounts ... ok
+test launcher::tests::rejects_fd_mounts_without_the_trusted_inner_sandbox_stage ... ok
+test launcher::tests::translates_fd_mounts_for_legacy_system_bubblewrap ... ok
+test launcher::tests::translates_multiple_fd_mounts_for_legacy_system_bubblewrap ... ok
+test fd_mount::tests::symlinked_mount_destination_closes_inherited_descriptor ... ok
+test launcher::tests::prefers_system_bwrap_when_help_lists_argv0 ... ok
+test launcher::tests::ignores_system_bwrap_when_system_bwrap_lacks_perms ... ok
+test launcher::tests::prefers_system_bwrap_when_system_bwrap_lacks_argv0 ... ok
+test fd_mount::tests::mismatched_mount_closes_inherited_descriptor ... ok
+test linux_run_main::tests::detects_proc_mount_operation_not_permitted_failure ... ok
+test linux_run_main::tests::detects_proc_mount_invalid_argument_failure ... ok
+test linux_run_main::tests::apply_seccomp_then_exec_with_legacy_landlock_panics ... ok
+test launcher::tests::rejects_malformed_legacy_bubblewrap_fd_mounts ... ok
+test linux_run_main::tests::detects_proc_mount_permission_denied_failure ... ok
+test linux_run_main::tests::legacy_landlock_cannot_bypass_daemon_socket_isolation - should panic ... ok
+test linux_run_main::tests::ignores_non_proc_mount_errors ... ok
+test linux_run_main::tests::inserts_unshare_net_when_network_isolation_requested ... ok
+test linux_run_main::tests::inner_command_includes_permission_profile_flag ... ok
+test linux_run_main::tests::inserts_unshare_net_when_proxy_only_network_mode_requested ... ok
+test linux_run_main::tests::inserts_bwrap_argv0_before_command_separator ... ok
+test linux_run_main::tests::bwrap_signal_forwarder_terminates_child_and_keeps_parent_alive ... ok
+test launcher::tests::detects_fd_backed_read_only_mount_support_in_system_bwrap_help ... ok
+test linux_run_main::tests::managed_network_policy_alone_enables_proxy_mode ... ok
+test linux_run_main::tests::malformed_managed_network_policy_is_rejected ... ok
+test linux_run_main::tests::managed_proxy_inner_command_requires_route_spec ... ok
+test linux_run_main::tests::masks_inherited_procfs_when_wsl_interop_is_masked_without_fresh_proc ... ok
+test linux_run_main::tests::managed_proxy_inner_command_includes_route_spec ... ok
+test linux_run_main::tests::masks_wsl_interop_with_full_network_and_restricted_filesystem ... ok
+test linux_run_main::tests::managed_proxy_preflight_argv_unshares_network ... ok
+test linux_run_main::tests::cleanup_synthetic_mount_targets_removes_only_empty_mount_targets ... ok
+test linux_run_main::tests::proc_mount_preflight_does_not_bind_the_full_filesystem ... ok
+test linux_run_main::tests::proc_mount_preflight_preserves_wsl_masks ... ok
+test linux_run_main::tests::non_managed_inner_command_omits_route_spec ... ok
+test linux_run_main::tests::proxy_only_mode_takes_precedence_over_full_network_policy ... ok
+test linux_run_main::tests::resolve_permission_profile_derives_runtime_policies ... ok
+test linux_run_main::tests::rewrites_bwrap_helper_command_not_nested_user_command_when_current_exe_appears_later ... ok
+test linux_run_main::tests::rewrites_inner_command_path_when_bwrap_lacks_argv0 ... ok
+test linux_run_main::tests::cleanup_synthetic_mount_targets_preserves_real_pre_existing_empty_file ... ok
+test linux_run_main::tests::resolve_permission_profile_preserves_direct_runtime_profile ... ok
+test linux_run_main::tests::synthetic_mount_registry_root_is_unique_to_effective_user ... ok
+test proxy_lifecycle::tests::malformed_handoff_closes_all_received_descriptors::extra_descriptors ... ok
+test linux_run_main::tests::cleanup_synthetic_mount_targets_waits_for_other_active_registrations ... ok
+test linux_run_main::tests::resolve_permission_profile_rejects_missing_configuration ... ok
+test linux_run_main::tests::valid_inner_stage_modes_do_not_panic ... ok
+test proxy_lifecycle::tests::malformed_handoff_closes_all_received_descriptors::non_listener ... ok
+test proxy_lifecycle::tests::malformed_handoff_closes_all_received_descriptors::truncated_control_message ... ok
+test linux_run_main::tests::root_write_read_only_carveout_requires_direct_runtime_enforcement ... ok
+test proxy_lifecycle::tests::rejects_extra_descriptors_even_when_first_is_a_listener::extra_descriptors ... ok
+test linux_run_main::tests::cleanup_synthetic_mount_targets_removes_transient_file_after_concurrent_owner_exits ... ok
+test proxy_lifecycle::tests::rejects_listener_bound_to_all_interfaces ... ok
+test proxy_lifecycle::tests::rejects_extra_descriptors_even_when_first_is_a_listener::truncated_control_message ... ok
+test proxy_lifecycle::tests::rejects_missing_descriptors_and_invalid_payloads ... ok
+test proxy_routing::tests::default_proxy_ports_match_expected_schemes ... ok
+test proxy_routing::tests::attribution_token_is_extracted_before_proxy_route_planning ... ok
+test linux_run_main::tests::split_only_filesystem_policy_requires_direct_runtime_enforcement ... ok
+test proxy_routing::tests::ignores_non_loopback_proxy_endpoint ... ok
+test proxy_routing::tests::parses_loopback_proxy_endpoint ... ok
+test proxy_routing::tests::plan_proxy_routes_only_includes_valid_loopback_endpoints ... ok
+test proxy_routing::tests::proxy_route_spec_serialization_omits_proxy_urls ... ok
+test proxy_routing::tests::recognizes_proxy_env_keys_case_insensitively ... ok
+test proxy_routing::tests::rewrites_proxy_url_to_local_loopback_port ... ok
+test seccomp::tests::full_network_policy_without_managed_network_skips_seccomp ... ok
+test seccomp::tests::full_network_without_managed_proxy_skips_network_seccomp_mode ... ok
+test seccomp::tests::managed_network_enforces_seccomp_even_for_full_network_policy ... ok
+test seccomp::tests::managed_proxy_routes_use_proxy_routed_seccomp_mode ... ok
+test proxy_lifecycle::tests::transferred_listener_survives_sender_close_and_is_cloexec ... ok
+test seccomp::tests::restricted_network_policy_always_installs_seccomp ... ok
+test seccomp::tests::restricted_network_without_proxy_routing_uses_restricted_mode ... ok
+test wslg::tests::conflicting_stacked_mounts_are_ambiguous ... ok
+test wslg::tests::mount_identity_distinguishes_roots_on_the_same_device ... ok
+test wslg::tests::ordinary_paths_do_not_identify_a_duplicate_root ... ok
+test bwrap::wslg_tests::wslg_mask_follows_filesystem_grants_and_denials::read_root ... ok
+test bwrap::wslg_tests::wslg_mask_follows_filesystem_grants_and_denials::write_root ... ok
+
+test result: ok. 161 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+   Compiling codex-utils-absolute-path v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/utils/absolute-path)
+   Compiling codex-utils-rustls-provider v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/utils/rustls-provider)
+   Compiling codex-utils-cache v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/utils/cache)
+   Compiling codex-utils-string v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/utils/string)
+   Compiling codex-http-client v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/http-client)
+   Compiling codex-utils-home-dir v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/utils/home-dir)
+   Compiling codex-utils-path-uri v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/utils/path-uri)
+   Compiling codex-utils-image v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/utils/image)
+   Compiling codex-execpolicy v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/execpolicy)
+   Compiling codex-network-proxy v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/network-proxy)
+   Compiling codex-extension-items v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/ext/items)
+   Compiling codex-utils-redacted-string v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/utils/redacted-string)
+   Compiling codex-async-utils v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/async-utils)
+   Compiling codex-client v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/codex-client)
+   Compiling codex-websocket-client v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/websocket-client)
+   Compiling codex-utils-pty v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/utils/pty)
+   Compiling codex-uds v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/uds)
+   Compiling codex-install-context v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/install-context)
+   Compiling codex-bwrap v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/bwrap)
+warning: codex-bwrap@0.165.0: /opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/bwrap/../vendor/bubblewrap/network.c: In function 'rtnl_send_request':
+warning: codex-bwrap@0.165.0: /opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/bwrap/../vendor/bubblewrap/network.c:53:10: warning: missing initializer for field 'nl_pid' of 'struct sockaddr_nl' [-Wmissing-field-initializers]
+warning: codex-bwrap@0.165.0:    53 |   struct sockaddr_nl dst_addr = { AF_NETLINK, 0 };
+warning: codex-bwrap@0.165.0:       |          ^~~~~~~~~~~
+warning: codex-bwrap@0.165.0: In file included from /opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/bwrap/../vendor/bubblewrap/network.c:26:
+warning: codex-bwrap@0.165.0: /usr/include/linux/netlink.h:40:25: note: 'nl_pid' declared here
+warning: codex-bwrap@0.165.0:    40 |         __u32           nl_pid;         /* port ID      */
+warning: codex-bwrap@0.165.0:       |                         ^~~~~~
+warning: codex-bwrap@0.165.0: /opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/bwrap/../vendor/bubblewrap/network.c: In function 'loopback_setup':
+warning: codex-bwrap@0.165.0: /opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/bwrap/../vendor/bubblewrap/network.c:142:10: warning: missing initializer for field 'nl_pid' of 'struct sockaddr_nl' [-Wmissing-field-initializers]
+warning: codex-bwrap@0.165.0:   142 |   struct sockaddr_nl src_addr = { AF_NETLINK, 0 };
+warning: codex-bwrap@0.165.0:       |          ^~~~~~~~~~~
+warning: codex-bwrap@0.165.0: /usr/include/linux/netlink.h:40:25: note: 'nl_pid' declared here
+warning: codex-bwrap@0.165.0:    40 |         __u32           nl_pid;         /* port ID      */
+warning: codex-bwrap@0.165.0:       |                         ^~~~~~
+   Compiling codex-protocol v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/protocol)
+   Compiling codex-api v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/codex-api)
+   Compiling codex-otel v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/otel)
+   Compiling codex-windows-sandbox v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/windows-sandbox-rs)
+   Compiling codex-mxc-sandbox v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/mxc-sandbox)
+   Compiling codex-sandboxing v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/sandboxing)
+   Compiling codex-linux-sandbox v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/linux-sandbox)
+    Finished `dev` profile [unoptimized] target(s) in 1m 00s
+   Compiling codex-utils-absolute-path v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/utils/absolute-path)
+   Compiling codex-utils-rustls-provider v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/utils/rustls-provider)
+   Compiling codex-utils-cache v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/utils/cache)
+   Compiling codex-utils-redacted-string v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/utils/redacted-string)
+   Compiling codex-http-client v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/http-client)
+   Compiling codex-utils-string v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/utils/string)
+   Compiling codex-utils-home-dir v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/utils/home-dir)
+   Compiling codex-utils-path-uri v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/utils/path-uri)
+   Compiling codex-utils-image v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/utils/image)
+   Compiling codex-execpolicy v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/execpolicy)
+   Compiling codex-network-proxy v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/network-proxy)
+   Compiling codex-extension-items v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/ext/items)
+   Compiling codex-async-utils v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/async-utils)
+   Compiling codex-utils-pty v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/utils/pty)
+   Compiling codex-client v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/codex-client)
+   Compiling codex-websocket-client v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/websocket-client)
+   Compiling codex-utils-path v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/utils/path-utils)
+   Compiling codex-install-context v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/install-context)
+   Compiling codex-keyring-store v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/keyring-store)
+   Compiling codex-uds v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/uds)
+   Compiling codex-build-info v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/build-info)
+   Compiling codex-workload-identity v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/workload-identity)
+   Compiling codex-file-watcher v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/file-watcher)
+   Compiling codex-core-plugin-common v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/core-plugin-common)
+   Compiling codex-websocket-auth v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/websocket-auth)
+   Compiling codex-file-search v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/file-search)
+   Compiling codex-aws-auth v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/aws-auth)
+   Compiling inquello-domain v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/inquello-domain)
+   Compiling codex-backend-openapi-models v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/codex-backend-openapi-models)
+   Compiling codex-app-server v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/app-server)
+   Compiling codex-user-verification v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/user-verification)
+   Compiling codex-utils-json-to-toml v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/utils/json-to-toml)
+   Compiling codex-ansi-escape v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/ansi-escape)
+   Compiling codex-mermaid v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/mermaid)
+   Compiling inquello-protocol v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/inquello-protocol)
+   Compiling codex-realtime-webrtc v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/realtime-webrtc)
+   Compiling codex-utils-sleep-inhibitor v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/utils/sleep-inhibitor)
+   Compiling inquello-adapters v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/inquello-adapters)
+   Compiling codex-utils-fuzzy-match v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/utils/fuzzy-match)
+   Compiling codex-utils-elapsed v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/utils/elapsed)
+   Compiling codex-cli v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/cli)
+   Compiling codex-tcp-tunnel v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/tcp-tunnel)
+   Compiling codex-responses-api-proxy v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/responses-api-proxy)
+   Compiling codex-stdio-to-uds v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/stdio-to-uds)
+   Compiling codex-protocol v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/protocol)
+   Compiling codex-file-system v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/file-system)
+   Compiling codex-api v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/codex-api)
+   Compiling codex-features v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/features)
+   Compiling codex-git-utils v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/git-utils)
+   Compiling codex-model-provider-info v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/model-provider-info)
+   Compiling codex-config v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/config)
+   Compiling codex-shell-command v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/shell-command)
+   Compiling codex-otel v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/otel)
+   Compiling codex-history v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/history)
+   Compiling codex-secrets v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/secrets)
+   Compiling codex-utils-output-truncation v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/utils/output-truncation)
+   Compiling codex-skills v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/skills)
+   Compiling codex-state v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/state)
+   Compiling codex-agent-identity v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/agent-identity)
+   Compiling codex-windows-sandbox v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/windows-sandbox-rs)
+   Compiling codex-mxc-sandbox v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/mxc-sandbox)
+   Compiling codex-exec-server-protocol v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/exec-server-protocol)
+   Compiling codex-sandboxing v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/sandboxing)
+   Compiling codex-linux-sandbox v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/linux-sandbox)
+   Compiling codex-rollout v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/rollout)
+   Compiling codex-context-fragments v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/context-fragments)
+   Compiling codex-response-debug-context v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/response-debug-context)
+   Compiling codex-guardian-context v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/guardian-context)
+   Compiling codex-code-mode-protocol v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/code-mode-protocol)
+   Compiling codex-login v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/login)
+   Compiling codex-exec-server v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/exec-server)
+   Compiling codex-prompts v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/prompts)
+   Compiling codex-models-manager v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/models-manager)
+   Compiling codex-feedback v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/feedback)
+   Compiling codex-code-mode v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/code-mode)
+   Compiling codex-model-provider v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/model-provider)
+   Compiling codex-app-server-protocol v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/app-server-protocol)
+   Compiling codex-rollout-trace v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/rollout-trace)
+   Compiling codex-utils-plugins v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/utils/plugins)
+   Compiling codex-plugin v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/plugin)
+   Compiling codex-connectors v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/connectors)
+   Compiling codex-tools v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/tools)
+   Compiling codex-rmcp-client v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/rmcp-client)
+   Compiling codex-message-board v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/message-board)
+   Compiling codex-hooks v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/hooks)
+   Compiling codex-apply-patch v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/apply-patch)
+   Compiling codex-mcp v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/codex-mcp)
+   Compiling codex-agent-roles v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/agent-roles)
+   Compiling codex-agent-graph-store v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/agent-graph-store)
+   Compiling codex-memories-read v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/memories/read)
+   Compiling codex-utils-git-discovery v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/utils/git-discovery)
+   Compiling codex-utils-audio v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/utils/audio)
+   Compiling codex-backend-client v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/backend-client)
+   Compiling codex-utils-cli v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/utils/cli)
+   Compiling codex-arg0 v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/arg0)
+   Compiling codex-worktree v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/worktree)
+   Compiling codex-cloud-config v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/cloud-config)
+   Compiling codex-utils-sandbox-summary v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/utils/sandbox-summary)
+   Compiling codex-cloud-tasks-client v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/cloud-tasks-client)
+   Compiling codex-extension-api v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/ext/extension-api)
+   Compiling codex-message-history v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/message-history)
+   Compiling codex-agent-message-board-client v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/agent-message-board-client)
+   Compiling codex-agent-message-board-extension v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/ext/agent-message-board)
+   Compiling codex-git-attribution v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/ext/git-attribution)
+   Compiling codex-multi-env-copy-file v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/ext/multi-env-copy-file)
+   Compiling codex-home v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/codex-home)
+   Compiling codex-utils-approval-presets v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/utils/approval-presets)
+   Compiling codex-cloud-tasks-mock-client v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/cloud-tasks-mock-client)
+   Compiling codex-analytics v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/analytics)
+   Compiling codex-thread-store v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/thread-store)
+   Compiling codex-core-plugins v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/core-plugins)
+   Compiling codex-skills-extension v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/ext/skills)
+   Compiling codex-guardian-reviewer v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/ext/guardian-reviewer)
+   Compiling codex-connectors-extension v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/ext/connectors)
+   Compiling codex-core v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/core)
+   Compiling codex-app-server-transport v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/app-server-transport)
+   Compiling codex-memories-write v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/memories/write)
+   Compiling codex-web-search-extension v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/ext/web-search)
+   Compiling codex-agent-extension v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/ext/agent)
+   Compiling codex-queue-extension v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/ext/queue)
+   Compiling codex-external-agent-migration v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/external-agent-migration)
+   Compiling codex-mcp-extension v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/ext/mcp)
+   Compiling codex-app-server-daemon v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/app-server-daemon)
+   Compiling codex-memories-extension v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/ext/memories)
+   Compiling codex-chatgpt v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/chatgpt)
+   Compiling codex-history-notes-extension v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/ext/history-notes)
+   Compiling codex-guardian-v2 v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/ext/guardian-v2)
+   Compiling codex-image-generation-extension v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/ext/image-generation)
+   Compiling codex-goal-extension v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/ext/goal)
+   Compiling codex-lmstudio v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/lmstudio)
+   Compiling codex-ollama v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/ollama)
+   Compiling codex-app-server-test-client v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/app-server-test-client)
+   Compiling codex-utils-oss v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/utils/oss)
+   Compiling codex-app-server-client v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/app-server-client)
+   Compiling codex-tui v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/tui)
+   Compiling codex-exec v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/exec)
+   Compiling codex-cloud-tasks v0.165.0 (/opt/inquello/build/sources/87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41/engine/codex-rs/cloud-tasks)
+    Finished `dev` profile [unoptimized] target(s) in 10m 21s
+{"version": 1, "sourceArchiveSha256": "87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41", "cargoLocked": true, "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)", "cargoLockSha256": "da492069dc9ba1dc01932a6ed080c7ad7741c711a28c9b781f1dcc4619581563", "binaries": {"codex": "7a5ce0cbfe7d2037c26dd622ddd814259f4187cbe426c9fccaa61f766c3bede7", "codex-linux-sandbox": "f75fd744d405a9ce0da729ac7b51ec9e2996296e66af6afc03ee6185e01dfb4c", "bwrap": "feddb1aae1d3cc2ae0059b180d52234cb2881f073e56e9dabf15fc1be599c0a4"}}
+guest-execution-binaries-built

@@ -1,0 +1,16 @@
+Smoke logs: D:\Inquello\tmp\inquello-seeded-smoke-jfwj3K
+2026-11-05T18:36:10.731045Z  INFO inquello_service::test_provider: synthetic OIDC provider listening issuer="https://127.0.0.1:64058"
+2026-11-05T18:36:11.073674Z  INFO inquello_service::server: inquello service listening local_addr=127.0.0.1:64061 https=true
+2026-11-05T18:36:11.189162Z  INFO sqlx::postgres::notice: relation "_sqlx_migrations" already exists, skipping
+2026-11-05T18:36:11.234154Z  INFO inquello_service::admin: workspace created by operator workspace_id=fcfa0ebe-1bb5-407f-a204-55e7f7d236f1 receipt_id=a6dfb408-28aa-48c5-b5c6-b91862e5788b
+2026-11-05T18:36:30.373122Z  INFO inquello_service::login: login transaction created login_transaction_id=ea18c236-cc40-4c32-8d34-7a4fdec7b13e
+2026-11-05T18:36:30.382051Z  INFO inquello_service::test_provider: authorization code issued for the synthetic subject
+2026-11-05T18:36:30.396551Z  INFO inquello_service::test_provider: ID token issued for the synthetic subject
+2026-11-05T18:36:30.461741Z  INFO inquello_service::login: session created principal_id=251988a3-ec1e-4e6f-925f-557089fd65be session_id=dea62613-29df-49ca-b0c5-afdc528ab2de
+2026-11-05T18:36:31.519621Z  INFO inquello_service::workspaces: invite accepted principal_id=251988a3-ec1e-4e6f-925f-557089fd65be workspace_id=fcfa0ebe-1bb5-407f-a204-55e7f7d236f1
+2026-11-05T18:38:43.625716Z  INFO inquello_service::sessions: refresh family revoked principal_id=251988a3-ec1e-4e6f-925f-557089fd65be family_id=fd3df10e-40cb-4141-b2ff-b80fc8e1b773 reason="logout"
+2026-11-05T18:38:43.641179Z  INFO inquello_service::commands: command applied principal_id=251988a3-ec1e-4e6f-925f-557089fd65be operation_id=logout-4981db4f-dcf2-44d9-8aa6-86632660bff6 receipt_id=1badb238-6a76-46fa-83ab-eeca5d246034
+{"phase":"visual","exitCode":0,"required":1,"missingOrFailed":[],"zeroFixtureCalls":true,"localSyntheticCalls":5,"invalidFixtureCalls":0}
+2026-11-05T18:38:43.971744Z  INFO inquello_dev_topology: dev topology stopping
+{"phase":"visual","phaseResult":{"ok":true,"missing":[],"events":["visual-reader-jump","visual-conversation"],"cleanupErrors":[]}}
+{"ok":true,"isolatedPhase":"visual","required":1,"missingOrFailed":[],"cleanupErrors":[]}

@@ -1,0 +1,2 @@
+{"event":"PILOT_READY","runId":"9f9d996b-255c-47f8-9fa2-4fc004cfab03","root":"D:\\Inquello\\tmp\\inquello-auth0-pilot-20261102","servicePid":15152,"electronPid":24384,"serviceUrl":"https://127.0.0.1:45443"}
+{"event":"PILOT_STOPPED","root":"D:\\Inquello\\tmp\\inquello-auth0-pilot-20261102","retained":true,"servicePid":15152,"electronPid":24384,"cleanupErrors":[]}

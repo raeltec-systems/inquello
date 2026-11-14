@@ -1,0 +1,8 @@
+{"probe": "inside-write", "passed": true, "stdout": ""}
+{"probe": "outside-read", "passed": true}
+{"probe": "symlink-escape", "passed": true}
+{"probe": "readonly-write", "passed": true}
+{"probe": "hidden-host-and-control-paths", "passed": true, "stdout": "no_new_privs=1 seccomp=2 capabilities=0"}
+{"probe": "direct-network-denied", "passed": true, "stdout": ""}
+{"probe": "continue-after-denials", "passed": true, "stdout": "persisted"}
+{"earlyIsolationGate": "passed", "taskProofPath": "/var/lib/inquello/tasks/isolation-proof-refxgk97/task", "completeSpecGate": false}

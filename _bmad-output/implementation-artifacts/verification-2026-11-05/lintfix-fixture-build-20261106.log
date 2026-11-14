@@ -1,0 +1,16 @@
+   Compiling codex-app-server v0.165.0 (D:\Projects\inquello\engine\codex-rs\app-server)
+warning: fields `cwd` and `search_path` are never read
+    --> app-server\src\request_processors\inquello_processor.rs:1270:16
+     |
+1269 | pub(crate) struct ExecLookup<'a> {
+     |                   ---------- fields in this struct
+1270 |     pub(crate) cwd: Option<&'a std::path::Path>,
+     |                ^^^
+1271 |     pub(crate) search_path: Option<&'a std::ffi::OsStr>,
+     |                ^^^^^^^^^^^
+     |
+     = note: `ExecLookup` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `codex-app-server` (lib) generated 1 warning
+    Finished `dev` profile [unoptimized] target(s) in 2m 48s

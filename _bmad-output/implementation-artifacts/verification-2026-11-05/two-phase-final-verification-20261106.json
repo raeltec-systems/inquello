@@ -1,0 +1,20 @@
+{
+  "at": "2026-11-06T07:50:09.592Z",
+  "head": "bb970352399d693a962d9d9b9c7c5ddcbb24a464",
+  "sourceFiles": 11029,
+  "sourceUnchanged": true,
+  "smokeRequired": 18,
+  "smokePassed": 18,
+  "suite": {
+    "passed": 2232,
+    "failed": 0,
+    "skipped": 22,
+    "passedFiles": 116,
+    "skippedFiles": 4,
+    "durationSeconds": 1117.71
+  },
+  "retainedRuntime": "deferred before start for priority Kobba Lending investigation",
+  "commit": false,
+  "push": false,
+  "pr": false
+}

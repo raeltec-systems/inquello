@@ -1,0 +1,23 @@
+import {describe,expect,it,vi} from 'vitest';
+import {UsageService} from '../src/main/usage/service';
+import {notifySettledWork} from '../src/main/usage/notifications';
+import {facts,taskId,principal} from './usage-fixtures';
+function deferred<T>(){let resolve!:(value:T)=>void;const promise=new Promise<T>(done=>{resolve=done;});return{promise,resolve};}
+const authority=()=>({ok:true as const,value:{sandbox:'available' as const}});
+function setup(){
+ let owner:string|null=principal,runtime:unknown={},ready=true;
+ const inspectEnvironment=vi.fn(async()=>authority()),request=vi.fn(async()=>facts()),changed=vi.fn();
+ const service=new UsageService({identity:{principalId:()=>owner},runtime:{instance:()=>runtime,ready:()=>ready,request:request as never},policy:{inspectEnvironment},onChanged:changed});
+ return{service,inspectEnvironment,request,changed,owner:()=>{owner=null;},runtime:()=>{runtime={};},stop:()=>{ready=false;}};
+}
+describe('usage observation reconstruction',()=>{
+ it('reconstructs after sandbox completion supersedes a successful held authority inspection',async()=>{
+  const h=setup(),held=deferred<ReturnType<typeof authority>>();h.inspectEnvironment.mockImplementationOnce(()=>held.promise);
+  const pending=h.service.forTask(taskId);await vi.waitFor(()=>expect(h.inspectEnvironment).toHaveBeenCalledOnce());
+  // Current main wiring: even observation-only completion calls invalidate().
+  notifySettledWork('inquello/tools/exec',{sandboxProbeTarget:'/fixture'},Promise.resolve({}),{usageChanged:()=>h.service.invalidate(),environmentChanged:()=>h.service.invalidate()},fn=>fn());
+  await Promise.resolve();held.resolve(authority());
+  expect(await pending).toMatchObject({ok:true,value:facts()});
+  expect(h.inspectEnvironment).toHaveBeenCalledTimes(2);expect(h.request).toHaveBeenCalledExactlyOnceWith('inquello/usage/read',{taskId});
+ });
+});

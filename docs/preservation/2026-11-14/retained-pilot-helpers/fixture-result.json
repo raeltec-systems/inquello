@@ -1,0 +1,8 @@
+{
+  "passed": true,
+  "identityAndCertificateMismatchRefused": true,
+  "expiredChainRefused": true,
+  "interruptedActivationRefused": true,
+  "operationOwnedTlsOnlyRestorationPassed": true,
+  "at": "2026-11-09T20:42:18.159Z"
+}

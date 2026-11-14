@@ -1,0 +1,26 @@
+Lockfile is up to date, resolution step is skipped
+Progress: resolved 1, reused 0, downloaded 0, added 0
+Packages: +205
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+   ╭──────────────────────────────────────────╮
+   │                                          │
+   │   Update available! 10.34.5 → 12.16.1.   │
+   │   Changelog: https://pnpm.io/v/12.16.1   │
+   │     To update, run: pnpm add -g pnpm     │
+   │                                          │
+   ╰──────────────────────────────────────────╯
+
+Progress: resolved 205, reused 106, downloaded 1, added 4
+Progress: resolved 205, reused 107, downloaded 93, added 15
+Progress: resolved 205, reused 107, downloaded 98, added 79
+Progress: resolved 205, reused 107, downloaded 98, added 124
+Progress: resolved 205, reused 107, downloaded 98, added 204
+Progress: resolved 205, reused 107, downloaded 98, added 205, done
+
+devDependencies:
++ react-markdown 10.1.0
++ rehype-sanitize 6.0.0
++ remark-gfm 4.0.1
+
+Done in 6s using pnpm v10.34.5

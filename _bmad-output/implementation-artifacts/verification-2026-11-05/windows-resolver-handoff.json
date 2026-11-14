@@ -1,0 +1,86 @@
+{
+  "asOfUtc": "2026-11-05T20:06:00Z",
+  "head": "c407483170e93ad9bea0f2d1c36e9d32693b0c44",
+  "status": "Held: desktop integration worker owns editing/testing; no owned native processes active. No staging, commit or push.",
+  "files": [
+    {
+      "path": "engine/codex-rs/app-server/src/request_processors/inquello_processor.rs",
+      "sha256": "c8da91178d9e2d091c79f2232cf4a3bdf4744deee0ded718a8120b3c19381863"
+    },
+    {
+      "path": "engine/codex-rs/app-server/src/request_processors/inquello_processor_tests.rs",
+      "sha256": "35268e74e6bcda774aa9990f29ec209df07b3f822151e1e7a16e428061deaa09"
+    }
+  ],
+  "diff": "windows-resolver-current.patch",
+  "binaryHashes": {
+    "standardCli": "42b1ae81f9802d5891eb645284399287a3ec78ab514090da3c11c96730ff3d6c",
+    "standardAppServer": "fbf2fcd3f5d6f185ad801b9bfde7855dfb34524d97539efa853c4ce5d73aef22",
+    "fixtureAppServer": "b17f446d4d86f54354276a13c5edfedd25526aaabd4023db3a124c43372f41b8"
+  },
+  "runtimeSource": "Production resolver unchanged since initial successful native builds; test source changed afterward. Guest runtime was not changed by this worker.",
+  "verification": [
+    {
+      "log": "windows-resolver-cli-build.log",
+      "status": "passed",
+      "detail": "Offline locked CLI in fixture target, 11m04s."
+    },
+    {
+      "log": "windows-resolver-app-build.log",
+      "status": "passed",
+      "detail": "Offline locked inference-fixtures app-server, 4m25s."
+    },
+    {
+      "log": "windows-resolver-tests.log",
+      "status": "failed",
+      "detail": "1 passed/2 failed. New tests used unsupported backslashes in rule tokens; corrected fixture spelling, not domain grammar."
+    },
+    {
+      "log": "windows-resolver-tests-corrected-fixture.log",
+      "status": "passed",
+      "detail": "3 new Windows resolver tests, 0 ignored; case/separator canonicalization, alias forbids, unresolved allow, rejected path/link matrix."
+    },
+    {
+      "log": "windows-resolver-inquello-tests.log",
+      "status": "failed",
+      "detail": "177 passed/4 failed/0 ignored. Existing native fixtures assumed Unix bare programs. Full access was host; three bounded tests also lacked actual guest setup."
+    },
+    {
+      "log": "windows-resolver-standard-cli-build.log",
+      "status": "passed",
+      "detail": "Default standard target CLI, 8m13s."
+    },
+    {
+      "log": "windows-resolver-standard-app-build.log",
+      "status": "passed",
+      "detail": "Default standard target app-server, 10m55s."
+    },
+    {
+      "log": "windows-resolver-desktop-build.log",
+      "status": "passed",
+      "detail": "TypeScript/data-policy/Vite build."
+    },
+    {
+      "log": "windows-resolver-inquello-tests-native-fixtures.log",
+      "status": "failed",
+      "detail": "178 passed/3 failed/0 ignored. Full access host fixture passed. Incorrect Windows host replacements in bounded tests stayed unresolved inside guest; all three function bodies restored exactly to HEAD afterward. Current restored candidate has not rerun whole native set."
+    },
+    {
+      "log": "desktop-full-docker-windows-resolver-full-access.log",
+      "status": "launch-failed",
+      "detail": "cmd syntax error before tests."
+    },
+    {
+      "log": "desktop-full-docker-windows-resolver-full-access-command-corrected.log",
+      "status": "launch-failed",
+      "detail": "cmd syntax error before tests."
+    },
+    {
+      "log": "desktop-full-docker-windows-resolver-full-access-direct-vitest.log",
+      "status": "failed",
+      "detail": "Actual standard-runtime witness failed before command at default-policy broad-mode denial. Desktop worker traced/corrected same-client test policy wiring."
+    }
+  ],
+  "parentReportedWitness": "Parent reported at 20:00 UTC: unchanged actual Full access witness passed (1 selected/5 filtered, 23.80s) after desktop fixture correction. Desktop worker owns exact final log; this worker did not independently reread it.",
+  "next": "After desktop release: test-only real isolated guest fixture through existing WslTasks transition/owned erase API; retain original guest commands and all assertions. Then rerun entire native set, preserve cleanup evidence, coordinate source checkpoint and remaining exact-tree gates."
+}

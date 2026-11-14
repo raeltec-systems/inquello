@@ -1,0 +1,67 @@
+{
+  "at": "2026-11-09T20:45:50.122Z",
+  "ready": {
+    "event": "PILOT_READY",
+    "runId": "9f9d996b-255c-47f8-9fa2-4fc004cfab03",
+    "root": "D:\\Inquello\\tmp\\inquello-auth0-pilot-20261102",
+    "servicePid": 15152,
+    "electronPid": 24384,
+    "serviceUrl": "https://127.0.0.1:45443"
+  },
+  "owner": {
+    "reconciledAfterWrapperModuleError": true,
+    "startedUtc": "2026-11-09T20:44:45.6957180Z",
+    "head": "daf2dbae7ff1bc229c0bbc012cb9bc89cb09a7e3",
+    "pid": 12816,
+    "runId": "9f9d996b-255c-47f8-9fa2-4fc004cfab03",
+    "manifestSha256": "71bd4edb2063a7390d75f6acd1ac5b9893916c773af3f7b08ecc6911f61da66f",
+    "reconciledUtc": "2026-11-09T20:45:48.3809827Z",
+    "wrapperPid": 25240
+  },
+  "identities": {
+    "processes": [
+      {
+        "ProcessId": 12816,
+        "ParentProcessId": 25240,
+        "Name": "node.exe",
+        "ExecutablePath": "C:\\Program Files\\nodejs\\node.exe",
+        "CreationDate": "/Date(1794257085695)/"
+      },
+      {
+        "ProcessId": 15152,
+        "ParentProcessId": 12816,
+        "Name": "inquello-service.exe",
+        "ExecutablePath": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\inquello-service.exe",
+        "CreationDate": "/Date(1794257088512)/"
+      },
+      {
+        "ProcessId": 24384,
+        "ParentProcessId": 12816,
+        "Name": "electron.exe",
+        "ExecutablePath": "D:\\Projects\\inquello\\desktop\\node_modules\\electron\\dist\\electron.exe",
+        "CreationDate": "/Date(1794257089882)/"
+      },
+      {
+        "ProcessId": 18812,
+        "ParentProcessId": 24384,
+        "Name": "codex-app-server.exe",
+        "ExecutablePath": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\codex-app-server.exe",
+        "CreationDate": "/Date(1794257097905)/"
+      }
+    ],
+    "listeners": [
+      {
+        "LocalAddress": "127.0.0.1",
+        "LocalPort": 45443,
+        "OwningProcess": 15152
+      }
+    ]
+  },
+  "handshake": {
+    "authorized": true,
+    "protocol": "TLSv1.3",
+    "serverFingerprint256": "36:DC:EF:F1:A4:25:8A:B3:8C:AC:70:44:53:85:BF:BB:07:D7:10:AC:8E:4B:55:4D:AD:D5:03:2F:2F:CE:F6:11"
+  },
+  "noModelPromptsSent": true,
+  "liveProviderAcceptance": "pending"
+}

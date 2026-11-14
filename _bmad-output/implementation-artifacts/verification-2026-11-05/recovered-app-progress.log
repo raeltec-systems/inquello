@@ -1,0 +1,69 @@
+   Compiling codex-app-server v0.165.0 (D:\Projects\inquello\engine\codex-rs\app-server)
+warning: fields `cwd` and `search_path` are never read
+    --> app-server\src\request_processors\inquello_processor.rs:1270:16
+     |
+1269 | pub(crate) struct ExecLookup<'a> {
+     |                   ---------- fields in this struct
+1270 |     pub(crate) cwd: Option<&'a std::path::Path>,
+     |                ^^^
+1271 |     pub(crate) search_path: Option<&'a std::ffi::OsStr>,
+     |                ^^^^^^^^^^^
+     |
+     = note: `ExecLookup` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `codex-app-server` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized] target(s) in 1m 58s
+     Running unittests src\lib.rs (target\debug\deps\codex_app_server-8ffb18f37e855649.exe)
+
+running 47 tests
+test request_processors::inquello_processor::tasks_bridge::progress_tests::actual_empty_refs_establish_absence_but_unresolved_refs_do_not ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::command_display_keeps_failure_diagnostic_tail_and_bounds_sanitized_allocation ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::canonical_cache_reuse_requires_output_lineage_policy_and_live_session ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::duplicate_identity_and_clipping_disclose_incomplete_history ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::forged_checks_do_not_become_structured_labels ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::an_unrelated_human_instruction_is_not_decision_authority ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::first_seen_later_revision_is_useful_but_not_complete_history ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::display_controls_are_removed_without_poisoning_progress ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::authorized_cross_turn_revisions_preserve_unaffected_findings_and_history ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::analytical_snapshot_ignores_uncited_stream_but_observes_older_cited_evidence ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::hidden_reasoning_and_foreign_turns_never_project ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::canonical_live_agent_text_projects_running_and_durable_completion_wins ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::completed_commands_require_success_and_exact_work_scope ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::failed_actions_and_retained_messages_are_citations_not_completion_proof ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::live_merge_refuses_listener_lag_instead_of_inventing_order ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::historical_revision_keeps_its_own_reason_when_superseded ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::live_message_overflow_marker_changes_the_final_activity_fence ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::live_scope_rejects_old_runtime_listener_turn_and_terminal_state ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::live_merge_requires_canonical_user_identity_and_preserves_start_order ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::native_pre_execution_failure_is_visible_but_printed_refusal_is_not_status ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::omitted_plan_steps_remain_cumulative_not_withdrawn ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::nonadvancing_history_cursor_refuses_instead_of_disclosing_partial_findings ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::live_running_evidence_changes_on_completion_without_reordering_or_duplicate ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::progress_read_cannot_accept_renderer_binding_or_principal ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::projection_without_plan_does_not_invent_steps ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::pre_execution_refusal_matches_shared_renderer_projection ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::only_exact_retained_human_instruction_ids_resolve_decision_basis ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::cumulative_plan_keeps_recent_ids_without_forgetting_canonical_revisions ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::live_commands_are_bounded_filtered_and_never_copy_output ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::same_revision_rewrite_and_unlinked_turn_cannot_replace_current_result ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::source_role_delimiters_and_forged_approval_remain_command_data ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::stale_revisions_and_same_revision_rewrites_are_not_replayed ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::terminal_execution_never_completes_pending_or_agent_only_steps ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::unstructured_and_malformed_outputs_remain_unchecked ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::terminal_runs_stop_unconfirmed_running_steps_without_marking_them_done ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::unresolved_initial_publication_references_disclose_incomplete_history ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::canonical_plan_revision_comparison_precedes_display_budget ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::unsupported_revision_reason_controls_never_become_structured_findings ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::paging_preserves_long_creation_and_supersession_reasons_exactly ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::structured_result_overflow_keeps_exact_order_and_exposes_bounded_continuation ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::endpoint_paging_reads_canonical_history_before_bounding_activity ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::live_display_bounds_refuse_history_but_allow_explicit_incomplete_activity ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::old_findings_and_withdrawal_predecessors_survive_the_activity_window ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::latest_structured_result_is_not_starved_by_old_fallback_content ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::all_current_and_historical_results_are_retrievable_in_bounded_pages ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::result_pagination_preserves_every_citation_across_item_and_payload_limits ... ok
+test request_processors::inquello_processor::tasks_bridge::progress_tests::final_serialized_ceiling_includes_maximum_escaping_references_and_basis ... ok
+
+test result: ok. 47 passed; 0 failed; 0 ignored; 0 measured; 536 filtered out; finished in 14.51s
+

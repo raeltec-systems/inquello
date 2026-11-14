@@ -1,0 +1,22 @@
+{
+  "date": "2026-11-05",
+  "document_checks_only": true,
+  "epic1_hash_matches_before": true,
+  "unique_story_inventory": 142,
+  "unique_canonical_ac_ids": 407,
+  "original_ac_texts_preserved_at_write": true,
+  "original_tracker_states_preserved_at_write": true,
+  "protected_implementation_and_root_historical_files_checked": 1,
+  "protected_baseline_changes": [],
+  "new_document_links_checked": 6,
+  "all_new_document_links_resolve": true,
+  "tracker_duplicate_keys": 0,
+  "runtime_tests_run": false,
+  "git_baseline_acceptance_texts_rechecked": 382,
+  "root_historical_files_checked_against_git": 10,
+  "root_historical_tracked_diffs": [],
+  "current_epics_sha256": "447f8de0b026b4ff74ef6c3c084d5e20221ed2e47cb06366229c3ca917f1c8f1",
+  "epic1_final_hash_matches": true,
+  "canonical_story_ids": 141,
+  "final_unique_ac_ids": 407
+}

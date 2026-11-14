@@ -1,0 +1,66 @@
+
+> inquello-desktop@0.0.0 test D:\Projects\inquello\desktop
+> vitest run --configLoader runner "test/usage-observation.test.ts" "--maxWorkers=1"
+
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.5 [39m[90mD:/Projects/inquello/desktop[39m
+
+ [31m❯[39m test/usage-observation.test.ts [2m([22m[2m1 test[22m[2m | [22m[31m1 failed[39m[2m)[22m[32m 15[2mms[22m[39m
+   [31m❯[39m usage observation reconstruction [2m(1)[22m
+[31m     [31m×[31m reconstructs after sandbox completion supersedes a successful held authority inspection[39m[32m 13[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m test/usage-observation.test.ts[2m > [22musage observation reconstruction[2m > [22mreconstructs after sandbox completion supersedes a successful held authority inspection
+[31m[1mAssertionError[22m: expected { Object (ok, code, ...) } to match object { ok: true, value: { …(4) } }
+(2 matching properties omitted from actual)[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[2m  {[22m
+[32m-   "ok": true,[39m
+[32m-   "value": {[39m
+[32m-     "capabilities": {[39m
+[32m-       "available": true,[39m
+[32m-       "reason": "Messages supports provider defaults only; alternatives are unavailable.",[39m
+[32m-       "reasoning": [[39m
+[32m-         "default",[39m
+[32m-       ],[39m
+[32m-       "routeRevision": 1,[39m
+[32m-       "speeds": [[39m
+[32m-         "default",[39m
+[32m-       ],[39m
+[32m-     },[39m
+[32m-     "limits": {[39m
+[32m-       "nextAction": "Inspect the provider account or use permitted human handling.",[39m
+[32m-       "reason": "No provider quota endpoint; unknown is not unlimited.",[39m
+[32m-       "source": "claude-api-key",[39m
+[32m-       "status": "unsupported",[39m
+[32m-     },[39m
+[32m-     "taskId": "22222222-2222-4222-8222-222222222222",[39m
+[32m-     "usage": {[39m
+[32m-       "attempts": [],[39m
+[32m-       "settings": null,[39m
+[32m-     },[39m
+[32m-   },[39m
+[31m+   "ok": false,[39m
+[2m  }[22m
+
+[36m [2m❯[22m test/usage-observation.test.ts:[2m20:25[22m[39m
+    [90m 18|[39m   notifySettledWork('inquello/tools/exec',{sandboxProbeTarget:'/fixtur…
+    [90m 19|[39m   await Promise.resolve();held.resolve(authority());
+    [90m 20|[39m   expect(await pending).toMatchObject({ok:true,value:facts()});
+    [90m   |[39m                         [31m^[39m
+    [90m 21|[39m   expect(h.inspectEnvironment).toHaveBeenCalledTimes(2);expect(h.reque…
+    [90m 22|[39m  });
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m   Start at [22m 17:49:19
+[2m   Duration [22m 936ms[2m (transform 58%, import 33%, tests 4%, worker 3%, setup 2%)[22m
+
+ ELIFECYCLE  Test failed. See above for more details.

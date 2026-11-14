@@ -1,0 +1,614 @@
+diff --git a/desktop/src/main/identity/session.ts b/desktop/src/main/identity/session.ts
+index b23026b28a..824af63061 100644
+--- a/desktop/src/main/identity/session.ts
++++ b/desktop/src/main/identity/session.ts
+@@ -49,7 +49,7 @@ import { LoopbackError, startLoopbackListener, type LoopbackListener, type Loopb
+ import { createPkce, createState, type Pkce } from './pkce';
+ import { IssuerError, ServiceError, type Issuer, type SharedService } from './service-client';
+ import type { CredentialStorage, PendingLogout, StoredSession } from './vault';
+-import { SCHEMA_VERSION, type SessionCredentials, type SessionCommandEnvelope } from './wire';
++import { SCHEMA_VERSION, type ExecutionPolicyView, type SessionCredentials, type SessionCommandEnvelope } from './wire';
+ 
+ export type IdentityState =
+   | { state: 'signed-out' }
+@@ -224,7 +224,7 @@ export class IdentitySession {
+       await this.service.capabilities();
+       this.shared = 'available';
+     } catch {
+-      this.shared = 'unavailable';
++      this.markServiceUnavailable();
+     }
+   }
+ 
+@@ -242,11 +242,11 @@ export class IdentitySession {
+           this.applyView(await this.service.session(this.record.accessCredential));
+           this.shared = 'available';
+         } catch {
+-          this.shared = 'unavailable';
++          this.markServiceUnavailable();
+         }
+         return;
+       }
+-      this.shared = 'unavailable';
++      this.markServiceUnavailable();
+     }
+   }
+ 
+@@ -483,7 +483,7 @@ export class IdentitySession {
+     } catch (error) {
+       if (error instanceof ServiceError && (error.kind === 'dependency_unavailable' || (error.kind === 'transport' && !error.delivered))) {
+         // The refresh did not happen: keep the family for a later attempt.
+-        this.shared = 'unavailable';
++        this.markServiceUnavailable();
+         return false;
+       }
+       // A reuse rejection, any other refusal, or an uncertain outcome: this
+@@ -594,7 +594,7 @@ export class IdentitySession {
+       return this.result(true);
+     } catch (error) {
+       if (!(error instanceof ServiceError)) {
+-        this.shared = 'unavailable';
++        this.markServiceUnavailable();
+         return this.result(false, REASONS.logoutPending);
+       }
+       switch (error.kind) {
+@@ -616,7 +616,7 @@ export class IdentitySession {
+             // retry; since this attempt committed nothing, it is not "sent".
+             this.record = { ...this.record, pendingLogout: { ...this.record.pendingLogout, sent: false } };
+             this.persist();
+-            this.shared = 'unavailable';
++            this.markServiceUnavailable();
+             return this.result(false, REASONS.logoutPending);
+           }
+           // The refresh ended the family (refused or uncertain): it was
+@@ -643,7 +643,7 @@ export class IdentitySession {
+         default:
+           // Transport, dependency or uncertain outcome: keep the pending
+           // operation and retry it later with the same ID.
+-          this.shared = 'unavailable';
++          this.markServiceUnavailable();
+           if (!interactive) this.options.logger.info('identity: pending sign-out not yet confirmed');
+           return this.result(false, REASONS.logoutPending);
+       }
+@@ -665,6 +665,62 @@ export class IdentitySession {
+     return state.state === 'signed-in' && this.record ? this.record.principalId : null;
+   }
+ 
++  private policyReads = 0;
++  private readonly policyReadWaiters: Array<() => void> = [];
++
++  private acquirePolicyRead(): Promise<boolean> {
++    if (this.policyReads < 4) { this.policyReads++; return Promise.resolve(true); }
++    if (this.policyReadWaiters.length >= 32) return Promise.resolve(false);
++    return new Promise(resolve => this.policyReadWaiters.push(() => resolve(true)));
++  }
++
++  private releasePolicyRead(): void {
++    const next = this.policyReadWaiters.shift();
++    if (next) next(); else this.policyReads--;
++  }
++
++  /** Only the fixed execution-policy GET may run concurrently. No response is
++   * cached or shared: every native disclosure still obtains a fresh service
++   * decision. Credential rotation and all mutations retain the exclusive lane. */
++  async readExecutionPolicy(workspaceId: string): Promise<ExecutionPolicyView | null> {
++    const generation = this.identityGeneration, principal = this.principalId(), sessionId = this.record?.sessionId;
++    if (!this.config || !principal || !sessionId) return null;
++    const current = () => generation === this.identityGeneration && principal === this.principalId() && sessionId === this.record?.sessionId;
++    if (!(await this.acquirePolicyRead())) return null;
++    try {
++      const credential = (failed?: string) => this.exclusive(async () => {
++        if (!current() || !this.record) return null;
++        // Concurrent 401s for an old token reuse the already-rotated token;
++        // they must not consume the refresh credential again.
++        const rotate = failed !== undefined && this.record.accessCredential === failed;
++        if ((rotate || Date.parse(this.record.accessExpiresAt) - this.now() < REFRESH_MARGIN_MS) && !(await this.refresh())) return null;
++        if (!current() || !this.record) return null;
++        return this.record.accessCredential;
++      });
++      let access = await credential();
++      for (let attempt = 0; attempt < 2; attempt++) {
++        if (!access || !current()) return null;
++        const failureGeneration = this.serviceFailureGeneration;
++        try {
++          const result = await this.service.executionPolicy(access, workspaceId);
++          if (!current()) return null;
++          if (failureGeneration === this.serviceFailureGeneration) this.shared = 'available';
++          return result;
++        } catch (error) {
++          if (!current()) return null;
++          if (attempt === 0 && error instanceof ServiceError && error.kind === 'unauthenticated') {
++            access = await credential(access);
++            continue;
++          }
++          this.noteServiceError(error);
++          if (failureGeneration === this.serviceFailureGeneration && error instanceof ServiceError && error.kind !== 'transport' && error.kind !== 'dependency_unavailable') this.shared = 'available';
++          throw error;
++        }
++      }
++      return null;
++    } finally { this.releasePolicyRead(); }
++  }
++
+   /**
+    * Runs one shared-service request with a fresh access credential, serialized
+    * with every other session operation. An `unauthenticated` answer triggers
+@@ -751,8 +807,14 @@ export class IdentitySession {
+     }
+   }
+ 
++  private serviceFailureGeneration = 0;
++  private markServiceUnavailable(): void {
++    this.serviceFailureGeneration++;
++    this.shared = 'unavailable';
++  }
++
+   private noteServiceError(error: unknown): void {
+-    if (error instanceof ServiceError && (error.kind === 'transport' || error.kind === 'dependency_unavailable')) this.shared = 'unavailable';
++    if (error instanceof ServiceError && (error.kind === 'transport' || error.kind === 'dependency_unavailable')) this.markServiceUnavailable();
+   }
+ 
+   private remember(...secrets: string[]): void {
+diff --git a/desktop/src/main/main.ts b/desktop/src/main/main.ts
+index 2e9ff87267..1738ba4247 100644
+--- a/desktop/src/main/main.ts
++++ b/desktop/src/main/main.ts
+@@ -222,7 +222,7 @@ function taskSessionChanged(identityChanged = false): void {
+   for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:tasks-session-changed', identityChanged);
+ }
+ function usageChanged(privateScope = false): void {
+-  usage?.invalidate();
++  if(privateScope)usage?.invalidate();else usage?.observationsChanged();
+   for (const window of BrowserWindow.getAllWindows()) window.webContents.send('inquello:usage-changed', privateScope);
+ }
+ function environmentChanged(privateScope = true): void {
+diff --git a/desktop/src/main/policy/service.ts b/desktop/src/main/policy/service.ts
+index 4fc38c67da..1f62c632ff 100644
+--- a/desktop/src/main/policy/service.ts
++++ b/desktop/src/main/policy/service.ts
+@@ -148,7 +148,7 @@ export interface PolicyServiceOptions {
+   /** Main-only host selection; isolated unit harnesses can model another OS. */
+   executionPlatform?: NodeJS.Platform;
+   runtime: OrganiseRuntime;
+-  identity: OrganiseIdentity;
++  identity: OrganiseIdentity & { readExecutionPolicy?(workspaceId: string): Promise<ExecutionPolicyView | null> };
+   organise: PolicyOrganise;
+   /** Absent when the shared service is not configured. */
+   service: ExecutionPolicyRoutes | null;
+@@ -201,6 +201,8 @@ function workspaceLayer(view: ExecutionPolicyView): InquelloWorkspaceExecutionPo
+   };
+ }
+ 
++class SupersededPolicyObservation extends Error {}
++
+ export class PolicyService {
+   private linuxTasks: { principal: string; tasks: WslTasks } | null = null;
+   private get usesWsl(): boolean { return (this.options.executionPlatform ?? process.platform) === 'win32'; }
+@@ -315,14 +317,18 @@ export class PolicyService {
+     if (!service) return fail('policy-unavailable', POLICY_REASONS.notConfigured);
+     const generation=this.authorityGeneration,principal=this.options.identity.principalId(),runtime=this.options.runtime.instance();
+     try {
+-      const view = await this.options.identity.withAccess((access) => service.executionPolicy(access, workspaceId));
+-      if (!view||!principal||generation!==this.authorityGeneration||principal!==this.options.identity.principalId()||runtime!==this.options.runtime.instance()||view.workspace_id!==workspaceId)throw new Error('Authority changed');
++      const view = this.options.identity.readExecutionPolicy
++        ? await this.options.identity.readExecutionPolicy(workspaceId)
++        : await this.options.identity.withAccess((access) => service.executionPolicy(access, workspaceId));
++      if(generation!==this.authorityGeneration||principal!==this.options.identity.principalId()||runtime!==this.options.runtime.instance())throw new SupersededPolicyObservation('Authority observation superseded');
++      if(!view||!principal||view.workspace_id!==workspaceId)throw new Error('Authority changed');
+       const epoch=BigInt(view.authorization_epoch),policy=BigInt(view.policy_revision),key=`${principal}:${workspaceId}`,prior=this.highest.get(key);
+-      if(epoch<1n||policy<1n||epoch>BigInt(Number.MAX_SAFE_INTEGER)||policy>BigInt(Number.MAX_SAFE_INTEGER)||(prior&&(epoch<prior.epoch||policy<prior.policy)))throw new Error('Stale authority');
++      if(epoch<1n||policy<1n||epoch>BigInt(Number.MAX_SAFE_INTEGER)||policy>BigInt(Number.MAX_SAFE_INTEGER))throw new Error('Invalid authority');
++      if(prior&&(epoch<prior.epoch||policy<prior.policy))throw new SupersededPolicyObservation('Authority observation superseded');
+       this.highest.set(key,{epoch,policy});
+       return { ok: true, value: workspaceLayer(view) };
+     } catch (error) {
+-      this.authorityGeneration++;
++      if (!(error instanceof SupersededPolicyObservation)) this.authorityGeneration++;
+       if (error instanceof ServiceError) {
+         if (error.kind === 'unauthenticated') return fail('signed-out', POLICY_REASONS.signedOut);
+         if (error.kind === 'denied') return fail('policy-unavailable', POLICY_REASONS.notAMember);
+diff --git a/desktop/src/main/tasks/service.ts b/desktop/src/main/tasks/service.ts
+index 81ae22ed95..648bb6b688 100644
+--- a/desktop/src/main/tasks/service.ts
++++ b/desktop/src/main/tasks/service.ts
+@@ -9,6 +9,7 @@ import type {InquelloWorkspaceExecutionPolicy} from '../../protocol/generated/v2
+ import {uuid,object} from '../usage/types';
+ import type {EscalationRoute} from '../policy/tools';
+ import {inquelloRefusal} from '../policy/permissions';
++import {RpcResponseError} from '../runtime';
+ import {parseCandidate,parseStarted,type TaskCandidateInput,type TaskCandidateView,type StartTaskInput,type StartedTaskView,type TasksResult} from './types';
+ export interface TaskServiceOptions {runtime:OrganiseRuntime;identity:Pick<OrganiseIdentity,'principalId'>;syncPrincipal():Promise<void>;bootstrap?(workspaceId:string):Promise<void>;prepareRoutes():Promise<{ok:boolean}>;taskBinding(taskId:string):Promise<{routeId:string;configurationRevision:number;disclosureBindings:{routeId:string;configurationRevision:number;active:boolean}[]}|null>;freshPolicy(workspaceId:string):Promise<InquelloWorkspaceExecutionPolicy|null>;routeApproval?(workspaceId:string,routeId:string):Promise<RouteApprovalView|null>;routeCheck?(workspaceId:string,request:RouteEligibilityCheckRequest):Promise<RouteEligibilityCheckResponse|null>;onAuthorityUnavailable?():void;authorityDiagnostic?:(stage:'start-input'|'start-sync'|'start-routes'|'start-bootstrap'|'start-policy'|'start-native'|'start-result'|'start-error'|'input'|'scope-before'|'policy-read'|'policy-null'|'scope-after'|'route-discovery'|'route-check'|'progress-scope'|'progress-sync'|'progress-bootstrap'|'progress-pre-policy'|'progress-reconcile'|'progress-native'|'progress-parse'|'progress-binding'|'progress-post-policy'|'progress-superseded'|'progress-page'|'progress-publish'|'progress-kind-stale_snapshot'|'progress-kind-session_changed'|'progress-kind-classification_unknown'|'progress-kind-authority_unknown'|'progress-kind-stale'|'progress-kind-not_found'|'progress-kind-transport-fence'|'progress-kind-other'|'progress-recheck-denied',scope:'current'|'changed')=>void;onAccepted?():void;onProgressChanged?():void;askPermission?(taskId:string,command:readonly string[]):Promise<'allowed'|'denied'|'expired'>}
+ export const INBOX_OBSERVATION_TIMEOUT_MS=10_000;
+@@ -253,7 +254,17 @@ export class TaskService {
+    const operations=[...this.lifecycleOperations.values()].filter(entry=>entry.input.taskId===input.taskId&&entry.input.workspaceId===input.workspaceId&&entry.scope.principal===s.principal);
+    stage='progress-reconcile';for(const entry of operations)if(reconcileOperations&&entry.dispatched&&!entry.promise&&this.lifecycleOpen(entry.receipt))await this.reconcileLifecycle(entry);
+    const pending=operations.at(-1);if(!this.current(s))throw new Error();
+-   stage='progress-native';const raw=await this.options.runtime.request('inquello/tasks/progress',{taskId:input.taskId,workspacePolicy:policy,...(activityOnly?{activityOnly:true}:input.resultPage?{resultPage:input.resultPage}:{})});
++   const request={taskId:input.taskId,workspacePolicy:policy,...(activityOnly?{activityOnly:true}:input.resultPage?{resultPage:{...input.resultPage}}:{})};
++   stage='progress-native';let raw:unknown;
++   try{raw=await this.options.runtime.request('inquello/tasks/progress',request);}
++   catch(error){
++    // A changed observation is not revoked authority. Like saved-work reads,
++    // retry this read once rather than serialize a status-only fallback ahead
++    // of the next history read. Never replay an effect or retry a stale page.
++    if(input.resultPage||!(error instanceof RpcResponseError)||error.method!=='inquello/tasks/progress'||error.rpcCode!==-32600||inquelloRefusal(error)?.kind!=='stale_snapshot'||!this.current(s)||superseded())throw error;
++    stage='progress-pre-policy';authorityFailure=true;const retryPolicy=await this.options.freshPolicy(input.workspaceId);if(!retryPolicy||!this.current(s)||superseded()||JSON.stringify(retryPolicy)!==JSON.stringify(policy))throw new Error();authorityFailure=false;
++    stage='progress-native';raw=await this.options.runtime.request('inquello/tasks/progress',request);
++   }
+    stage='progress-parse';const value=parseProgress(raw);
+    stage='progress-binding';if(!this.current(s)||value.taskId!==input.taskId||value.workspaceId!==input.workspaceId||lifecycleAtRead!==this.lifecycleTasks.get(input.taskId))throw new Error();
+    stage='progress-post-policy';authorityFailure=true;const after=await this.options.freshPolicy(input.workspaceId);if(!after||!this.current(s)||JSON.stringify(after)!==JSON.stringify(policy))throw new Error();authorityFailure=false;stage='progress-superseded';if(superseded())throw new Error();
+diff --git a/desktop/src/main/usage/service.ts b/desktop/src/main/usage/service.ts
+index d9ee39c801..7ed8945bdf 100644
+--- a/desktop/src/main/usage/service.ts
++++ b/desktop/src/main/usage/service.ts
+@@ -4,21 +4,36 @@ import {inquelloRefusal} from '../policy/permissions';
+ import {parseTaskUsage,uuid,type SetUsageInput,type UsageResult} from './types';
+ export interface UsageServiceOptions {runtime:OrganiseRuntime;identity:Pick<OrganiseIdentity,'principalId'>;policy:Pick<PolicyService,'inspectEnvironment'>;onChanged?():void}
+ const unavailable=():UsageResult=>({ok:false,code:'unavailable',reason:'Usage information unavailable. Refresh when the runtime and private Task authority are available.'});
++const changed=():UsageResult=>({ok:false,code:'changed',reason:'The private Task session changed. Refresh before continuing.'});
+ export class UsageService {
+  private epoch=0;
++ private observationEpoch=0;
+  constructor(private readonly options:UsageServiceOptions){}
++ /** Identity, runtime and unknown authority changes never permit reconstruction. */
+  invalidate():void{this.epoch++;}
++ /** Existing completion notifications refresh facts, not private authority. */
++ observationsChanged():void{this.observationEpoch++;}
+  private async request(taskId:string,input?:SetUsageInput):Promise<UsageResult>{
+   const principal=this.options.identity.principalId(),runtime=this.options.runtime.instance(),epoch=this.epoch;
+-  const current=()=>!!principal&&principal===this.options.identity.principalId()&&runtime===this.options.runtime.instance()&&epoch===this.epoch&&this.options.runtime.ready();
++  let observation=this.observationEpoch;
++  const authorityCurrent=()=>!!principal&&principal===this.options.identity.principalId()&&runtime===this.options.runtime.instance()&&epoch===this.epoch&&this.options.runtime.ready();
++  const current=()=>authorityCurrent()&&observation===this.observationEpoch;
+   try{
+    uuid(taskId);if(!current())return unavailable();
+-   const authority=await this.options.policy.inspectEnvironment(taskId);if(!authority.ok||!current())return unavailable();
+-   const raw=await this.options.runtime.request(input?'inquello/usage/set':'inquello/usage/read',input??{taskId});
+-   if(!current())return{ok:false,code:'changed',reason:'The private Task session changed. Refresh before continuing.'};
+-   const view=parseTaskUsage(raw,principal!);if(view.taskId!==taskId)return unavailable();
+-   if(input)this.options.onChanged?.();
+-   return{ok:true,value:view};
++   for(let attempt=0;attempt<2;attempt++){
++    observation=this.observationEpoch;
++    const authority=await this.options.policy.inspectEnvironment(taskId);
++    if(authority.ok!==true||!authorityCurrent())return unavailable();
++    if(!current()){if(!input&&attempt===0)continue;return unavailable();}
++    const raw=await this.options.runtime.request(input?'inquello/usage/set':'inquello/usage/read',input??{taskId});
++    if(!authorityCurrent())return changed();
++    // Validate before reconstruction: malformed native data is never retryable.
++    const view=parseTaskUsage(raw,principal!);if(view.taskId!==taskId)return unavailable();
++    if(!current()){if(!input&&attempt===0)continue;return changed();}
++    if(input)this.options.onChanged?.();
++    return{ok:true,value:view};
++   }
++   return unavailable();
+   }catch(error){const kind=inquelloRefusal(error)?.kind;if(current()&&(kind==='revision_conflict'||kind==='operation_conflict'))return{ok:false,code:'conflict',reason:'Task settings or route changed first. Your draft is preserved; refresh and explicitly save again.'};return unavailable();}
+  }
+  forTask(taskId:string):Promise<UsageResult>{return this.request(taskId);}
+diff --git a/desktop/src/renderer/Shell/task-observation.ts b/desktop/src/renderer/Shell/task-observation.ts
+index 77ceb55422..4f4fc51ba6 100644
+--- a/desktop/src/renderer/Shell/task-observation.ts
++++ b/desktop/src/renderer/Shell/task-observation.ts
+@@ -33,7 +33,12 @@ function tick(onlyDirty=false){const rows=[...entries.values()];if(!rows.length)
+  // A selected Task never queues behind navigation. Background work can use
+  // at most three slots, leaving one for controls/questions and invalidations.
+  const priority=ordered.filter(full),background=ordered.filter(entry=>!full(entry));
+- for(const entry of [...priority.filter(e=>e.dirty),...priority.filter(e=>!e.dirty),...background.filter(e=>e.dirty),...background.filter(e=>!e.dirty)])if((!entry.busy||entry.upgrade)&&capacity(entry))void read(entry);
++ for(const entry of [...priority.filter(e=>e.dirty),...priority.filter(e=>!e.dirty),...background.filter(e=>e.dirty),...background.filter(e=>!e.dirty)]){
++  // Stream invalidations share the fast lane's bound. The general dirty timer
++  // must not insert an extra read between two scheduled live reads.
++  if(onlyDirty&&live(entry)){scheduleLive();continue;}
++  if((!entry.busy||entry.upgrade)&&capacity(entry))void read(entry);
++ }
+  cursor=(cursor+3)%rows.length;
+ }
+ function schedule(){if(!scheduled)scheduled=setTimeout(()=>{scheduled=undefined;tick(true);},250);}
+diff --git a/desktop/test/identity-session.test.ts b/desktop/test/identity-session.test.ts
+index 1c57fe09b5..c7822057c0 100644
+--- a/desktop/test/identity-session.test.ts
++++ b/desktop/test/identity-session.test.ts
+@@ -685,3 +685,119 @@ describe('local data deletion support (Story 1.12)', () => {
+     expect(fs.existsSync(path.join(w.dir, SESSION_FILE))).toBe(false);
+   });
+ });
++
++
++describe('bounded fresh execution-policy reads', () => {
++  const workspace = '11111111-1111-4111-8111-111111111111';
++  const policy = { workspace_id: workspace, authorization_epoch: '1', policy_revision: '1', execution: null };
++  const gate = () => { let release!: () => void; const promise = new Promise<void>(resolve => { release = resolve; }); return {promise, release}; };
++
++  it('allows four GETs, bounds the waiting queue, and recovers every permit', async () => {
++    const w = world(), session = w.make(); await session.signIn(); const held = gate(); let active=0, peak=0;
++    const read = vi.spyOn(w.service, 'executionPolicy').mockImplementation(async () => { active++; peak=Math.max(peak,active); await held.promise; active--; return policy; });
++    const reads = Array.from({length:37}, () => session.readExecutionPolicy(workspace));
++    await waitFor(() => read.mock.calls.length === 4); expect(await reads[36]).toBeNull(); expect(peak).toBe(4);
++    held.release(); expect((await Promise.all(reads)).filter(Boolean)).toHaveLength(36); expect(peak).toBe(4);
++    expect(await session.readExecutionPolicy(workspace)).toEqual(policy); expect(read).toHaveBeenCalledTimes(37);
++  });
++
++  it('releases permits after endpoint errors without retrying a denial', async () => {
++    const w = world(), session = w.make(); await session.signIn();
++    const read = vi.spyOn(w.service, 'executionPolicy').mockRejectedValue(new ServiceError('denied',true,403));
++    const results = await Promise.allSettled(Array.from({length:36},()=>session.readExecutionPolicy(workspace)));
++    expect(results.every(r=>r.status==='rejected')).toBe(true); expect(read).toHaveBeenCalledTimes(36);
++    read.mockResolvedValue(policy); expect(await session.readExecutionPolicy(workspace)).toEqual(policy);
++  });
++
++  it('serializes one expiry rotation across concurrent fresh GETs', async () => {
++    let now=Date.now(); const w=world('gnome_libsecret',{now:()=>now}), session=w.make(); await session.signIn(); now+=15*60_000;
++    const read=vi.spyOn(w.service,'executionPolicy').mockResolvedValue(policy);
++    expect(await Promise.all(Array.from({length:4},()=>session.readExecutionPolicy(workspace)))).toEqual(Array(4).fill(policy));
++    expect(w.service.calls.filter(c=>c==='refresh')).toHaveLength(1);
++    expect(read.mock.calls.every(([access])=>access===w.service.current()!.access)).toBe(true);
++  });
++
++  it('coalesces concurrent old-token 401s into one rotation, not four', async () => {
++    const w=world(), session=w.make(); await session.signIn(); const old=w.service.current()!.access, held=gate();
++    const read=vi.spyOn(w.service,'executionPolicy').mockImplementation(async access=>{if(access===old){await held.promise;throw new ServiceError('unauthenticated',true,401);}return policy;});
++    const reads=Array.from({length:4},()=>session.readExecutionPolicy(workspace));await waitFor(()=>read.mock.calls.length===4);held.release();
++    expect(await Promise.all(reads)).toEqual(Array(4).fill(policy));expect(w.service.calls.filter(c=>c==='refresh')).toHaveLength(1);expect(read).toHaveBeenCalledTimes(8);
++  });
++
++  it('uses an already rotated token after a late 401 and stops after a second 401', async () => {
++    const w=world(), session=w.make();await session.signIn();const old=w.service.current()!.access,held=gate();
++    const read=vi.spyOn(w.service,'executionPolicy').mockImplementation(async access=>{if(access===old)await held.promise;throw new ServiceError('unauthenticated',true,401);});
++    const pending=session.readExecutionPolicy(workspace);const rejected=expect(pending).rejects.toBeInstanceOf(ServiceError);await waitFor(()=>read.mock.calls.length===1);
++    expect(await session.refreshNow()).toBe(true);held.release();await rejected;
++    expect(w.service.calls.filter(c=>c==='refresh')).toHaveLength(1);expect(read).toHaveBeenCalledTimes(2);
++  });
++
++  it.each(['dependency','lost','reuse'] as const)('does not dispatch a near-expiry read after %s refresh failure', async outcome=>{
++    let now=Date.now();const w=world('gnome_libsecret',{now:()=>now}),session=w.make();await session.signIn();now+=15*60_000;w.service.refreshOutcome=outcome;
++    const read=vi.spyOn(w.service,'executionPolicy').mockResolvedValue(policy);
++    expect(await session.readExecutionPolicy(workspace)).toBeNull();expect(read).not.toHaveBeenCalled();
++    expect(w.service.calls.filter(c=>c==='refresh')).toHaveLength(1);
++  });
++
++  it('suppresses queued reads and late success after logout, including same-principal sign-in', async () => {
++    const w=world(),session=w.make();await session.signIn();const principal=session.principalId(),held=gate();
++    const read=vi.spyOn(w.service,'executionPolicy').mockImplementation(async()=>{await held.promise;return policy;});
++    const pending=Array.from({length:8},()=>session.readExecutionPolicy(workspace));await waitFor(()=>read.mock.calls.length===4);
++    expect((await session.signOut()).ok).toBe(true);
++    // The default fake mints a different principal per login. Model a new
++    // session for the same principal explicitly, including its service view.
++    const bootstrap=w.service.bootstrap.bind(w.service);vi.spyOn(w.service,'bootstrap').mockImplementation(async request=>{const credentials=await bootstrap(request);w.service.current()!.principalId=principal!;return{...credentials,principal_id:principal!};});
++    await session.signIn();expect(session.principalId()).toBe(principal);
++    held.release();expect(await Promise.all(pending)).toEqual(Array(8).fill(null));expect(read).toHaveBeenCalledTimes(4);
++    expect(await session.readExecutionPolicy(workspace)).toEqual(policy);
++  });
++
++  it('does not publish a late failure into a replacement session', async () => {
++    const w=world(),session=w.make();await session.signIn();const held=gate();
++    const read=vi.spyOn(w.service,'executionPolicy').mockImplementation(async()=>{await held.promise;throw new ServiceError('transport',true);});
++    const pending=session.readExecutionPolicy(workspace);await waitFor(()=>read.mock.calls.length===1);session.forgetLocally();await session.signIn();
++    expect(session.snapshot().sharedService).toBe('available');held.release();expect(await pending).toBeNull();expect(session.snapshot().sharedService).toBe('available');
++  });
++
++  it('leaves general request and explicit refresh serialization unchanged', async () => {
++    const w=world(),session=w.make();await session.signIn();const held=gate(),entered:string[]=[];
++    const first=session.withAccess(async()=>{entered.push('first');await held.promise;return 1;});
++    const second=session.withAccess(async()=>{entered.push('second');return 2;});await waitFor(()=>entered.length===1);expect(entered).toEqual(['first']);held.release();
++    expect(await Promise.all([first,second])).toEqual([1,2]);expect(entered).toEqual(['first','second']);
++  });
++});
++
++
++describe('concurrent policy availability ordering', () => {
++  const workspace='11111111-1111-4111-8111-111111111111';
++  const policy={workspace_id:workspace,authorization_epoch:'1',policy_revision:'1',execution:null};
++  it.each(['policy','serialized'] as const)('does not overwrite a later %s failure with an old GET success',async source=>{
++    const w=world(),session=w.make();await session.signIn();let release!:()=>void;const gate=new Promise<void>(r=>{release=r;});
++    const read=vi.spyOn(w.service,'executionPolicy').mockImplementationOnce(async()=>{await gate;return policy;}).mockRejectedValue(new ServiceError('transport',true));
++    const old=session.readExecutionPolicy(workspace);await waitFor(()=>read.mock.calls.length===1);
++    const failed=source==='policy'?session.readExecutionPolicy(workspace):session.withAccess(async()=>{throw new ServiceError('transport',true);});
++    await expect(failed).rejects.toBeInstanceOf(ServiceError);expect(session.snapshot().sharedService).toBe('unavailable');release();expect(await old).toEqual(policy);expect(session.snapshot().sharedService).toBe('unavailable');
++    read.mockResolvedValue(policy);expect(await session.readExecutionPolicy(workspace)).toEqual(policy);expect(session.snapshot().sharedService).toBe('available');
++  });
++});
++
++
++describe('policy retry lifecycle races',()=>{
++  const workspace='11111111-1111-4111-8111-111111111111';
++  it('does not refresh or retry when logout supersedes a queued 401 retry',async()=>{
++    const w=world(),session=w.make();await session.signIn();let rejectRead!:()=>void,releaseBlock!:()=>void;
++    const response=new Promise<void>(resolve=>{rejectRead=resolve;}),block=new Promise<void>(resolve=>{releaseBlock=resolve;});
++    const read=vi.spyOn(w.service,'executionPolicy').mockImplementation(async()=>{await response;throw new ServiceError('unauthenticated',true,401);});
++    const pending=session.readExecutionPolicy(workspace);await waitFor(()=>read.mock.calls.length===1);let blocking=false;
++    const mutation=session.withAccess(async()=>{blocking=true;await block;return true;});await waitFor(()=>blocking);
++    rejectRead();await new Promise<void>(resolve=>setImmediate(resolve));const logout=session.signOut();releaseBlock();
++    expect(await pending).toBeNull();expect(await mutation).toBe(true);expect((await logout).ok).toBe(true);
++    expect(read).toHaveBeenCalledTimes(1);expect(w.service.calls.filter(c=>c==='refresh')).toHaveLength(0);
++  });
++  it('keeps a rotated policy credential memory-only when vault persistence fails',async()=>{
++    let now=Date.now();const w=world('gnome_libsecret',{now:()=>now});const vault=new CredentialVault({safeStorage:fakeSafeStorage('gnome_libsecret'),platform:'linux',dir:w.dir});const session=w.make({vault});await session.signIn();
++    vi.spyOn(vault,'save').mockImplementation(()=>{throw new Error('fixture vault failure');});now+=15*60_000;
++    const policy={workspace_id:workspace,authorization_epoch:'1',policy_revision:'1',execution:null};vi.spyOn(w.service,'executionPolicy').mockResolvedValue(policy);
++    expect(await session.readExecutionPolicy(workspace)).toEqual(policy);expect(session.snapshot().credentialStorage).toBe('memory-only');expect(fs.existsSync(path.join(w.dir,SESSION_FILE))).toBe(false);
++  });
++});
+diff --git a/desktop/test/live-conversation.test.tsx b/desktop/test/live-conversation.test.tsx
+index aa1787a3e5..123f98ef8f 100644
+--- a/desktop/test/live-conversation.test.tsx
++++ b/desktop/test/live-conversation.test.tsx
+@@ -106,3 +106,24 @@ describe('quiet results in the transcript', () => {
+     for (const button of nav.querySelectorAll('button')) expect(button.classList.contains('iq-button--sm')).toBe(true);
+   });
+ });
++
++it('does not resurrect an old completed read when a follow-up starts during that read',async()=>{
++ let changed=()=>{},release!:(value:unknown)=>void,reads=0;
++ let next:ProgressSnapshot={...base,status:'completed',items:[agent('Earlier answer','completed')]};
++ const progress=vi.fn(async()=>{
++  reads++;
++  if(reads===2)return new Promise(resolve=>{release=resolve;});
++  return {ok:true,value:next};
++ });
++ Object.assign(globalThis,{inquello:{tasks:{progress,answer:vi.fn(),onProgressChanged:(fn:()=>void)=>{changed=fn;return()=>{};},onSessionChanged:()=>()=>{}}}});
++ render(<TaskProgress taskId="task-1" workspaceId="workspace-1"/>);
++ await screen.findByText('Earlier answer');
++ await act(async()=>{changed();});
++ await waitFor(()=>expect(release).toBeTypeOf('function'));
++ next={...base,runId:'run-2',turnId:'turn-2',items:[agent('Held follow-up text')]};
++ const {refreshTaskObservation}=await import('../src/renderer/Shell/task-observation');
++ await act(async()=>{refreshTaskObservation('task-1','workspace-1');changed();release({ok:true,value:{...base,status:'completed',items:[agent('Stale completed response','completed')]}});});
++ await screen.findByText('Held follow-up text');
++ expect(screen.queryByText('Stale completed response')).toBeNull();
++ expect(screen.queryByText(/^Finished/)).toBeNull();
++});
+diff --git a/desktop/test/policy-units.test.ts b/desktop/test/policy-units.test.ts
+index 00979c80d2..9ae3191a49 100644
+--- a/desktop/test/policy-units.test.ts
++++ b/desktop/test/policy-units.test.ts
+@@ -649,3 +649,27 @@ describe('settings scope fences', () => {
+     expect(h.calls).toHaveLength(0);
+   });
+ });
++
++
++describe('concurrent authority observation ordering',()=>{
++  const view=(revision:string):ExecutionPolicyView=>({workspace_id:WORKSPACE,authorization_epoch:'9',policy_revision:revision,execution:null});
++  const deferred=()=>{let resolve!:(value:ExecutionPolicyView)=>void,reject!:(error:Error)=>void;const promise=new Promise<ExecutionPolicyView>((yes,no)=>{resolve=yes;reject=no;});return{promise,resolve,reject};};
++  it('rejects a lower local revision without poisoning a newer in-flight decision',async()=>{
++    const old=deferred(),newer=deferred(),last=deferred();const queue=[old,newer,last];
++    const h=harness({service:{executionPolicy:async()=>queue.shift()!.promise}});
++    const a=h.policy.startPolicy(WORKSPACE),b=h.policy.startPolicy(WORKSPACE),c=h.policy.startPolicy(WORKSPACE);
++    newer.resolve(view('5'));expect((await b)?.policyRevision).toBe(5);old.resolve(view('4'));expect(await a).toBeNull();last.resolve(view('5'));expect((await c)?.policyRevision).toBe(5);
++  });
++  it.each(['denied','transport'] as const)('a genuinely late %s still invalidates an overlapping allowed response',async kind=>{
++    const old=deferred(),newer=deferred(),last=deferred();const queue=[old,newer,last];
++    const h=harness({service:{executionPolicy:async()=>queue.shift()!.promise}});
++    const a=h.policy.startPolicy(WORKSPACE),b=h.policy.startPolicy(WORKSPACE),c=h.policy.startPolicy(WORKSPACE);
++    newer.resolve(view('5'));expect((await b)?.policyRevision).toBe(5);old.reject(new ServiceError(kind,true));expect(await a).toBeNull();last.resolve(view('5'));expect(await c).toBeNull();
++  });
++  it('does not cascade invalidation when an already-superseded response settles',async()=>{
++    const denied=deferred(),old=deferred(),fresh=deferred();const queue=[denied,old,fresh];
++    const h=harness({service:{executionPolicy:async()=>queue.shift()!.promise}});
++    const a=h.policy.startPolicy(WORKSPACE),b=h.policy.startPolicy(WORKSPACE);denied.reject(new ServiceError('denied',true));expect(await a).toBeNull();
++    const c=h.policy.startPolicy(WORKSPACE);old.resolve(view('5'));expect(await b).toBeNull();fresh.resolve(view('5'));expect((await c)?.policyRevision).toBe(5);
++  });
++});
+diff --git a/desktop/test/tasks-progress.test.ts b/desktop/test/tasks-progress.test.ts
+index f5f44bac61..5af5914373 100644
+--- a/desktop/test/tasks-progress.test.ts
++++ b/desktop/test/tasks-progress.test.ts
+@@ -1,6 +1,7 @@
+ import {taskBindingFixture} from './model-fixtures';
+ import {describe,it,expect,vi} from 'vitest';
+ import {TaskService} from '../src/main/tasks/service';
++import {RpcResponseError} from '../src/main/runtime';
+ import {parseProgress,parseQuestion,parseAnswers} from '../src/main/tasks/progress';
+ import {taskProgressPayload,taskAnswerPayload} from '../src/main/tasks/validators';
+ const task='11111111-1111-4111-8111-111111111111',workspace='22222222-2222-4222-8222-222222222222';
+@@ -121,3 +122,38 @@ it('rehydrates current provider credentials before revealing saved progress afte
+ it('refuses saved progress if provider handoff changes identity or fails',async()=>{
+  for(const change of [false,true]){const x=setup();x.prepareRoutes.mockImplementationOnce(async()=>{if(change)x.setPrincipal(null);return{ok:change};});expect(await x.service.progress(input)).toMatchObject({ok:false});expect(x.request).not.toHaveBeenCalled();}
+ });
++
++describe('bounded current progress reconstruction retry',()=>{
++ const stale=(kind='stale_snapshot',code=-32600,method='inquello/tasks/progress')=>new RpcResponseError(method,code,'Fixed refusal',{inquello:{kind}});
++ it('reconstructs once after output changes, with fresh policy before and after, without a fallback or effect',async()=>{
++  const x=setup();x.request.mockRejectedValueOnce(stale());
++  expect(await x.service.progress(input)).toMatchObject({ok:true,value:{runId:'run-1'}});
++  expect(x.request).toHaveBeenCalledTimes(2);expect(x.fresh).toHaveBeenCalledTimes(3);
++  expect(x.request.mock.calls.map(call=>call[0])).toEqual(['inquello/tasks/progress','inquello/tasks/progress']);
++  expect(x.authorityUnavailable).not.toHaveBeenCalled();
++ });
++ it('stops after a second changed snapshot',async()=>{
++  const x=setup();x.request.mockRejectedValue(stale());
++  expect(await x.service.progress(input)).toMatchObject({ok:false});expect(x.request).toHaveBeenCalledTimes(2);
++ });
++ it.each([stale('authority_unknown'),stale('session_changed'),stale('not_found'),stale('stale'),stale('stale_snapshot',-32001),stale('stale_snapshot',-32600,'inquello/tasks/resume'),new Error('stale_snapshot'),{rpcCode:-32600,data:{inquello:{kind:'stale_snapshot'}}}])('does not retry non-exact or authority errors',async error=>{
++  const x=setup();x.request.mockRejectedValue(error);
++  expect(await x.service.progress(input)).toMatchObject({ok:false});expect(x.request).toHaveBeenCalledTimes(1);
++ });
++ it.each(['principal','runtime','task','policy','unavailable'] as const)('does not retry after %s changes',async change=>{
++  const x=setup();x.request.mockImplementationOnce(async()=>{
++   if(change==='principal')x.setPrincipal(null);else if(change==='runtime')x.restart();else if(change==='task')x.service.invalidateTask(task);else x.setPolicy(change==='unavailable'?null:{workspaceId:workspace,authorizationEpoch:2});
++   throw stale();
++  });
++  expect(await x.service.progress(input)).toMatchObject({ok:false});expect(x.request).toHaveBeenCalledTimes(1);
++ });
++ it('still suppresses a second reply when policy changes while it waits',async()=>{
++  const x=setup();x.request.mockRejectedValueOnce(stale()).mockImplementationOnce(async()=>{x.setPolicy({workspaceId:workspace,authorizationEpoch:2});return snapshot();});
++  expect(await x.service.progress(input)).toMatchObject({ok:false});expect(x.request).toHaveBeenCalledTimes(2);
++ });
++ it('does not retry a page tied to a changed analytical snapshot',async()=>{
++  const x=setup();x.request.mockRejectedValue(stale());
++  expect(await x.service.progress({...input,resultPage:{snapshotId:task,currentOffset:1,historyOffset:0}})).toMatchObject({ok:false});
++  expect(x.request).toHaveBeenCalledTimes(1);
++ });
++});
+diff --git a/desktop/test/usage-observation.test.ts b/desktop/test/usage-observation.test.ts
+new file mode 100644
+--- /dev/null
++++ b/desktop/test/usage-observation.test.ts
+@@ -0,0 +1,67 @@
++import {describe,expect,it,vi} from 'vitest';
++import {UsageService} from '../src/main/usage/service';
++import {notifySettledWork} from '../src/main/usage/notifications';
++import {facts,taskId,principal} from './usage-fixtures';
++function deferred<T>(){let resolve!:(value:T)=>void;const promise=new Promise<T>(done=>{resolve=done;});return{promise,resolve};}
++const authority=()=>({ok:true as const,value:{sandbox:'available' as const}});
++function setup(){
++ let owner:string|null=principal,runtime:unknown={},ready=true;
++ const inspectEnvironment=vi.fn(async()=>authority()),request=vi.fn(async()=>facts()),changed=vi.fn();
++ const service=new UsageService({identity:{principalId:()=>owner},runtime:{instance:()=>runtime,ready:()=>ready,request:request as never},policy:{inspectEnvironment},onChanged:changed});
++ return{service,inspectEnvironment,request,changed,owner:()=>{owner=null;},runtime:()=>{runtime={};},stop:()=>{ready=false;}};
++}
++describe('usage observation reconstruction',()=>{
++ it('reconstructs after sandbox completion supersedes a successful held authority inspection',async()=>{
++  const h=setup(),held=deferred<ReturnType<typeof authority>>();h.inspectEnvironment.mockImplementationOnce(()=>held.promise);
++  const pending=h.service.forTask(taskId);await vi.waitFor(()=>expect(h.inspectEnvironment).toHaveBeenCalledOnce());
++  const refresh=(privateScope:boolean)=>{if(privateScope)h.service.invalidate();else h.service.observationsChanged();};
++  notifySettledWork('inquello/tools/exec',{sandboxProbeTarget:'/fixture'},Promise.resolve({}),{usageChanged:refresh,environmentChanged:refresh},fn=>fn());
++  await Promise.resolve();held.resolve(authority());
++  expect(await pending).toMatchObject({ok:true,value:facts()});
++  expect(h.inspectEnvironment).toHaveBeenCalledTimes(2);expect(h.request).toHaveBeenCalledExactlyOnceWith('inquello/usage/read',{taskId});
++ });
++});
++
++describe('bounded current-authority reconstruction',()=>{
++ it('discards an observation-superseded native payload and reads current settings from scratch',async()=>{
++  const h=setup(),held=deferred<ReturnType<typeof facts>>();h.request.mockImplementationOnce(()=>held.promise);
++  const pending=h.service.forTask(taskId);await vi.waitFor(()=>expect(h.request).toHaveBeenCalledOnce());
++  h.service.observationsChanged();const latest=facts();latest.usage.settings={revision:2,route_revision:2,choices:{reasoning:'default',speed:'default'}};latest.capabilities.routeRevision=2;h.request.mockResolvedValue(latest);held.resolve(facts());
++  expect(await pending).toEqual({ok:true,value:latest});expect(h.inspectEnvironment).toHaveBeenCalledTimes(2);expect(h.request).toHaveBeenCalledTimes(2);
++ });
++ it.each(['authority','native'] as const)('refuses a second observation change during %s without an unbounded retry',async phase=>{
++  const h=setup();
++  if(phase==='authority')h.inspectEnvironment.mockImplementation(async()=>{h.service.observationsChanged();return authority();});
++  else h.request.mockImplementation(async()=>{h.service.observationsChanged();return facts();});
++  expect(await h.service.forTask(taskId)).toMatchObject({ok:false});expect(h.inspectEnvironment).toHaveBeenCalledTimes(2);expect(h.request).toHaveBeenCalledTimes(phase==='native'?2:0);
++ });
++ it.each(['owner','runtime','stop','hard'] as const)('never reconstructs past %s during successful authority wait',async change=>{
++  const h=setup(),held=deferred<ReturnType<typeof authority>>();h.inspectEnvironment.mockImplementationOnce(()=>held.promise);
++  const pending=h.service.forTask(taskId);await vi.waitFor(()=>expect(h.inspectEnvironment).toHaveBeenCalledOnce());h.service.observationsChanged();if(change==='hard')h.service.invalidate();else h[change]();held.resolve(authority());
++  expect(await pending).toMatchObject({ok:false});expect(h.inspectEnvironment).toHaveBeenCalledOnce();expect(h.request).not.toHaveBeenCalled();
++ });
++ it.each(['owner','runtime','stop','hard'] as const)('never reconstructs past %s during successful native wait',async change=>{
++  const h=setup(),held=deferred<ReturnType<typeof facts>>();h.request.mockImplementationOnce(()=>held.promise);
++  const pending=h.service.forTask(taskId);await vi.waitFor(()=>expect(h.request).toHaveBeenCalledOnce());h.service.observationsChanged();if(change==='hard')h.service.invalidate();else h[change]();held.resolve(facts());
++  expect(await pending).toMatchObject({ok:false});expect(h.inspectEnvironment).toHaveBeenCalledOnce();expect(h.request).toHaveBeenCalledOnce();
++ });
++ it.each(['denied','throws'] as const)('does not retry %s policy even with an observation change',async kind=>{
++  const h=setup();h.inspectEnvironment.mockImplementationOnce(async()=>{h.service.observationsChanged();if(kind==='throws')throw new Error('authority unavailable');return{ok:false,code:'failed',reason:'unavailable'} as never;});
++  expect(await h.service.forTask(taskId)).toMatchObject({ok:false});expect(h.inspectEnvironment).toHaveBeenCalledOnce();expect(h.request).not.toHaveBeenCalled();
++ });
++ it.each(['malformed','foreign','throws'] as const)('does not retry %s native data even with an observation change',async kind=>{
++  const h=setup();h.request.mockImplementationOnce(async()=>{h.service.observationsChanged();if(kind==='throws')throw new Error('native unavailable');return(kind==='foreign'?{...facts(),taskId:principal}:{} )as never;});
++  expect(await h.service.forTask(taskId)).toMatchObject({ok:false});expect(h.inspectEnvironment).toHaveBeenCalledOnce();expect(h.request).toHaveBeenCalledOnce();
++ });
++ it.each(['authority','native'] as const)('never replays a settings mutation superseded during %s',async phase=>{
++  const h=setup();if(phase==='authority')h.inspectEnvironment.mockImplementationOnce(async()=>{h.service.observationsChanged();return authority();});
++  else h.request.mockImplementationOnce(async()=>{h.service.observationsChanged();return facts();});
++  expect(await h.service.set({taskId,operationId:taskId,expectedRevision:0,routeRevision:1,reasoning:'default',speed:'default'})).toMatchObject({ok:false});
++  expect(h.inspectEnvironment).toHaveBeenCalledOnce();expect(h.request).toHaveBeenCalledTimes(phase==='native'?1:0);expect(h.changed).not.toHaveBeenCalled();
++ });
++ it('holds the original hard generation fixed across reconstruction',async()=>{
++  const h=setup();h.inspectEnvironment.mockImplementationOnce(async()=>{h.service.observationsChanged();return authority();});
++  h.inspectEnvironment.mockImplementationOnce(async()=>{h.service.invalidate();return authority();});
++  expect(await h.service.forTask(taskId)).toMatchObject({ok:false});expect(h.inspectEnvironment).toHaveBeenCalledTimes(2);expect(h.request).not.toHaveBeenCalled();
++ });
++});

@@ -1,0 +1,17 @@
+{
+  "runId": "9f9d996b-255c-47f8-9fa2-4fc004cfab03",
+  "backup": "D:\\Inquello\\backups\\pilot-live-acceptance-20261109",
+  "backupComplete": true,
+  "sameKeys": true,
+  "sevenDayLifetime": true,
+  "certificateProof": {
+    "caPublicKeySha256": "0e0c9cf393c50a68c1239d7a38fca34945682de8f28fdfa35493c427294348d9",
+    "serverPublicKeySha256": "aa3f536c71c8e519f81507e64408e74d0b469f7cfa87c63d8ac2b1d013ac9e82",
+    "caNotAfter": "Nov 16 20:44:01 2026 GMT",
+    "serverNotAfter": "Nov 16 20:44:01 2026 GMT"
+  },
+  "freeBytesBefore": 33090293760,
+  "databaseBytes": 9798159,
+  "activated": true,
+  "at": "2026-11-09T20:44:03.793Z"
+}

@@ -1,0 +1,1998 @@
+{
+  "date": "2026-11-05",
+  "evidence_kind": "planning-only; no runtime tests",
+  "historical_story_headings": 139,
+  "current_story_headings": 141,
+  "current_unique_story_inventory_including_1_31": 142,
+  "original_acceptance_count": 382,
+  "current_acceptance_count": 407,
+  "all_original_acceptance_text_preserved": true,
+  "epic_1_section_sha256": "b8a23bda37cfb45f54e43479eeab90609d7e6deb3271a6bde1ef4afa938a0bca",
+  "all_existing_tracker_states_preserved": true,
+  "new_tracker_keys": [
+    "6-6-establish-source-backed-organisation-and-first-engagement-context",
+    "6-7-prepare-and-revise-risk-based-organisational-coverage-plans",
+    "10-3-compact-and-resume-long-work-with-durable-references",
+    "12-1-run-a-procedure-non-interactively-with-structured-versioned-results",
+    "12-2-bind-service-identities-before-unattended-enablement",
+    "12-3-revoke-unattended-credentials-without-assuming-seat-removal-is-enough",
+    "12-4-reassign-work-reviews-and-unattended-jobs-on-departure",
+    "12-5-configure-schedule-and-event-mandates-in-automations",
+    "12-6-report-run-outcomes-and-prevent-duplicate-effects",
+    "12-8-verify-revocation-and-duplicate-effect-safety-for-unattended-routes",
+    "13-1-extend-retained-material-policy-to-all-remaining-enabled-categories",
+    "epic-10",
+    "epic-10-retrospective",
+    "epic-12",
+    "epic-12-retrospective",
+    "epic-13",
+    "epic-13-retrospective"
+  ],
+  "stories": [
+    {
+      "story": "1.1",
+      "title": "Set up the initial Inquello fork from the selected public Codex cut",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "1.1.1",
+        "1.1.2"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "1.2",
+      "title": "Run the packaged runtime over a bounded desktop transport",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "1.2.1",
+        "1.2.2"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "1.3",
+      "title": "Isolate desktop renderers from host privilege",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "1.3.1"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "1.4",
+      "title": "Keep local working metadata behind domain-owned commands",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "1.4.1"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "1.5",
+      "title": "Apply the selected typography, tokens and icon semantics",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "1.5.1",
+        "1.5.2"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "1.6",
+      "title": "Operate core action and input primitives",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "1.6.1",
+        "1.6.2"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "1.7",
+      "title": "Navigate and identify work with accessible primitives",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "1.7.1",
+        "1.7.2"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "1.8",
+      "title": "Inspect progress and proposed actions with accessible primitives",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "1.8.1",
+        "1.8.2"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "1.9",
+      "title": "Register capability limits before enablement",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "1.9.1",
+        "1.9.2"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "1.10",
+      "title": "Authenticate an Inquello identity independently of inference",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "1.10.1",
+        "1.10.2",
+        "1.10.3"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "1.11",
+      "title": "Enforce internal-company memberships without disclosing private Tasks",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "1.11.1",
+        "1.11.2",
+        "1.11.3",
+        "1.11.4"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "1.12",
+      "title": "Govern the local data actually held by the first private route",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "1.12.1",
+        "1.12.2",
+        "1.12.3"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "1.13",
+      "title": "Keep provider credentials separate and protected",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "1.13.1",
+        "1.13.2"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "1.14",
+      "title": "Organise private Workspaces, Engagements, folders and Tasks",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "1.14.1",
+        "1.14.2",
+        "1.14.3",
+        "1.14.4"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "1.15",
+      "title": "Distinguish execution, checks, review and delivery states",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "1.15.1",
+        "1.15.2",
+        "1.15.3"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "1.16",
+      "title": "Navigate the desktop shell with keyboard and responsive layout",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "1.16.1",
+        "1.16.2",
+        "1.16.3"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "1.17",
+      "title": "Compose a plain private request without claiming later inputs",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "1.17.1"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "1.18",
+      "title": "Inspect effective managed policy and explicit broader modes",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "1.18.1",
+        "1.18.2",
+        "1.18.3"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "1.19",
+      "title": "Bound initial tool reads, writes and network access",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "1.19.1",
+        "1.19.2",
+        "1.19.3",
+        "1.19.4"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "1.20",
+      "title": "Authorize specific actions without granting professional approval",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "1.20.1",
+        "1.20.2",
+        "1.20.3",
+        "1.20.4"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "1.21",
+      "title": "Discover current tools and connection states honestly",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "1.21.1",
+        "1.21.2",
+        "1.21.3",
+        "1.21.4"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "1.22",
+      "title": "Configure initial processing routes without silent fallback",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "1.22.1",
+        "1.22.2",
+        "1.22.3",
+        "1.22.4",
+        "1.22.5",
+        "1.22.6"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "1.23",
+      "title": "Show local execution separately from inference",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "1.23.1",
+        "1.23.2"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "1.24",
+      "title": "Choose reasoning and inspect attributable usage",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "1.24.1",
+        "1.24.2",
+        "1.24.3"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "1.25",
+      "title": "Start a real plain-text private Task on a configured route",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "1.25.1",
+        "1.25.2",
+        "1.25.3"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "1.26",
+      "title": "Follow actual basic progress and truthful results",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "1.26.1",
+        "1.26.2",
+        "1.26.3"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "1.27",
+      "title": "Reject untrusted instructions in initial tool output",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "1.27.1",
+        "1.27.2"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "1.28",
+      "title": "Gate current-route real-data use on negative authorization evidence",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "1.28.1",
+        "1.28.2",
+        "1.28.3",
+        "1.28.4"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "1.29",
+      "title": "Steer, stop and recover the same private Task",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "1.29.1",
+        "1.29.2",
+        "1.29.3",
+        "1.29.4",
+        "1.29.5"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "1.30",
+      "title": "Find and reopen only permitted saved work",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "1.30.1",
+        "1.30.2",
+        "1.30.3",
+        "1.30.4",
+        "1.30.5",
+        "1.30.6",
+        "1.30.7"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "2.1",
+      "title": "Understand an existing work folder with precise references",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "2.1.1",
+        "2.1.2",
+        "2.1.3",
+        "2.1.4"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "2.2",
+      "title": "Use images and screenshots as attributable context",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "2.2.1",
+        "2.2.2"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "2.3",
+      "title": "Capture selections and application snapshots with saved or live scope stated",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "2.3.1",
+        "2.3.2",
+        "2.3.3"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "2.4",
+      "title": "Attach connector identity, entity scope and extraction context to evidence",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "2.4.1",
+        "2.4.2"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "2.5",
+      "title": "Run calculations, queries and scripts with retained derivations",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "2.5.1",
+        "2.5.2",
+        "2.5.3",
+        "2.5.4"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "2.6",
+      "title": "Apply standing instructions and Workspace guidance with provenance",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "2.6.1",
+        "2.6.2"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "2.7",
+      "title": "Define, select and validate a Method before Task invocation",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "2.7.1",
+        "2.7.2",
+        "2.7.3"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "2.8",
+      "title": "Start a Task with actual files and a selected Method",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "2.8.1",
+        "2.8.2"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "2.9",
+      "title": "Retain Composer attachments and selected Method during navigation",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "2.9.1"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "2.10",
+      "title": "Execute and verify a registered Method on its supplied inputs",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "2.10.1",
+        "2.10.2"
+      ],
+      "new_acceptance_ids": [
+        "2.10.2"
+      ]
+    },
+    {
+      "story": "2.11",
+      "title": "Record Task-specific departures separately from Method changes",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "2.11.1",
+        "2.11.2",
+        "2.11.3"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "2.12",
+      "title": "Show population, exclusions, sampling and actual Coverage",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "2.12.1",
+        "2.12.2",
+        "2.12.3",
+        "2.12.4",
+        "2.12.5"
+      ],
+      "new_acceptance_ids": [
+        "2.12.4",
+        "2.12.5"
+      ]
+    },
+    {
+      "story": "2.13",
+      "title": "Inspect technical investigation detail without forcing it on ordinary review",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "2.13.1",
+        "2.13.2"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "2.14",
+      "title": "Show attributable parallel reads and complete analysis progress",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "2.14.1",
+        "2.14.2",
+        "2.14.3"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "2.15",
+      "title": "Run hooks with observable outcomes and defined mandatory-check consequences",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "2.15.1",
+        "2.15.2",
+        "2.15.3"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "2.16",
+      "title": "Keep M1 evidence and retrieved-source instructions subordinate",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "2.16.1",
+        "2.16.2",
+        "2.16.3"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "2.17",
+      "title": "Research with attributable sources and labelled limits",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "2.17.1",
+        "2.17.2",
+        "2.17.3"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "2.18",
+      "title": "Verify source authority before enabling attributable analysis",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "2.18.1",
+        "2.18.2"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "3.1",
+      "title": "Create and revise workbooks and CSV with format-aware changes",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "3.1.1",
+        "3.1.2",
+        "3.1.3",
+        "3.1.4",
+        "3.1.5"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "3.2",
+      "title": "Create and revise Word documents preserving review metadata",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "3.2.1",
+        "3.2.2",
+        "3.2.3"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "3.3",
+      "title": "Create and revise presentations preserving theme, charts and notes",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "3.3.1",
+        "3.3.2"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "3.4",
+      "title": "Continue the same saved file in Excel, Word or PowerPoint and return",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "3.4.1",
+        "3.4.2",
+        "3.4.3",
+        "3.4.4",
+        "3.4.5"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "3.5",
+      "title": "Work in isolated alternatives and promote deliberately",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "3.5.1",
+        "3.5.2",
+        "3.5.3"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "3.6",
+      "title": "Generate explanatory visuals labelled distinct from evidence",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "3.6.1",
+        "3.6.2"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "3.7",
+      "title": "Render source and artifact previews without decision authority",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "3.7.1",
+        "3.7.2"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "3.8",
+      "title": "Reconcile the W1 ledger-to-bank fixture exactly",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "3.8.1",
+        "3.8.2",
+        "3.8.3"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "3.9",
+      "title": "Identify affected outputs when a Method changes; pass M1",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "3.9.1",
+        "3.9.2"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "3.10",
+      "title": "Attribute artifact effort to its producing Task",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "3.10.1"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "4.1",
+      "title": "Bind explicit share grants to private resources",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "4.1.1",
+        "4.1.2",
+        "4.1.3"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "4.2",
+      "title": "Make the exact shared version usable on the recipient computer",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "4.2.1",
+        "4.2.2",
+        "4.2.3",
+        "4.2.4"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "4.3",
+      "title": "Stop revoked shared retrieval and active-agent use",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "4.3.1",
+        "4.3.2",
+        "4.3.3",
+        "4.3.4",
+        "4.3.5"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "4.4",
+      "title": "Apply revocation to derived knowledge and shared held-data controls",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "4.4.1",
+        "4.4.2",
+        "4.4.3",
+        "4.4.4",
+        "4.4.5"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "4.5",
+      "title": "Admit team knowledge without publishing private exploration",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "4.5.1",
+        "4.5.2",
+        "4.5.3",
+        "4.5.4",
+        "4.5.5",
+        "4.5.6"
+      ],
+      "new_acceptance_ids": [
+        "4.5.6"
+      ]
+    },
+    {
+      "story": "4.6",
+      "title": "Prove private/shared memory and revocation boundaries",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "4.6.1",
+        "4.6.2",
+        "4.6.3",
+        "4.6.4",
+        "4.6.5"
+      ],
+      "new_acceptance_ids": [
+        "4.6.5"
+      ]
+    },
+    {
+      "story": "4.7",
+      "title": "Assign Task and Human Review responsibility with attribution",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "4.7.1",
+        "4.7.2",
+        "4.7.3"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "5.1",
+      "title": "Open a private reviewer Task anchored to the submission",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "5.1.1",
+        "5.1.2",
+        "5.1.3"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "5.2",
+      "title": "Reperform the analysis and challenge its basis",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "5.2.1",
+        "5.2.2"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "5.3",
+      "title": "Request a review with evidence-anchored findings",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "5.3.1",
+        "5.3.2",
+        "5.3.3",
+        "5.3.4"
+      ],
+      "new_acceptance_ids": [
+        "5.3.4"
+      ]
+    },
+    {
+      "story": "5.4",
+      "title": "Let the reviewer issue only human-selected anchored notes",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "5.4.1",
+        "5.4.2"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "5.5",
+      "title": "Review evidence, choose a treatment and Keep or Revert a proposal",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "5.5.1",
+        "5.5.2",
+        "5.5.3",
+        "5.5.4",
+        "5.5.5"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "5.6",
+      "title": "Maintain the reviewed basis and mark affected decisions stale",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "5.6.1",
+        "5.6.2",
+        "5.6.3"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "5.7",
+      "title": "Correct, recheck and keep closure separate; pass W2",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "5.7.1",
+        "5.7.2",
+        "5.7.3"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "5.8",
+      "title": "Resolve notes with the preparer agent and return a precise handoff",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "5.8.1",
+        "5.8.2"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "5.9",
+      "title": "Recheck the revision with the reviewer agent before human acceptance",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "5.9.1",
+        "5.9.2"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "5.10",
+      "title": "Retain code, configuration and security review for IT audit",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "5.10.1",
+        "5.10.2",
+        "5.10.3"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "5.11",
+      "title": "Export and import a reviewable package with declared losses",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "5.11.1",
+        "5.11.2",
+        "5.11.3",
+        "5.11.4",
+        "5.11.5"
+      ],
+      "new_acceptance_ids": [
+        "5.11.5"
+      ]
+    },
+    {
+      "story": "5.12",
+      "title": "Preserve Task context across editor, environment, delegation, review and resume boundaries",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "5.12.1",
+        "5.12.2",
+        "5.12.3"
+      ],
+      "new_acceptance_ids": [
+        "5.12.3"
+      ]
+    },
+    {
+      "story": "5.13",
+      "title": "Expose the complete state model including Delivery and Professional Approval links",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "5.13.1",
+        "5.13.2",
+        "5.13.3",
+        "5.13.4"
+      ],
+      "new_acceptance_ids": [
+        "5.13.4"
+      ]
+    },
+    {
+      "story": "5.14",
+      "title": "Demonstrate the workbook-to-review-to-export engineering checkpoint",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "5.14.1",
+        "5.14.2",
+        "5.14.3"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "6.1",
+      "title": "Plan, scope and run procedures with the practice's own terminology",
+      "disposition": "V1 internal-audit; AC 6.1.1 retained future external-audit activation",
+      "acceptance_ids": [
+        "6.1.1",
+        "6.1.2",
+        "6.1.3",
+        "6.1.4"
+      ],
+      "new_acceptance_ids": [
+        "6.1.4"
+      ]
+    },
+    {
+      "story": "6.2",
+      "title": "Track evidence requests and receipt and prepare stakeholder communications",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "6.2.1",
+        "6.2.2"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "6.3",
+      "title": "Inspect, authorise and verify a bounded external update against a fixture destination; pass W3",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "6.3.1",
+        "6.3.2",
+        "6.3.3",
+        "6.3.4",
+        "6.3.5"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "6.4",
+      "title": "Handle responses, actions and retests without agent closure",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "6.4.1",
+        "6.4.2",
+        "6.4.3",
+        "6.4.4"
+      ],
+      "new_acceptance_ids": [
+        "6.4.3",
+        "6.4.4"
+      ]
+    },
+    {
+      "story": "6.5",
+      "title": "Complete first-increment fixture validation and deferral accounting",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "6.5.1",
+        "6.5.2",
+        "6.5.3",
+        "6.5.4",
+        "6.5.5",
+        "6.5.6",
+        "6.5.7",
+        "6.5.8"
+      ],
+      "new_acceptance_ids": [
+        "6.5.6",
+        "6.5.7",
+        "6.5.8"
+      ]
+    },
+    {
+      "story": "6.6",
+      "title": "Establish source-backed organisation and first-engagement context",
+      "disposition": "new current V1 lifecycle",
+      "acceptance_ids": [
+        "6.6.1",
+        "6.6.2",
+        "6.6.3",
+        "6.6.4"
+      ],
+      "new_acceptance_ids": [
+        "6.6.1",
+        "6.6.2",
+        "6.6.3",
+        "6.6.4"
+      ]
+    },
+    {
+      "story": "6.7",
+      "title": "Prepare and revise risk-based organisational coverage plans",
+      "disposition": "new current V1 lifecycle",
+      "acceptance_ids": [
+        "6.7.1",
+        "6.7.2",
+        "6.7.3",
+        "6.7.4",
+        "6.7.5"
+      ],
+      "new_acceptance_ids": [
+        "6.7.1",
+        "6.7.2",
+        "6.7.3",
+        "6.7.4",
+        "6.7.5"
+      ]
+    },
+    {
+      "story": "7.1",
+      "title": "Inspect pages in the local built-in browser profile",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "7.1.1",
+        "7.1.2"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "7.2",
+      "title": "Anchor questions to selected page content and site-exposed tools",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "7.2.1",
+        "7.2.2"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "7.3",
+      "title": "Operate supported applications with Computer Use under the acting identity",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "7.3.1",
+        "7.3.2",
+        "7.3.3"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "7.4",
+      "title": "Teach a routine by demonstration where eligible",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "7.4.1",
+        "7.4.2"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "7.5",
+      "title": "Complete browser-context and page-origin trust checks",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "7.5.1"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "8.1",
+      "title": "Enable approved remote/cloud execution without confusing collaboration hosting",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "8.1.1",
+        "8.1.2"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "8.2",
+      "title": "Isolate versioned text alternatives with Git worktrees",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "8.2.1"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "8.3",
+      "title": "Prepare published or hosted outputs under audience and destination authority",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "8.3.1",
+        "8.3.2"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "9.1",
+      "title": "Supply client tools bound to the current artifact",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "9.1.1"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "9.2",
+      "title": "Supply and verify the ChatGPT/OpenAI subscription sign-in route",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "9.2.1",
+        "9.2.2",
+        "9.2.3",
+        "9.2.4",
+        "9.2.5"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "9.3",
+      "title": "Supply and verify the OpenAI API-key route",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "9.3.1",
+        "9.3.2",
+        "9.3.3",
+        "9.3.4",
+        "9.3.5"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "9.4",
+      "title": "Supply and verify the Azure Foundry route",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "9.4.1",
+        "9.4.2",
+        "9.4.3",
+        "9.4.4",
+        "9.4.5"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "9.5",
+      "title": "Supply and verify the Azure OpenAI route",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "9.5.1",
+        "9.5.2",
+        "9.5.3",
+        "9.5.4",
+        "9.5.5"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "9.6",
+      "title": "Supply and verify the Amazon Bedrock route",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "9.6.1",
+        "9.6.2",
+        "9.6.3",
+        "9.6.4",
+        "9.6.5"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "9.7",
+      "title": "Supply and verify the GCP/Vertex route",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "9.7.1",
+        "9.7.2",
+        "9.7.3",
+        "9.7.4",
+        "9.7.5"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "9.8",
+      "title": "Supply and verify the organisation gateway route",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "9.8.1",
+        "9.8.2",
+        "9.8.3",
+        "9.8.4",
+        "9.8.5"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "9.9",
+      "title": "Supply and verify the local model route",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "9.9.1",
+        "9.9.2",
+        "9.9.3",
+        "9.9.4",
+        "9.9.5"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "9.10",
+      "title": "Extend and verify the selected and conditionally permitted Claude routes",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "9.10.1",
+        "9.10.2",
+        "9.10.3",
+        "9.10.4",
+        "9.10.5"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "9.11",
+      "title": "Inspect prompts and specialist-model eligibility where permitted",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "9.11.1"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "9.12",
+      "title": "Offer eligible composer predictions without changing instructions",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "9.12.1"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "9.13",
+      "title": "Compose tool work programmatically with preserved provenance",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "9.13.1"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "9.14",
+      "title": "Retain security scans, findings and inherited backlog",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "9.14.1"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "10.1",
+      "title": "Delegate bounded work to focused agents and consolidate with disagreements visible",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "10.1.1",
+        "10.1.2",
+        "10.1.3"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "10.2",
+      "title": "Explore side chats, forks and references without losing origin",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "10.2.1",
+        "10.2.2",
+        "10.2.3"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "10.3",
+      "title": "Compact and resume long work with durable references",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "10.3.1",
+        "10.3.2"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "10.4",
+      "title": "Control permitted application and site activity recall",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "10.4.1",
+        "10.4.2"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "10.5",
+      "title": "Carry current grants, revocation and cost through delegated work",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "10.5.1"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "11.1",
+      "title": "Continue the same Task from the CLI with audit-labelled session controls",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "11.1.1",
+        "11.1.2"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "11.2",
+      "title": "Assist beside an open workbook or document with stated context scope",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "11.2.1",
+        "11.2.2"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "11.3",
+      "title": "Steer and review work from a mobile or remote client",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "11.3.1",
+        "11.3.2"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "11.4",
+      "title": "Bind optional physical controls to named Tasks and actions",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "11.4.1"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "11.5",
+      "title": "Dictate instructions with a correctable transcript",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "11.5.1"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "11.6",
+      "title": "Notify attention needs and offer an optional companion",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "11.6.1",
+        "11.6.2"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "11.7",
+      "title": "Import setup and recent history with declared losses",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "11.7.1",
+        "11.7.2"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "11.8",
+      "title": "Share a read-only conversation snapshot to a selected audience",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "11.8.1",
+        "11.8.2"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "12.1",
+      "title": "Run a procedure non-interactively with structured, versioned results",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "12.1.1",
+        "12.1.2",
+        "12.1.3"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "12.2",
+      "title": "Bind service identities before unattended enablement",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "12.2.1",
+        "12.2.2"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "12.3",
+      "title": "Revoke unattended credentials without assuming seat removal is enough",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "12.3.1"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "12.4",
+      "title": "Reassign work, reviews and unattended jobs on departure",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "12.4.1",
+        "12.4.2",
+        "12.4.3"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "12.5",
+      "title": "Configure schedule and event mandates in Automations",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "12.5.1",
+        "12.5.2",
+        "12.5.3",
+        "12.5.4"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "12.6",
+      "title": "Report run outcomes and prevent duplicate effects",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "12.6.1",
+        "12.6.2",
+        "12.6.3"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "12.7",
+      "title": "Receive Tasks and change-triggered reviews from connected services",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "12.7.1",
+        "12.7.2"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "12.8",
+      "title": "Verify revocation and duplicate-effect safety for unattended routes",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "12.8.1"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "13.1",
+      "title": "Extend retained-material policy to all remaining enabled categories",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "13.1.1",
+        "13.1.2",
+        "13.1.3"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "13.2",
+      "title": "Report usage and compliance events separately from accepted work",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "13.2.1"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "14.1",
+      "title": "Deliver to a named external audit-record destination",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "14.1.1"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "15.1",
+      "title": "Verify continuity across all enabled surfaces and delegation",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "15.1.1",
+        "15.1.2"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "15.2",
+      "title": "Verify truthful state and approval meanings across every enabled route",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "15.2.1",
+        "15.2.2",
+        "15.2.3"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "15.3",
+      "title": "Reconcile the complete Capability Contract register",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "15.3.1",
+        "15.3.2",
+        "15.3.3"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "15.4",
+      "title": "Run full-V1 integration evidence and preserve remaining V2 deferrals",
+      "disposition": "retained compatible V1",
+      "acceptance_ids": [
+        "15.4.1",
+        "15.4.2",
+        "15.4.3",
+        "15.4.4",
+        "15.4.5"
+      ],
+      "new_acceptance_ids": [
+        "15.4.5"
+      ]
+    },
+    {
+      "story": "16.1",
+      "title": "Select the permitted record mode at Organisation or Workspace level",
+      "disposition": "retained V2",
+      "acceptance_ids": [
+        "16.1.1"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "16.2",
+      "title": "Link practice workflows to native records with attributed approvals",
+      "disposition": "retained V2",
+      "acceptance_ids": [
+        "16.2.1",
+        "16.2.2"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "16.3",
+      "title": "Govern native records with retention, hold, deletion, amendment and recovery",
+      "disposition": "retained V2",
+      "acceptance_ids": [
+        "16.3.1",
+        "16.3.2"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "16.4",
+      "title": "Migrate records to native mode with an identified destination and verified results",
+      "disposition": "retained V2",
+      "acceptance_ids": [
+        "16.4.1"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "17.1",
+      "title": "Revisit a hosted agent browser or sandbox",
+      "disposition": "retained V2",
+      "acceptance_ids": [
+        "17.1.1"
+      ],
+      "new_acceptance_ids": []
+    },
+    {
+      "story": "1.31",
+      "title": "Customer onboarding",
+      "disposition": "existing owner-approved extension, preserved in tracker/spec; not inserted into frozen Epic 1 section",
+      "status_unchanged": "in-progress",
+      "acceptance_source": "existing customer-onboarding specification, unchanged"
+    }
+  ],
+  "original_acceptance_sha256": {
+    "1.1.1": "a3d80ffdb7f6c9119cf8641022ef2c554dfb515aad3ec80f48e5be55264aa4f0",
+    "1.1.2": "80de8d56d2f1f9b56d6fbbfea199fe75844e2a4b7c22f749bff5aef4a2b42a2a",
+    "1.2.1": "44fcf5d83b5b92022f1b75c9715b65f7042d00b60810ccd41b6d24c8d74f0def",
+    "1.2.2": "2da42857cbf74f27ccdc5d1008e1091027b7d2f7048f705eea3bf96a5aa625cf",
+    "1.3.1": "94183daf8995a4a0aee3da33d44f230f31e3b6e74aabf784d8fb35c93bb6b1c5",
+    "1.4.1": "7659f383d1f1a088e029513ed6885c040836260c707b84e5844ff6956e6cbc92",
+    "1.5.1": "c5b22d5cdca586c9dd79f56f49c37dbef4e5c7d644e7f64d59697d6642749be8",
+    "1.5.2": "bcb634891fc7e4979d8fe7e45fa3384a47ce21658874f3c27ec4191a6493df5f",
+    "1.6.1": "d820c1ee305fad3e12b7badc5eacf22f8a3bdc10bb2da0dda4932390ea83309f",
+    "1.6.2": "dc95181c0ab4abe197359c76ae1fe8a6230c04cf43e935f922dd2f1296da50cf",
+    "1.7.1": "608913bad2e5b08664f14652f2d6a186f1b2179f62fa0f1a5d1774fae9aec182",
+    "1.7.2": "b136aa364cd8da1fbe814c44be489de38343e824109d09c91863e665a9cdeed4",
+    "1.8.1": "cac40c36cec88baa30a75a02c62845314d0f05e7423394b6120b1c745959bf4b",
+    "1.8.2": "ed37fe497ce64fc918ff92205d4fc1b15e68a6540bec633ed9c3c31b15694cb9",
+    "1.9.1": "c4cd3d6d1c25c7ec087a58f86c2fc9bd41006bd21334e6a2d8014320eedfd175",
+    "1.9.2": "9d04585c9971fc605bb759379ad0a05ceadee9bbc8a99d1e2dcfbe520d5c0324",
+    "1.10.1": "2342b34d28a2d9eb2e073b26135074ff6530d8266f08c7992b7d24d1d4c2f782",
+    "1.10.2": "0585862d0e46292116ce61b006afede31d513265342e20712599e55c68eab5e9",
+    "1.10.3": "15442b4daf3f22c7efcb611c952dc55145e60f007bbc6fa0ff00f8a532b8f601",
+    "1.11.1": "dcfaf326361f265947024c80e379586a4b1cb82d2ffccb409480947de3f4f70f",
+    "1.11.2": "0223688aca7f40ebf379657d71906ff1668d803cbe9e19af5c0463b38fa08c40",
+    "1.11.3": "8f66e2c5ef753f8a280225e621f36303b84d2d622f604f5e1c0bd047ae068b92",
+    "1.11.4": "fe4617a68b7d26b6e0c593e92570794d7faf583b89f85b523ba6f000a77c0b5c",
+    "1.12.1": "d4ccf92e7e466cfb779a73651fa52007a79be120dfec58103b329cdc303095ca",
+    "1.12.2": "6ea4f0659996932d17572e8947ee67c8a95d7e4dbb35b4d5fa95c85de22bcf14",
+    "1.12.3": "a0fe88510c17b0220fb1a2acb0dea93e8e35928543bfd67fd31cb8a84265ad04",
+    "1.13.1": "3bc7d56848ba029b8ab8e47ad844b90b90c46be688a259c31faa0f447b816c58",
+    "1.13.2": "c9cf5503f4aff44684a03ca173b2b327d562cad45f707b1e2d11d60bc6e68085",
+    "1.14.1": "a8edee285aa83978fadaf73661a11c61156a0b11ab25f607493a5c399d3848bf",
+    "1.14.2": "b85688be869cdfc6c81d0bfd78d64ec2eeb1616a117559c1a1a8a4380dc3ce7f",
+    "1.14.3": "0cf8753166ab57bcd6d3542a3ea5cdc5f8ddb5f823c4c70b9d203621e609b8a6",
+    "1.14.4": "6e375567c8b580d2fb2a6d42a60e609f50d30c09a2044fe4d75223170c0a75ba",
+    "1.15.1": "a862bf574c492beed2ef86bd475360200fe60ce960d8a469515bac63f1751163",
+    "1.15.2": "fb34710aa1f19cecc7f27ad3c2dff1060dd2125d30c88bdeec1aad1f195236c6",
+    "1.15.3": "811ce95c0dfe844b75a8b38e39b0bc0ab9c4baac0106a43374ffeb1e614094d1",
+    "1.16.1": "f8e849697cddf6d5f7d7d29700fc803bee3e81c9dc1dd1b4b229a8313bbf14de",
+    "1.16.2": "ab33d5ed47d9fa5f36ef588605cb307d6c70da762d526bc66cad52255dfc7f83",
+    "1.16.3": "c8bfb8ae4315ab1a067dd6f3542da7108827ee9b747ec4887374ee209f321f94",
+    "1.17.1": "1d94fa50a501c9df7af543be260fa938e3138e6561e4c439e687190425a246e9",
+    "1.18.1": "78dca822e3ba6860625a4cc1050ba1023d6eac08da56c2b3b12aad979db9888f",
+    "1.18.2": "451eb9415dcb2177da5c7107d8b943348212ef21af74bc472ce5489260668e69",
+    "1.18.3": "70c71edaab43629ae0a4924c32c58f71877852ee37c17dc5e018627dfe133976",
+    "1.19.1": "4c51f8e351af5cfb437795c7d4326c60018c64692fb61758264dc4fe79fd4ab4",
+    "1.19.2": "959e057c92e0025b2c46b01444bf091ce9e4b290d1705b8280b7f8918ca7a051",
+    "1.19.3": "20aa7b31cd8ebfce9cefc86675598aa9041b39ed85e922f1638798f70380eb7f",
+    "1.19.4": "6ba0b217e296fc2300489a70ae5a85719f8e6d456f92562b8e8e55bb27bfb550",
+    "1.20.1": "5c293fb8e029517ef96d153789e3b831fd74db529fcd9a8e26a43bd2b711c3fe",
+    "1.20.2": "d782ebd7f011fcbc659b0267a168ddb318c4bedcc73113753a5a0d7483d59b41",
+    "1.20.3": "cc2ac0ad36309f17643fe38148cccd613dca9be7ff00ede4b7c27ba08d69664d",
+    "1.20.4": "158a3c396ba6c61e9ea485d99339942e7dffccfbd65bb7a3e1b54706a4825619",
+    "1.21.1": "2d9f8b12ba148d6f29c70891adec23b7c5a68b4f11a90efcdee5fc6c525cde58",
+    "1.21.2": "1a6dcfba3a83eb629395af72be8886564eebabe1e528cd541e695da8eaada30c",
+    "1.21.3": "37333c6d0f4921031bf8b68d2661afb28f6c16b21eb2be4d4860af55103b554f",
+    "1.21.4": "cca5dba11ef66a4a22b723883ed46535f109195cdf73f9862d0298da6d575e67",
+    "1.22.1": "5ee156ce2334a23faba1ed4165dd4e63905334f9a9eb8da29cda5ae73712a274",
+    "1.22.2": "a1dc37b131165ab2e29b3599f223c7ed5e73e15d53c0d5a1909d960a5f79519a",
+    "1.22.3": "3b02befaab21ab0705ad53972ce898f03cc7beb445935dc0e60e9d5dd6de6441",
+    "1.22.4": "f65024ade8b0b5e1311efdefe2d23689c3b2469cc4e5b0f9c364aa89ff73ad1d",
+    "1.22.5": "08aa6e7817cc02a35b4de0759bef5e05aac0c0a6ba69c634533a56be7e6712fa",
+    "1.22.6": "1f3d3f1de7f6c8c83e1dc62922b2f8757f7e985636c745b55d834777f73b911a",
+    "1.23.1": "6211ec3f92b90e1b385ae09919fa4c9866230a88534ccc8c290b15c077dc968b",
+    "1.23.2": "e7d5bfe25d47aaaf98129902fb677e16e150ceb7eb52fc58dc1b2941ef158eab",
+    "1.24.1": "9f924ec511e113395244ac55efea927bf12622160cb5459ec34bd0332a70abe7",
+    "1.24.2": "93e2b4ebe3877dc4ac1d2b34d60365ccf5e1f3641c2f6a63ba3072adaf82c8f1",
+    "1.24.3": "01753c30866d27e8649064da7f2e5006178a3122a23bfc1e4a647d377053bb3d",
+    "1.25.1": "9e82b2acaab0a2365af45a1fb5323bdcf3241f6e3021a265960c52a8f3303c97",
+    "1.25.2": "148f5694e2556ea7a8f487c3154b39471d0a436ab82d775343af8f5dafa22753",
+    "1.25.3": "b8cb490856ed538cec40cd74d129034f9eed5933efab0d38d6dbc063e54d60a3",
+    "1.26.1": "03b6de0b1320eb473a87871dc4f696164138d51ae57cb8ffb3a24628761f9ba9",
+    "1.26.2": "cf2dee10b669af015aedd294d61a54934ff561f5b89a09960248613599cfecef",
+    "1.26.3": "027421776326229bd7cbc0f9cda3b647249fa01cfaf1d49a71aea6030dea5298",
+    "1.27.1": "200e2923a0c57b5f695f3ca98e84d76a4bc0eebab774d45071f6ba17dfd76781",
+    "1.27.2": "17545c682715d87a203d8622d8d6b4624cfdeabf6d63dbd9451b9a6a116f365c",
+    "1.28.1": "4f1207068b8daf0bc91ce0ffce54a9badc2c8f33a161ca0a8a617b7b49d55a43",
+    "1.28.2": "16a479c9604eed9bac4a939275301ca68f3dc7f8343b458cdf3b1855988bc6a7",
+    "1.28.3": "3c75f68be3200ab517252314e1b5169f7ce95325cf7576097e5f151f81b5f3a6",
+    "1.28.4": "559390d72495584b05fe049158c764aec6cee4edc847621edea42a537c694653",
+    "1.29.1": "ef707d332791f4c835a1dedcd3c3bb375f77cb4d4a90fd5a1da7ae2af98c9e3a",
+    "1.29.2": "6a4c42a25eb6ace311a17e83d8fb25fc2e3959e598ca3ced5b49760216560d36",
+    "1.29.3": "ed98c98826a4feaf26a9b8ee4b8874033fbbd0587c1c581f649330d0512196fd",
+    "1.29.4": "89b070f009af22e6ee9e5750408197e7643285b0128c327a4ff972dc877c90c1",
+    "1.29.5": "dfc3aca7dfa3cd8a481ccac978d6dca53ca6264015a3c6f35d6b44b5129a1713",
+    "1.30.1": "a92c7d4f68edf21bba05a4b88b5dff6a00b26a785cb6c4e77deb87131db0122d",
+    "1.30.2": "4e79b7101e47092305033910fe77c638eeeec1a0628ba034e7ab9dd6b289f024",
+    "1.30.3": "9546c2e931b0764f190e026f8bb4ba26bb44bdf8108e6efd99c07d1d6ae3c4e3",
+    "1.30.4": "c71f797f4b43d870ddb929e5db27acd7821b7dc34a785cc9fd0f09cc2ac3f7e5",
+    "1.30.5": "5448469e6a3ce3b39976f087a7ca5c4609952ff66175925ab646dfb7807585ea",
+    "1.30.6": "6d6d1638b9d271142b11b2228735d83776b5f2a3f7814df85323f4f81bc65f94",
+    "1.30.7": "fd5d5576c7912dcf0109ddd690cd6aa942a936a8288803526edb00e8ea62d3b6",
+    "2.1.1": "5bbdc969fee3ab2f51e420a0d6fcbb2d4437f6a07efc68391c06a0718c451aa7",
+    "2.1.2": "ca951770c25893e183f9efb0f081dafbf6f6468d3f3b238826afcac0f64dd301",
+    "2.1.3": "3d57dd788a3c38cd4c7b91fc318dd17a84290155f487c289d6ca691c963c7df5",
+    "2.1.4": "55f18fd942b77c43d66b4d3c3f0bef80d560be1898ee5b6ed4b1b5160db1ea3d",
+    "2.2.1": "8c65f9fc60d5a15e41b2330e3fcd2687da84c3cfbf975c3c29a864c10baf572c",
+    "2.2.2": "a918fc05136168e6b199cfcde74bee3a00195b2a257732aab5e368d1cc559ae4",
+    "2.3.1": "0655ea7a77e84f6c0707614a0d045368abce2483aec807d583547382bfa8d208",
+    "2.3.2": "47eee761a5388e1f0055700ae802c8827afebe8599046e40df4a098d0035d01d",
+    "2.3.3": "64ff9a381b9418f4b11ff2e4fb251ebab114c13c72ec10f9168d14267ad98c69",
+    "2.4.1": "c22a8c71063942dc88828b79e35f21b5de73a21089ca801e68140489ca4d8273",
+    "2.4.2": "5d21c900300f8a5467e70e1c6cf32a3cbb0ba3a63c452ebf9caeb82f5a7978b3",
+    "2.5.1": "b1dc6c68e03763c7cebe3c7ee76bb054ae0dd001c563aca02ef4d6387ca21a42",
+    "2.5.2": "de201ff107a57a38eacbd9e6678625debd24275319afa6122d181bfbb0316eb2",
+    "2.5.3": "9fef4bfdb632fb176f2fccf8711ba75041b6f58cfe770981ceeaeb402e4fed5e",
+    "2.5.4": "34dd978501787642d7e1d16af87aaf1df65b93701c51fb08c24e1987c22dff87",
+    "2.6.1": "38ca8920ac02e7fd52b4385b029319bf800ab3a37a5b2f8edf6f2c336e84c01a",
+    "2.6.2": "0764cc0619e18ec594431171ee37d985cb6a699ba8c547d96eece2559897f999",
+    "2.7.1": "99b220cbc384c08becd0701228c9210ec8ff78d757746917a72fac465351b2d0",
+    "2.7.2": "c7984a64561a8eb69c6ae7f51f9674389b96bffef3fa569b12f4da0b6b0c1ad5",
+    "2.7.3": "d0235ae0a536e4d491e38b9b3aceb8cd36538d3539ed9b0542dfe75e6d6665af",
+    "2.8.1": "8e0a528343b806d08bf3c4f14015c44c4d7e9e105a50ec2046dc658f481e3b9a",
+    "2.8.2": "8f082429d7eed7297841400ef7a6a7e9b2e83b5d10963a7ac7a623fb6a49ecac",
+    "2.9.1": "dd4bd48d805040b4a84f4513ed95d07f1712c04ba163739a6027c297517d198d",
+    "2.10.1": "420003ce637de833afd94b24488243fe943b72f6a513a847e615e45b688dfd20",
+    "2.11.1": "bf92bc2d43457fb4c0bad4a0ef484786e21abedcc65e6ada7e1560550694d498",
+    "2.11.2": "da54d3621cf38a4c92c79f654d3878a4066c5008d7a62c29dbcd3220c3211d20",
+    "2.11.3": "58f269e5f1553b5099de5ebbf42be7e7a00d0df09113a444cce982f96c71ae38",
+    "2.12.1": "3421431522df0d8c7c6c9039efee0526ee1866dc3ff6348ee451445d5244900a",
+    "2.12.2": "fb97d3889f55356094a31b0a4fac0fe93bcae5d18b68d19d20c4260165930f43",
+    "2.12.3": "4b85599f4b4f6eea6f35b93765d61a54176e3a44f0a1c0871349586fe51730e2",
+    "2.13.1": "6fc1297398f0a6781a3705921474fa2e71febc304e81b742b19e7373eaeedc7e",
+    "2.13.2": "afdc109f383858e4bedbff4f0474a9be95b94c11e25ebe2a26fd9f01f1765186",
+    "2.14.1": "d45a5d48bd0e912cf00d12faaeb89ef1e022d5239db78650cd5658fa1e864a4b",
+    "2.14.2": "828e774fa133a144ad8e4e376c4a516474094297aa39dd7532a3e645b93c5496",
+    "2.14.3": "6db993228deff66fbd7436765d94cef7d451dd599a50a57d491188bd85b42c6a",
+    "2.15.1": "15ea1caa16d220cf8d91713122f92535a3955433e950c5d8bd4dcf9a817d8cd1",
+    "2.15.2": "127a5adad90394122486d70b00c73300619a833b976df70b197f0cb0f24612aa",
+    "2.15.3": "0cc7d92cfdcdd44815065dbb5d3dab33fdb1dc588901239e32c6e65933851b61",
+    "2.16.1": "17c70c17b24c6d3e4d63d8bbabcdf723b34451bb52da80ff7f849ca9326f47b4",
+    "2.16.2": "d61df7e996d96092d3c25d30566222f4d96a1d853d379014cb98102fe0416ed8",
+    "2.16.3": "6de13a5b473ab7d1abc480b261b38abfe2284b4a060a07e8ce78ac26d1ce5240",
+    "2.17.1": "9cac4460ea77f302493a8b42afca2b2cde5b5f50ea688c5d8b6f7a3d341424ac",
+    "2.17.2": "88495ff91cd4b0f51e4ae74c9350ebecf1ac43e79cd6d666702e08b169e8349d",
+    "2.17.3": "7298b1466a6bdee1b9e9f6e7314d101f793dea428ae6b184b4ba02a4f9d631e3",
+    "2.18.1": "10fa02a2ac7e890112abb08fb44b68017f304dba932f51452b6506d19784b529",
+    "2.18.2": "9040f60100f606830fc56640f85a38f6160e5a1eebd11bb2efe444b383516854",
+    "3.1.1": "23503554d52a091878d6b63d9f86d967d5fc62dc31768f3e950d746e6e68aebc",
+    "3.1.2": "6f55ffb3228104c368c068f1401bdb03c93685fb4270d41dd661dc6d5f569734",
+    "3.1.3": "3a2616bd5cb7129d649646ceb8c092a992c38a8e560466f00daf7053013a25c1",
+    "3.1.4": "64ba016fc4acdda8a82cb788ed6d6ae4e381d1829f8b3c2d6cd45a2b2630a1ee",
+    "3.1.5": "6f8b4f4d6742750667ffd730f430cfa4c5a1496941d39d0e31d8aed92ca30bc2",
+    "3.2.1": "3aefa915d6c7ec1956b5bf37903d354945ef45f25a5c6a8ee54536fc9023f799",
+    "3.2.2": "19de21b4e2a3731d24099a79ae92446cd841607d68078c563d60563576d81cfe",
+    "3.2.3": "3badc138bbb21746f8e3220ae7dc87b5c3deab28093863033990bd5d6881f5e2",
+    "3.3.1": "975fe80e837a9ff758fb4846eeb2c3483fcb79d8a16a322095e206d087a486e7",
+    "3.3.2": "62f704a539fa132f77e458efb6cd2286902bacf04e61dde232eb94e3df730b9b",
+    "3.4.1": "1b67dd02ebb0f7e77f2c371092b087e0f5b8c347a4da1c993c47e8dd74936970",
+    "3.4.2": "77af59e576c52e01903f953c5e67f14e0c8b8012c08d40b780d7af16f6d18b9b",
+    "3.4.3": "cc44fc7c3ec856ea5356eb2985520cb7b76cd36e038398bafd1e8c1ef66642a7",
+    "3.4.4": "7744bf6527888f4262226db922ecb8549cb6249d4c9206e35459a770f88e554e",
+    "3.4.5": "0273512019892a4f6531876a95931cae59105d6a82d319217c8e0b55a1ec6523",
+    "3.5.1": "e60f3902c600e84d1210ffae7d5965760ed9e1843d900786905aa81ce1663599",
+    "3.5.2": "3846fd3affa04a95ed328f9945acd470b16c4629f6c304c4b2619aeb96c76705",
+    "3.5.3": "c0a014f085b68ce4f2b152bce9b11ead8e08eaf4a28f444a1d560ec69e4a64e2",
+    "3.6.1": "30a072f14d041e3a3801a82bb7c09f6d8f76246f38c438755f8111039fe619b3",
+    "3.6.2": "66337305f830d287b74e7dd107620ce98b4ea7d2503fff53a4b9017bb0d5f72f",
+    "3.7.1": "2cdc418b5e57745ba66148cf546a181720334b0819519575e5c9b063ef6d963e",
+    "3.7.2": "2ebc1d4cccc6ad37008c3efcfbfa3f088986810c22c608dd7c83c83d362d361e",
+    "3.8.1": "18ecd1f7277259e74310e15369a5aa1376398efe59bd6d08e546a02c6b1ca565",
+    "3.8.2": "e92ebd44d83020a0b97e7f595f831fc85352582a99d1b4991e874ac61b81dcf1",
+    "3.8.3": "221b7d6c25bed5848314673552bd38d4d49e1d9996398636e4f87fb8bd822541",
+    "3.9.1": "e320bfe58e23de2af8f65d378012e5bdaafb393812bc225a16569d0ce26080be",
+    "3.9.2": "4bcc1cd05c38b4ea9a89322fa9a10838ab3d8496dc412c48779d8e1015d36910",
+    "3.10.1": "218c4c4f5001b5b1159d5c66a5b1e96367f9b2ac81495a1f5734e2a12a22912e",
+    "4.1.1": "75e004b570a13d99a87e1f332bd790751dcec209f32d86db708d5ab482303896",
+    "4.1.2": "6eb43ff4769242872256335ab6f22ce871fb654c4a03cad411da8c3ed7c1af84",
+    "4.1.3": "df4d1113b848a24107cf2963384d686ea23a35c1ba0c741a2d2e206afbcae227",
+    "4.2.1": "c945aaa2c88725311b032a0e5b172448ec81c66b13bed191639e82e017050ad7",
+    "4.2.2": "d282cb080c4f8dfccf0415a634cc6b73ec5b9b10a89069216f5eeae0ce8563de",
+    "4.2.3": "3c3077425f5427cb1f843669d1524ba41362741953cb1745b11d74f4d2d4e835",
+    "4.2.4": "4798ec7acc73e6d0672d86932ec43f8fc41731c351dde2dd464026c365cea76b",
+    "4.3.1": "104ef8f004275f6d788626f48432a4082059db2b403880be76d7aaf832d36a1e",
+    "4.3.2": "ba492585d3dce7d4adfbba21ad26bbd9c19b293495004c2c13122a299dc67dfa",
+    "4.3.3": "ab3484be354958e988af558a82bef541a6bc98bd370c2cc6cc579f2ae9abbb4c",
+    "4.3.4": "3d384391e78a6321fabc4796f7ae3b7a15a0bbc5a571fdb409f8890735718e3e",
+    "4.3.5": "aa6a367159dc3de9b37a33173a30386bbc2618af8085248e3ca8a41bc656af2c",
+    "4.4.1": "bb0d3a4e432e92b85ccf1ecddda93b41b751382a65984cef3c1318e564b677af",
+    "4.4.2": "3bb5eaee329a49f8f93c8513b42a7de6e11f24b33bf461e1964c544fec9de6a0",
+    "4.4.3": "32175789cbead110d4a57e8ba8415ab2501a8c72337e1fce5eddcbf105594f7d",
+    "4.4.4": "36528a9f80d4c6b65afdd199124d63ee2cf665848059198c3a3d9552702111b6",
+    "4.4.5": "37e81de07bd4cd378141febbacd0bb45e9abcf474b04e123ff1c952a0209212f",
+    "4.5.1": "082f6f9959e6a84152b960452d3a16154ab915085be36ec4b867bba5f05bf556",
+    "4.5.2": "9be2b87d25361ce6c6e3d67be1de82a487073a031796cf3cdb9ff80ee4484bf5",
+    "4.5.3": "cc456281154fa3cc1ad271744b4821d5ea9edb01e825fab9cdbd6201f43d4a17",
+    "4.5.4": "e79594c9142e0e2101ee4ae4ad1f8c219480ce82bb332939b5d22e310b322be7",
+    "4.5.5": "44005b811cc1d7139aff8af3440766acb2d14fca73fab148a5a90ffe2c644e24",
+    "4.6.1": "10e19a98be026fc46708d8c60c39b54bb2c8b74de1858492c0d9d291b9042025",
+    "4.6.2": "2e0c697235edb8a3b51383e0319200e54b7bc23be2db0800edfbb7430589e7db",
+    "4.6.3": "854c474f13adf00d509522fdbd459cc9a0d0532ce01673d3eaefc895b7d4c6a3",
+    "4.6.4": "349807b8baddb2f6111ba5ca24d7ac1c7d2663a3b3332023144ff8494b63d590",
+    "4.7.1": "2593794a353cabc67f3bc219fad81c1ca82a1ff28e0f128a3abcba946895410f",
+    "4.7.2": "c22820f6e3a3005b57bab5f8a76a995a813c400d8a1d4460b642e318226884f5",
+    "4.7.3": "4a4fdede6a03e4b0e53a4859587c640a095c417f29c568a3e90576e529813d4c",
+    "5.1.1": "2a21b2cc8e86601acb862cebcb66338655775b948de6bd823949b5858640d202",
+    "5.1.2": "1d54ebf3121647e6bec54ff5af2033279ad86dd2816a927df2029e1cc6b53633",
+    "5.1.3": "036165a715f27ef55644ef5539e8230a7ef72f01353a48592d3dd97ba56ba5bb",
+    "5.2.1": "e9c7a3cec8062e0b07813068823ac86b516d2bdd49ac3eb7bf12905fcabe587d",
+    "5.2.2": "ae8c47a9d18726e968cadecc7614548c76288fa098d652ce26f9463e29d9e1d1",
+    "5.3.1": "c82ad1c5b2e18cc9f9f705df242f570e826e2b718046c4a7f78cc65d7ba2f6ac",
+    "5.3.2": "600d592831eb5a8745129d62d80bee1649ed7273ea2d0a9e5d63d14939f41522",
+    "5.3.3": "79189555329df0905f35ff775362c7d9bfe2b57f039c3d78e0e7024494d4d873",
+    "5.4.1": "0134766e524c68e49a803bc653d74a84b661b157dd476e177f6438bdef352617",
+    "5.4.2": "32457cc1ff8a40abcfac12f4bf0ff13cdf2bd993ca64e750fb19f3615e5f04d6",
+    "5.5.1": "239dc3114a2c388c9fc5a36562fa7001adf0c4137f9ecbbea51281c67bbabb78",
+    "5.5.2": "6301b33702a6a9dc580539b9ce42958aa5664469e613020d19729d5b3cc4cc0a",
+    "5.5.3": "dc32d703c20973bd3622bcc27f7a1a9f555705f638fd32f7d9b6b1a841eb57c2",
+    "5.5.4": "6fd69caf18fd3d2a6af7a600714c19f26ee29dbb4372f71ddf215964cd414887",
+    "5.5.5": "fc2907db42228ea20dc5e3b8d7cc7d069fb22a4175f3e89aae70da82570e74fe",
+    "5.6.1": "827a873ec2efe60731054c30f159f8fbfc550a156b9d0cee9415888175d02670",
+    "5.6.2": "5579f87175aeaea63e588776415bea6bd4c2da3f4e6d6a21909c5d96065b0c84",
+    "5.6.3": "3bd395f13354d95210ef209bc48ebff18c4b537d3052934b0311496410fe4e7b",
+    "5.7.1": "4599672cefbf170520eec5a1307e47a2191d6b636de99b3f3841f5015b23ac83",
+    "5.7.2": "95f293c51555b3fa02deab6778703784a67b41c326c7b0a3776fd870b29d7631",
+    "5.7.3": "3ca04e76caae51e37e24f74414e65e53b02f1f476bebc16ee7711bfda5a2e35d",
+    "5.8.1": "7846cd4e011500ee55fb3ae492c2e0d2d052a8c5eb7b95f2e6a125ded2d3b78b",
+    "5.8.2": "bc1097f74d7e8ed4d4df6079c47b9fc1a22c896893211f8b2ea0bb5ded8d9200",
+    "5.9.1": "8c4ce8bddb0a61f113abcc12212beebc42137f07cf0a1d2d957507ca8b9c6d7d",
+    "5.9.2": "5c7803e03e5de2cf3d1db641a47729789084946e4e10c2d81c89e50cfcb0fac2",
+    "5.10.1": "d510d8c0c2dfe640c8074f16938c9e060b2fa2d5db30039c9e8dfe3d7fecafe4",
+    "5.10.2": "47c4942ca27bf5b77c75c34187eee8e5e6eeb0cb9ac0a09cc29e2bb825eb4456",
+    "5.10.3": "9e727338b67adfc8ed3ea0223e58d0681c40e57ae342ab7e43c17eb85118934a",
+    "5.11.1": "a781d6af4e5e1ff515594e345d989d6866dafa01f343968462af6b9505bfc727",
+    "5.11.2": "87bf95f32a7806ae4e5fad937da28168228b5b8a75a408c64100d5acc715fc4c",
+    "5.11.3": "263c8e41263c8e417c978afb4e3058645a3c9fc1b4231d2a314bd6092956aca5",
+    "5.11.4": "f58ca072553fc84bf66b79f6b514f2bf78773e9e28bd467dd6dc262330df2086",
+    "5.12.1": "c9e4086484229eba09a0f0d2517cb07d5d90e295e4e3172e5e56acbce0f508a5",
+    "5.12.2": "50836783f38137177694931a6190a9515305de518977b63f300d3c2f14973bc5",
+    "5.13.1": "8a99286541c43b0bf84c485963fc0ecace178d7f53291b7f16639c3fb829ba35",
+    "5.13.2": "652676107a1e2f6d5216caf7de689ceef3dc8f590b3fb6cfed9ab3def60a31bf",
+    "5.13.3": "bf0a330701a8bbc7638d0cc314e360ad03f5b4ed2726c7a0d3bb6a3411c86fb8",
+    "5.14.1": "50794ae80034a341afffa333338559acd1c188eb508abfb79d2b025b6db93f9a",
+    "5.14.2": "f9fd707424f7c61629242959e8c38d305d33a4aa558dc2e403a558b9cda4cfb5",
+    "5.14.3": "b69306971060ef32513ef0754ad7129c31df575395608e05bd76d0afcd2d5df9",
+    "6.1.1": "667f7b1103cbed3ee4b326acf9aa1206d06edfb0f80a820dd3f6d38cbef78fac",
+    "6.1.2": "64898f813ac5ea2d31d33b68f5e9917b25fad3b8a3132a22aa3e8caf3fc934e5",
+    "6.1.3": "6e504972f966dd438a36a260c6f71674adb6cb50108d2a616233bad40549076e",
+    "6.2.1": "4c9470a5703d001dd2df278073dcc68fe0b8aa09de7836c4e733fbb51c97b337",
+    "6.2.2": "f420c8718eeaa2c432755df38e32da0b8c4d70802ad7dbcb52d8752abb7d0267",
+    "6.3.1": "d85130575d33b854a01f17534629867b10ce9fe2ed8895c6075207361d6d35e0",
+    "6.3.2": "53456e39b112b137e862f989b71a77cc1faac1d47dfad68ca9d3a281c0b4021c",
+    "6.3.3": "7a2342b1040b77f85d7c04ec44ebd25c9f21839c88717d9ec203dcffe3780656",
+    "6.3.4": "f8f159f1996d5728fd4a1fa8ae2e2aa44d9a1aa428c3bf5597af6bb015d75722",
+    "6.3.5": "6df0da1fc671e8485a3487bb2268a2bc549047f211ec4a2d6560d89d1d2cf5c9",
+    "6.4.1": "82d59fb5fbcc0e4e14196ad578bc1d52840c90e248805daf5abd0daebd00e3e4",
+    "6.4.2": "a9b7d4f1ad8c0c2d7d97361c44cc89479f086218b3fcaa79e68253b491ba46d3",
+    "6.5.1": "257d510a411a04de0854f59389126776266a73672a850c3151707e280f46bde7",
+    "6.5.2": "d4c89dbde0a43219b05394efd8802436d8e3a43d605b1f7166b6156f109540b4",
+    "6.5.3": "152ea84d4f41d2056faf0dea9160e41bee017be7ccaa04191a313952e0ac69f0",
+    "6.5.4": "d6cdff46f24ed0ad370a799e9919abf8cc97ba6c3a6386f23372df4a6200c714",
+    "6.5.5": "60f1d4bf799c0becc57441cae8f7f80bbac6f360c4b43c2375d21b8c77d06112",
+    "7.1.1": "27ae3617dd32751a8c2d5b54bc9e1aed4318dbc31670dc070e445cebecd0be92",
+    "7.1.2": "756cf8072be7312ea43e466d2661a3cf3a97ad523bbd967a34b6c6d44c7649a9",
+    "7.2.1": "5e959df8b59d5f88d9066f695b3d39934063df5d9f0848b5b280b900926a91c5",
+    "7.2.2": "06bbd8c89ec8110186d66d93502a45f80830b58c386e7e912eeb3abc476ac6cc",
+    "7.3.1": "76cec60ae6a0505f8526eb3faf290613c1e92dc206fcdb488d6189f4a8857cd2",
+    "7.3.2": "c0caa8771d4f798f7b93834f62b463a5da2e9b42ea485d6a983971aa1e2bc77e",
+    "7.3.3": "63f34acaa534f7d9c378cc2666c5993685e47858f0cd56ad55be1f328f400450",
+    "7.4.1": "6c05ef91c74521d780fdd545201950aac51bb8cd60c12995914496475f2d9d7c",
+    "7.4.2": "7030277e2cb7cf54f03f1d3680fbfd8be58cff50a68f7e6dd7da90459bf92ce3",
+    "7.5.1": "fd00d6577418faadbb9aa204ed679688aa19f7df7fba3d6c5b607904c5b375a9",
+    "8.1.1": "27de8c58846e7d5423b44e8d5a80c94148ec3ed1643bc46e146923e6058b358a",
+    "8.1.2": "f03427aa3b047937db98389e4ea51e5fe731b7774c2793765913cef3de0d7469",
+    "8.2.1": "133b12677f50b771ad4db9f73d0c57c2f4d26611168297dc8c916bf7aaf5a1ab",
+    "8.3.1": "06390e513c2b5d798027fbbfe2c8f1fb4a72107ff1671d29a59f662386e78b5c",
+    "8.3.2": "1bf962db4ca7296969613f0b3352caa0f78ae5ecb1681210661a41fbabab6685",
+    "9.1.1": "70724dfff7247bd4e585cd5eddddcfe6cc12fd1bb05e16e92e131e7f11a82e18",
+    "9.2.1": "61effb3136771402f29d2c8ee78dca6234a9cf6ac3fa60551079febb981f396a",
+    "9.2.2": "b7b3d53c9316d7eda65d387b0709c1a8906fb773b1c38166e46565e39a6864e8",
+    "9.2.3": "44b1db8ba8d94859e7f8eb2a782d110a8d778b953142c8bd7e58786530d635bf",
+    "9.2.4": "26be218965de7e2555e0339c6b03d1d6228d16183df311b7e3022aea81a7e0f5",
+    "9.2.5": "3f7e290099a23f66878f42fdb489b6198e37f61a9248b66a57b565fc2879be70",
+    "9.3.1": "ae87eff10cf98e98266936db16853292a921f5cdc3512bdcbedaafa1ba578e93",
+    "9.3.2": "9bd7dc558f8703517df23d7329eb62885856aebb7fe0819fdfe9e116f17e5612",
+    "9.3.3": "99aa6797a43db462e425b3d81675270391bbf241bf10ad3758c9b2f3e4c735b2",
+    "9.3.4": "12f7a78376cf4c63665046e19d541bb6b3fec4cef018b416607bc1495ca6a031",
+    "9.3.5": "52a82ab79215038e7e4447131865b69938af7f03920288cd6be17a41d6317562",
+    "9.4.1": "4edd9ecbaea1829ddbd3b7eb79402c1e3b18bec2e57222350a8611093d1c1d39",
+    "9.4.2": "c1a75fad41b0a5b068b66e7cc84cdae84b8e8158b3ffa3c3daf1920277cba94f",
+    "9.4.3": "68c6d7d6775839471f9af2bc78a0a8f77eb7fdf3f93cfb2083f74703533ec526",
+    "9.4.4": "0962a29c285382f3ad4828107213c898d97ca1247bf0b4228ac62005577ac738",
+    "9.4.5": "8e8e72ec0db52031421216aaa7afcf84f52c1b125094c2bf22ffa508b942dcdd",
+    "9.5.1": "0e99f7bc5afad13d8195a008fb9e7ee6efea805a0963b55de1ae5d009f9755e8",
+    "9.5.2": "cf6461c45ac54e221ab6441ad05d9461f4959b8e531fc47630dbf9ba9f936600",
+    "9.5.3": "bb101a3fe468ab044a9e4395fb1ea602e125c9319336e5ea9a89ca15be55b703",
+    "9.5.4": "f90f233af82e0fa0ae2930f43d2478efc9003630fe441d5c4825d675f8790ae9",
+    "9.5.5": "988e4973583eae1b3820cceb4c70112aa9166b3e8f13b19b44fa45c2cbd67a1d",
+    "9.6.1": "df5c8465106af918ff5fa495a5da5164190381678aa2d09bf18e638016a652f1",
+    "9.6.2": "e880dff7955f34ced4674fd3f8dcd9fa10a742623e7a6d7918409cef6d4cafac",
+    "9.6.3": "7df6502c66db0d586780acc1c6f729ee2f697a253838fa3331db74b8183a902a",
+    "9.6.4": "f884f60578eda219c684bde46eba289000057e93f7d9e630f6e863bf2d4a8e70",
+    "9.6.5": "b8b146e77abed26795c143201466093f83bcb5caae1111e57f80c76e4c42d2cd",
+    "9.7.1": "4fe70654ea5aea25191236effb9adb362a450f3f8fad1b02fbd95722a6a188f9",
+    "9.7.2": "84bc0cddcf0a8cd4399834a7ce0026fa56be1911db3877ac42133700f94240d7",
+    "9.7.3": "d27a8f87ba2cbe2406767298919fb9ef998eb3fbc2d05a56e6c6eb4b8af48789",
+    "9.7.4": "279e4fa16960e5b0407be9454bd9e992d03e058b01f228268fd79e0b6912e1ed",
+    "9.7.5": "c5eed9f86a2bc645407b5c280d34c6539b53512e4842b19a2cbb5f99db1469c7",
+    "9.8.1": "92eb755f57ea5219f674694019647283c4f7c6342356a1ed2b00e8511d6ae308",
+    "9.8.2": "41166c6cd54ecd2230fd78428c1c76548dd544bca44f6e8bb14ae4f5ed6dde00",
+    "9.8.3": "b045af79bcc9e0284037af29f04061965bed5c3c444eadefdcb799965bbde06a",
+    "9.8.4": "d32da536a88839f1cbe93575d6018eb00443c21fbb565338b3f32d03c1a93c75",
+    "9.8.5": "8ebe094198767cecf10f03131e0170219d4907ed81063a722bf6ed3fa5bb2b60",
+    "9.9.1": "354c516419e0820b3234bc637d44b8ea900e42aa554d5653087817500c6267e2",
+    "9.9.2": "01d5036a4ddb35ac3c025b4254443e7526722bb105cc428f704968091b3d2ac4",
+    "9.9.3": "d7299442b786d1d7b0ccc61cb8ca3fe9c65b4cf12d8cfb13adb561373c411b42",
+    "9.9.4": "8ed7a2c517091c4d8cbb17accd48913a1b79a41f1b28b128a128e5aaa60f096a",
+    "9.9.5": "cbf3a8c1c2270f1a77c30b5f1a3e8e2f18d4174ad3cbaba8b8ac9de564bb5b4a",
+    "9.10.1": "8dbf9a6b96bfe215edf2fc1b22827e8123a5a2fb4bbe3ccf074a12f4d3fd12f0",
+    "9.10.2": "f1fa4905a1bf3db275a785c32cb785b907bd0f14be46c32ef016a27fb366683e",
+    "9.10.3": "44c567f3a296a9b3d11d9b75ac22828fc21784614ef1e3adeca2362ec61e4297",
+    "9.10.4": "2bd1987dd220d0d62998c446b4c86e8f98606c97367accef937b0937bc896150",
+    "9.10.5": "bcb9378d2f12d4c539216e9b43c697a8ffd96f3d7354e6cf70972e75befe8084",
+    "9.11.1": "4b306fac1e465f5d432284cd331575f81b0182cacb7abf0a510333d44b867063",
+    "9.12.1": "f175e83a6cb5a7d9e7508cffff25d39b7618777f124a214949b4b7b9d0ac3bc6",
+    "9.13.1": "6cea511d9fc198d293383560b97640e5ddca732d7d5f4a759c713de7155fc8d2",
+    "9.14.1": "d5249fd453fa4913858326df20a8d0b71852fff3f5b8c06a275dfdd1f2daff4e",
+    "10.1.1": "aa98a7ce20dca0bba952fa70cc04d948ee8eebdf3950c9c0dd8f252895e34858",
+    "10.1.2": "af3219501e4237a7f4dbff3e336487abedd0704df716aee693862fc8ae43a428",
+    "10.1.3": "5583b37b2129bcb276996cb5657707f10550b5d900738cc73bccb8d3f70e7e46",
+    "10.2.1": "48241cecfa51d7d32c72084b0e4a9cc98ee3dd3852b221444d786b9993380392",
+    "10.2.2": "560b45bf6a26f338c09cb584b724c0e476b81b912b7796d36575ebf68ac0c123",
+    "10.2.3": "00243f9559224e8c5f01519a14fd17e0ab191883480b0c539f40152fbb8433f3",
+    "10.3.1": "da03936a21b3c64671089c841d52e3cbe8543407b0d5d72f7c697b2730206289",
+    "10.3.2": "a3a495155890a17c855c310782851d31d703bbc3f987b9df4e45961a7807c1f9",
+    "10.4.1": "e38b977425c0b15e66dec846857f1b364022f74e889c9cf8211102e39129a48c",
+    "10.4.2": "62587c1abc5a9c4312f3a4aee5604de0a2a164bb314544d16bc71c988dbce1ca",
+    "10.5.1": "2e589134b707a3c5cf136afba75898a94e13ab4907e029551b1a38d70ed591c2",
+    "11.1.1": "cdaae7091ac7d2720be1dc975d1f178b012924c8abc93d0896b6ab1502bb5f2b",
+    "11.1.2": "0b5476a47d7b7c88d5b94595191dc9fcaa4c733bb7595206954d2450b6ca9da6",
+    "11.2.1": "c4a8019df246f854df1d401f206585337f095b09f85f88be0d62ce6f1f12cb11",
+    "11.2.2": "648d35db99c950c6706ee1ba5670a83243013ee262f2fe04e27c198b34403747",
+    "11.3.1": "7a2881faca0bab9f5ef821b3b0520bf9cace0d60675c0efa0aa109cb501e0b27",
+    "11.3.2": "fffc316d14f84d06484d3347dbc41ab7ffa145e659bc53d4d70e2d0500b3c44f",
+    "11.4.1": "69f8b05f9e801d55be617a1a089d23db62d28005afb5b915493c63b8367e61c5",
+    "11.5.1": "4cdeb395287fb612014f7a6c13d5ca838132965debe6aff975e16f65a4711b6f",
+    "11.6.1": "9d2e35588d4f4b856fcf0f21a0127ba8ea746b4fa24fada0f07b51efd7a2d929",
+    "11.6.2": "08fa1627dea3d6868ad5f883485d621af0d03a5ace5429591411614dc542e1f3",
+    "11.7.1": "2abb0ba167f1611e008f5a8ddbec9d740d61a72da0d46dd87133e3f5a58b29a8",
+    "11.7.2": "272fd0e6558b026c59630eeb047678c8b7509f522946d0d900efdb09bb2dcd25",
+    "11.8.1": "77f6cbe64585fe558d4ec2b361bae6be56f0e68539cd04afec7ddf5918c4757d",
+    "11.8.2": "a45b76af4cc8b488a489011b56a775084f33cc7621709c8b4a5a3b8aed7a1cd1",
+    "12.1.1": "384ff3789c3572bf30581a2f28461058a49e6850281f785f80ed19d86205ecf0",
+    "12.1.2": "5ffcc718b3b3b53bef7e8081aed1cea08bb5c98beec8a6479143fc74713544a7",
+    "12.1.3": "842dd7134dc47046d2e4ac2df26d56231205682ddf405ca7634a6611591c23a9",
+    "12.2.1": "dc0bd4c0f203368220a247bc1ce7de42aa8ca42aeea3d85f6fd6bcb1fa1be5db",
+    "12.2.2": "599eff5dcf384a6434b21933bb7bb97d7b8646e924dda6e3ac3535a54c57f822",
+    "12.3.1": "b08b9ece10b53cbae34847c831e7099cfa0f5010cf48bf33d75194c7d8c44bbf",
+    "12.4.1": "3258eaa8a54846a56401624764ff3ab930e1c36f336d81f9309d1905429a3ff6",
+    "12.4.2": "e5dcceb8b807e5ef96f47cdb82ae2a873e97587541fd601ba816db86ac806aad",
+    "12.4.3": "1f403639832154ff6f6d491d1d472410649091459ad765566b7a8d2297338c66",
+    "12.5.1": "9f73a20e9d5d57cb3e84f509d140073ea19aec9604a8544329091e9c294900df",
+    "12.5.2": "725461c86d5cd8389a5115b1b12257698d6a1ddd392ff4d0423ccb6f14774ece",
+    "12.5.3": "a3a0a845bbffc271f75a06478d552d0f535eaa33cb88d8f3b2ee0018d845927a",
+    "12.5.4": "4b9e009ccaea9c83c5b5e363ac2a0566645a07e6edc063e5916f45a0acc3d87e",
+    "12.6.1": "b2726e07f5038799c281798440b116fce5acb04cc27e54bdab73b94e65dfef0b",
+    "12.6.2": "08afbc93c2f95a53333ac06b603b6d6a3a6a514e3ec1930be739174044443f2d",
+    "12.6.3": "a30715b6208465a2fbab6f26727dc302014a5b6c3348a69b2eaf7b34c7a429cd",
+    "12.7.1": "06c99bd86b30c39e64ab6f908a5945acbdef500094dda44f3389c0e3223ba7e3",
+    "12.7.2": "d4ae99f28107a22e54c6821d1a8a650d6e3eb903d849c412b59707f2e52de376",
+    "12.8.1": "331e2d01f0da9162f74e836ad3f6297d5f3b4b51c514ccc0d1786e1b64e056b3",
+    "13.1.1": "1e684650132104b28319b0a57610860d6e06c0dcb99b7db3aad8d99fd8089b41",
+    "13.1.2": "87c68950fbee3d3a982566fdc049626d28f5c800a415c90bfb9851763110dfaa",
+    "13.1.3": "23fbf30b4c03a6db618c929e17c4b1f7f4bedcf85c6650490a553a1053e161b5",
+    "13.2.1": "d6992ef187332b650fd8f04f901855a899e8a09a1adda71696cc4bfa19ea8f1a",
+    "14.1.1": "3272b70e215d5ab4b7cbe0ed6b44aa0e5a2cde72cf31db096280827b9ee757ea",
+    "15.1.1": "16f9b5e2e708ad39f2cf680a98d89e91048902714fcc2206e56a69822264bfa5",
+    "15.1.2": "b82754a8d2a6c33f27553a5ced221bbc5a8e9de70cc1658cb568cbadbc6fbc76",
+    "15.2.1": "f293a6457b1092796a498ceefd77a1ad85324bbf885f83863f53e618a116f86e",
+    "15.2.2": "548b8d5d142dc5d99bef3054c3fac8380d272b833c56ad89326dd23e95138f4a",
+    "15.2.3": "084d4af6d3714ff8576f638fcfc061cc93a40364f667e725ef8b65020769e63a",
+    "15.3.1": "0492b8415bcaeaf936ad20e2dfa9c2c94d7e5dee8a9f3c9fddd35b8a77801824",
+    "15.3.2": "af685584a63c5581ac96100a760bf8ac7213ecd07ba061c2a26b70529332dc43",
+    "15.3.3": "cb890132c7757a627b18bdd02eb1635b99a78ee8e8e4073238bf183f698bb919",
+    "15.4.1": "ffe52846d3651cce967550b757ab661bf48ab601e2cf55fa25bf3d39cfe7c709",
+    "15.4.2": "2a2ca4210ae34d80c64a3d670d0cd797cb0cf7301fcf708aa5689d2d2c8a2a7a",
+    "15.4.3": "b98023c7d7c3c2f09721052f57b88492a41c1d541538a7b5ef6ecf08422733ab",
+    "15.4.4": "19c23854012be0746833b3918c11ec9dd2c1ebd0e13e471065f58e5dab6061df",
+    "16.1.1": "b821f84af040d54606dd6b3da53842868e3a61fa683a7a1c368d415aa629a7f3",
+    "16.2.1": "93bb8a772aaa25f95d3458591cb315766334320e480269d6202ab55d8a65d37d",
+    "16.2.2": "445eca13bab3d0c64064a2a26a8f3745cb82ad8447f2f2230a242bfc5ad478fe",
+    "16.3.1": "d630d1957679a0899fba452fa3db5e4f0555a8933ba1e4bf62fca1d6f063b92f",
+    "16.3.2": "b97f7484ab5a78e97a4e2704a9d089594e188153d038f16cda3265df3ba3438d",
+    "16.4.1": "530167dfe277112954bafd7de10b769b991c2893eafba680b0abfb9b96ff964c",
+    "17.1.1": "26ddaf77ff5caf16659f4166782f4bf43cb7b72a02263634d962c8a6438dc96b"
+  }
+}

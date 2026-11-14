@@ -1,0 +1,10 @@
+[
+  {"claim": "IIA 2024 Global Internal Audit Standards structure (5 Domains, 15 Principles, 52 Standards)", "class": "structure", "pub_date": "2024-01"},
+  {"claim": "IIA Cybersecurity Topical Requirement (mandatory eff. Feb 5, 2026)", "class": "regulatory", "pub_date": "2025-02"},
+  {"claim": "IIA Third-Party & Organizational Behavior Topical Requirements (eff. Sep/Dec 2026)", "class": "regulatory", "pub_date": "2025-09"},
+  {"claim": "BCBS 223, OCC 12 CFR Part 30 App D, Fed SR 13-1 & SR 26-2 Banking Rules", "class": "regulatory", "pub_date": "2026-04"},
+  {"claim": "US GAO 2024 Yellow Book (eff. Dec 15, 2025) & UK GIAS Public Sector Note (eff. Apr 1, 2025)", "class": "regulatory", "pub_date": "2024-12"},
+  {"claim": "Audit software workflows (TeamMate+, Diligent One, AuditBoard, Workiva)", "class": "player", "pub_date": "2024-08"},
+  {"claim": "Agile Internal Auditing & SaaS GRC continuous compliance automation", "class": "tech_adoption", "pub_date": "2025-01"},
+  {"claim": "Internal Audit Data Analytics (28% advanced) & GenAI Adoption (41%)", "class": "ai_adoption", "pub_date": "2025-03"}
+]

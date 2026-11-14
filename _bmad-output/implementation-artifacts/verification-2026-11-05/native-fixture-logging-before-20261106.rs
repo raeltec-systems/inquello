@@ -1,0 +1,3026 @@
+//! The `inquello/*` methods against a real working store in a temp directory.
+
+use super::*;
+use codex_app_server_protocol::InquelloWorkspaceListParams;
+use pretty_assertions::assert_eq;
+use serde::de::DeserializeOwned;
+use tempfile::TempDir;
+
+const WORKSPACE: &str = "5d6e7f80-91a2-4b3c-8d4e-5f6a7b8c9d0e";
+const OTHER_WORKSPACE: &str = "6e7f8091-a2b3-4c4d-8e5f-6a7b8c9d0e1f";
+const ALICE: &str = "11111111-1111-4111-8111-111111111111";
+const BOB: &str = "22222222-2222-4222-8222-222222222222";
+const DESKTOP: ConnectionId = ConnectionId(1);
+const OTHER: ConnectionId = ConnectionId(2);
+
+struct Fixture {
+    dir: TempDir,
+    processor: InquelloRequestProcessor,
+}
+
+fn fixture() -> Fixture {
+    let dir = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
+    let runtime_home = dir.path().join("runtime-home");
+    let processor = InquelloRequestProcessor::with_store_path(
+        Some(dir.path().join("working.sqlite")),
+        vec![runtime_home],
+    );
+    Fixture { dir, processor }
+}
+
+// Workspace-tree disclosure asks the desktop for fresh authority. These tests own
+// an in-memory responder rather than weakening that production disclosure check.
+async fn with_workspace_authority(
+    mut processor: InquelloRequestProcessor,
+) -> InquelloRequestProcessor {
+    use crate::outgoing_message::{OutgoingEnvelope, OutgoingMessageSender};
+    let (tx, mut rx) = tokio::sync::mpsc::channel(8);
+    let outgoing = std::sync::Arc::new(OutgoingMessageSender::new(
+        tx,
+        codex_analytics::AnalyticsEventsClient::disabled(),
+    ));
+    let responder = outgoing.clone();
+    let store = processor
+        .store()
+        .await
+        .unwrap_or_else(|error| panic!("fixture store: {error:?}"));
+    tokio::spawn(async move {
+        while let Some(OutgoingEnvelope::ToConnection {
+            connection_id,
+            message,
+            ..
+        }) = rx.recv().await
+        {
+            let request = serde_json::to_value(message)
+                .unwrap_or_else(|error| panic!("encode authority: {error}"));
+            let id = serde_json::from_value(request["id"].clone())
+                .unwrap_or_else(|error| panic!("authority ID: {error}"));
+            let response = match request["method"].as_str() {
+                Some("inquello/tasks/authority") => {
+                    json!({"workspacePolicy":workspace_policy(WORKSPACE, 1, None)})
+                }
+                Some("inquello/context/authorize") => {
+                    use inquello_domain::organise::OrganiseStore;
+                    let tree = store
+                        .load_workspace_tree(
+                            inquello_domain::organise::WorkspaceId::parse(WORKSPACE)
+                                .unwrap_or_else(|error| panic!("workspace: {error:?}")),
+                            PrincipalId::parse(ALICE)
+                                .unwrap_or_else(|error| panic!("principal: {error:?}")),
+                        )
+                        .await
+                        .unwrap_or_else(|error| panic!("inventory: {error:?}"));
+                    json!({"available":true,"snapshot":"isolated-store-inventory","serviceEngagementIds":tree.engagements.iter().map(|e|e.service_engagement_id.to_string()).collect::<Vec<_>>()})
+                }
+                _ => panic!("Unexpected fixture authority request"),
+            };
+            responder
+                .notify_client_response(connection_id, id, response)
+                .await;
+        }
+    });
+    processor.task_layer_fixture = Some((DeviceRequirements::default(), UserConfig::default()));
+    processor.with_task_outgoing(outgoing)
+}
+
+fn decode<T: DeserializeOwned>(
+    result: Result<Option<ClientResponsePayload>, JSONRPCErrorError>,
+) -> T {
+    let payload = result
+        .unwrap_or_else(|error| panic!("request failed: {error:?}"))
+        .unwrap_or_else(|| panic!("no response payload"));
+    let value = serde_json::to_value(payload).unwrap_or_else(|error| panic!("encode: {error}"));
+    serde_json::from_value(value).unwrap_or_else(|error| panic!("decode: {error}"))
+}
+
+fn kind(result: Result<Option<ClientResponsePayload>, JSONRPCErrorError>) -> String {
+    let error = result.err().unwrap_or_else(|| panic!("expected a refusal"));
+    error
+        .data
+        .as_ref()
+        .and_then(|data| data["inquello"]["kind"].as_str())
+        .map(str::to_string)
+        .unwrap_or_default()
+}
+
+async fn sign_in(processor: &InquelloRequestProcessor, connection: ConnectionId, principal: &str) {
+    let bound: InquelloSetPrincipalResponse = decode(
+        processor
+            .set_principal(
+                connection,
+                InquelloSetPrincipalParams {
+                    principal_id: Some(principal.to_string()),
+                },
+            )
+            .await,
+    );
+    assert_eq!(bound.principal_id.as_deref(), Some(principal));
+}
+
+fn engagement_params(op: &str, workspace: &str) -> InquelloEngagementCreateParams {
+    InquelloEngagementCreateParams {
+        operation_id: op.to_string(),
+        expected_revision: 0,
+        workspace_id: workspace.to_string(),
+        service_engagement_id: uuid::Uuid::new_v4().to_string(),
+        name: "FY26 audit".to_string(),
+        objectives: "Opinion".to_string(),
+        scope: "Group".to_string(),
+        client_entity: Some("Synthetic Client Ltd".to_string()),
+        period_start: Some("2026-01-01".to_string()),
+        period_end: Some("2026-12-31".to_string()),
+    }
+}
+
+fn task_params(
+    op: &str,
+    engagement: Option<&str>,
+    folder: Option<&str>,
+) -> InquelloTaskCreateParams {
+    InquelloTaskCreateParams {
+        operation_id: op.to_string(),
+        expected_revision: 0,
+        workspace_id: WORKSPACE.to_string(),
+        engagement_id: engagement.map(str::to_string),
+        folder_id: folder.map(str::to_string),
+        title: "Untitled thread".to_string(),
+    }
+}
+
+#[tokio::test]
+async fn calls_before_set_principal_are_unauthenticated() {
+    let Fixture { dir, processor } = fixture();
+    assert_eq!(
+        kind(processor.workspace_list(DESKTOP).await),
+        "unauthenticated"
+    );
+    assert_eq!(
+        kind(
+            processor
+                .task_create(DESKTOP, task_params("op", None, None))
+                .await
+        ),
+        "unauthenticated"
+    );
+    // Refused before the store was touched.
+    assert!(!dir.path().join("working.sqlite").exists());
+    assert_eq!(
+        kind(
+            processor
+                .set_principal(
+                    DESKTOP,
+                    InquelloSetPrincipalParams {
+                        principal_id: Some("not-a-uuid".to_string()),
+                    },
+                )
+                .await
+        ),
+        "invalid"
+    );
+}
+
+#[tokio::test]
+async fn without_a_store_path_methods_answer_store_not_configured() {
+    let processor = InquelloRequestProcessor::with_store_path(None, Vec::new());
+    sign_in(&processor, DESKTOP, ALICE).await;
+    assert_eq!(
+        kind(processor.workspace_list(DESKTOP).await),
+        "store_not_configured"
+    );
+    let _ = InquelloWorkspaceListParams {};
+}
+
+#[tokio::test]
+async fn a_store_inside_the_runtime_home_is_refused() {
+    let dir = tempfile::tempdir().unwrap_or_else(|error| panic!("tempdir: {error}"));
+    let processor = InquelloRequestProcessor::with_store_path(
+        Some(dir.path().join("working.sqlite")),
+        vec![dir.path().to_path_buf()],
+    );
+    sign_in(&processor, DESKTOP, ALICE).await;
+    assert_eq!(
+        kind(processor.workspace_list(DESKTOP).await),
+        "store_unavailable"
+    );
+}
+
+#[tokio::test]
+async fn organise_engagement_folder_and_task_then_move_it() {
+    let Fixture {
+        dir: _dir,
+        processor,
+    } = fixture();
+    let processor = with_workspace_authority(processor).await;
+    sign_in(&processor, DESKTOP, ALICE).await;
+    let created: InquelloEngagementResponse = decode(
+        processor
+            .engagement_create(DESKTOP, engagement_params("op-e", WORKSPACE))
+            .await,
+    );
+    let engagement = created.engagement;
+    assert_eq!(
+        engagement.client_entity.as_deref(),
+        Some("Synthetic Client Ltd")
+    );
+    assert_eq!(engagement.period_start.as_deref(), Some("2026-01-01"));
+    assert_eq!(created.receipt.resulting_revision, 1);
+    let folder: InquelloFolderResponse = decode(
+        processor
+            .folder_create(
+                DESKTOP,
+                InquelloFolderCreateParams {
+                    operation_id: "op-f".to_string(),
+                    expected_revision: 0,
+                    workspace_id: WORKSPACE.to_string(),
+                    engagement_id: engagement.engagement_id.clone(),
+                    name: "Planning".to_string(),
+                },
+            )
+            .await,
+    );
+    let task: InquelloTaskResponse = decode(
+        processor
+            .task_create(
+                DESKTOP,
+                task_params(
+                    "op-t",
+                    Some(&engagement.engagement_id),
+                    Some(&folder.folder.folder_id),
+                ),
+            )
+            .await,
+    );
+    assert_eq!(task.task.visibility, InquelloTaskVisibility::Private);
+    assert_eq!(task.task.creator_principal_id, ALICE);
+    let refused = processor
+        .task_attach_thread(
+            DESKTOP,
+            InquelloTaskAttachThreadParams {
+                operation_id: "op-a".to_string(),
+                expected_revision: 1,
+                workspace_id: WORKSPACE.to_string(),
+                task_id: task.task.task_id.clone(),
+                runtime_thread_id: "thread-1".to_string(),
+            },
+        )
+        .await
+        .expect_err("caller-supplied thread attachment must be refused");
+    assert_eq!(refused.data.unwrap()["inquello"]["kind"], "unsupported");
+    let moved: InquelloTaskResponse = decode(
+        processor
+            .task_move(
+                DESKTOP,
+                InquelloTaskMoveParams {
+                    operation_id: "op-m".to_string(),
+                    expected_revision: 1,
+                    workspace_id: WORKSPACE.to_string(),
+                    task_id: task.task.task_id.clone(),
+                    engagement_id: None,
+                    folder_id: None,
+                },
+            )
+            .await,
+    );
+    assert_eq!(moved.task.task_id, task.task.task_id);
+    assert_eq!(moved.task.runtime_thread_id, None);
+    assert_eq!(moved.task.source_refs, task.task.source_refs);
+    assert_eq!(moved.task.artifact_refs, task.task.artifact_refs);
+    assert_eq!(
+        (moved.task.engagement_id, moved.task.folder_id),
+        (None, None)
+    );
+
+    let tree: InquelloWorkspaceTreeResponse = decode(
+        processor
+            .workspace_tree(
+                DESKTOP,
+                InquelloWorkspaceTreeParams {
+                    workspace_id: WORKSPACE.to_string(),
+                },
+            )
+            .await,
+    );
+    assert_eq!(tree.engagements, vec![engagement]);
+    assert_eq!(tree.folders, vec![folder.folder]);
+    assert_eq!(tree.tasks.len(), 1);
+}
+
+#[tokio::test]
+async fn refusals_carry_kinds_stale_revisions_and_replays() {
+    let Fixture {
+        dir: _dir,
+        processor,
+    } = fixture();
+    sign_in(&processor, DESKTOP, ALICE).await;
+    let elsewhere: InquelloEngagementResponse = decode(
+        processor
+            .engagement_create(DESKTOP, engagement_params("op-e", OTHER_WORKSPACE))
+            .await,
+    );
+    let task: InquelloTaskResponse = decode(
+        processor
+            .task_create(DESKTOP, task_params("op-t", None, None))
+            .await,
+    );
+    let replay: InquelloTaskResponse = decode(
+        processor
+            .task_create(DESKTOP, task_params("op-t", None, None))
+            .await,
+    );
+    assert!(replay.receipt.replayed);
+    assert_eq!(replay.task.task_id, task.task.task_id);
+
+    let rename = |op: &str, expected: u64| InquelloTaskRenameParams {
+        operation_id: op.to_string(),
+        expected_revision: expected,
+        workspace_id: WORKSPACE.to_string(),
+        task_id: task.task.task_id.clone(),
+        title: "Bank confirmations".to_string(),
+    };
+    let _: InquelloTaskResponse = decode(processor.task_rename(DESKTOP, rename("op-r1", 1)).await);
+    let stale = processor
+        .task_rename(DESKTOP, rename("op-r2", 1))
+        .await
+        .err()
+        .unwrap_or_else(|| panic!("stale rename must fail"));
+    assert_eq!(
+        stale.data,
+        Some(json!({ "inquello": { "kind": "revision_conflict", "expected": 1, "actual": 2 } }))
+    );
+    assert_eq!(
+        kind(
+            processor
+                .task_move(
+                    DESKTOP,
+                    InquelloTaskMoveParams {
+                        operation_id: "op-m".to_string(),
+                        expected_revision: 2,
+                        workspace_id: WORKSPACE.to_string(),
+                        task_id: task.task.task_id.clone(),
+                        engagement_id: Some(elsewhere.engagement.engagement_id),
+                        folder_id: None,
+                    },
+                )
+                .await
+        ),
+        "workspace_mismatch"
+    );
+    let mut reused = task_params("op-t", None, None);
+    reused.title = "Another".to_string();
+    assert_eq!(
+        kind(processor.task_create(DESKTOP, reused).await),
+        "operation_conflict"
+    );
+}
+
+#[tokio::test]
+async fn tasks_are_listed_only_for_their_creator() {
+    let Fixture {
+        dir: _dir,
+        processor,
+    } = fixture();
+    let processor = with_workspace_authority(processor).await;
+    sign_in(&processor, DESKTOP, ALICE).await;
+    sign_in(&processor, OTHER, BOB).await;
+    let shared: InquelloEngagementResponse = decode(
+        processor
+            .engagement_create(DESKTOP, engagement_params("op-e", WORKSPACE))
+            .await,
+    );
+    let id = shared.engagement.engagement_id;
+    let _: InquelloTaskResponse = decode(
+        processor
+            .task_create(DESKTOP, task_params("op-a", Some(&id), None))
+            .await,
+    );
+    let bobs: InquelloTaskResponse = decode(
+        processor
+            .task_create(OTHER, task_params("op-b", Some(&id), None))
+            .await,
+    );
+    let tree = |connection| {
+        processor.workspace_tree(
+            connection,
+            InquelloWorkspaceTreeParams {
+                workspace_id: WORKSPACE.to_string(),
+            },
+        )
+    };
+    let alices: InquelloWorkspaceTreeResponse = decode(tree(DESKTOP).await);
+    assert_eq!(alices.tasks.len(), 1);
+    assert_eq!(alices.tasks[0].creator_principal_id, ALICE);
+    assert_eq!(
+        kind(
+            processor
+                .task_rename(
+                    DESKTOP,
+                    InquelloTaskRenameParams {
+                        operation_id: "op-r".to_string(),
+                        expected_revision: 1,
+                        workspace_id: WORKSPACE.to_string(),
+                        task_id: bobs.task.task_id,
+                        title: "Taken".to_string(),
+                    },
+                )
+                .await
+        ),
+        "not_found"
+    );
+
+    // Signing out (or closing the connection) unbinds the principal.
+    let _: InquelloSetPrincipalResponse = decode(
+        processor
+            .set_principal(DESKTOP, InquelloSetPrincipalParams { principal_id: None })
+            .await,
+    );
+    assert_eq!(kind(tree(DESKTOP).await), "unauthenticated");
+    processor.connection_closed(OTHER).await;
+    assert_eq!(kind(tree(OTHER).await), "unauthenticated");
+}
+
+// ---- Task states (Story 1.15) ----------------------------------------------------
+
+fn state_params(
+    op: &str,
+    expected: u64,
+    task_id: &str,
+    dimension: &str,
+    value: &str,
+    actor_kind: &str,
+) -> InquelloStateRecordParams {
+    let (scope_kind, scope_id) = match dimension {
+        "task" => ("task", task_id.to_string()),
+        "run" => ("run", "run-1".to_string()),
+        _ => ("task", task_id.to_string()),
+    };
+    InquelloStateRecordParams {
+        operation_id: op.to_string(),
+        expected_revision: expected,
+        task_id: task_id.to_string(),
+        dimension: dimension.to_string(),
+        scope_kind: scope_kind.to_string(),
+        scope_id,
+        value: value.to_string(),
+        actor_kind: actor_kind.to_string(),
+        actor_ref: (actor_kind != "human").then(|| "inquello-desktop".to_string()),
+    }
+}
+
+async fn new_task(
+    processor: &InquelloRequestProcessor,
+    connection: ConnectionId,
+    op: &str,
+) -> String {
+    let created: InquelloTaskResponse = decode(
+        processor
+            .task_create(connection, task_params(op, None, None))
+            .await,
+    );
+    created.task.task_id
+}
+
+#[tokio::test]
+async fn task_states_are_recorded_and_listed_by_dimension() {
+    let Fixture {
+        dir: _dir,
+        processor,
+    } = fixture();
+    sign_in(&processor, DESKTOP, ALICE).await;
+    let task_id = new_task(&processor, DESKTOP, "op-t").await;
+    let list = || {
+        processor.state_list(
+            DESKTOP,
+            InquelloStateListParams {
+                task_id: task_id.clone(),
+            },
+        )
+    };
+    let empty: InquelloStateListResponse = decode(list().await);
+    assert_eq!(empty.revision, 0);
+    assert_eq!(
+        empty
+            .dimensions
+            .iter()
+            .map(|d| (d.dimension.as_str(), d.records.len()))
+            .collect::<Vec<_>>(),
+        vec![
+            ("task", 0),
+            ("run", 0),
+            ("output", 0),
+            ("checks", 0),
+            ("review", 0),
+            ("approval_marker", 0),
+            ("delivery_marker", 0),
+        ]
+    );
+
+    for (op, expected, dimension, value) in [
+        ("op-1", 0, "task", "planned"),
+        ("op-2", 1, "task", "running"),
+        ("op-3", 2, "run", "execution_finished"),
+    ] {
+        let recorded: InquelloStateRecordResponse = decode(
+            processor
+                .state_record(
+                    DESKTOP,
+                    state_params(op, expected, &task_id, dimension, value, "system"),
+                )
+                .await,
+        );
+        assert_eq!(
+            (
+                recorded.record.value.as_str(),
+                recorded.record.revision,
+                recorded.record.actor_kind.as_str(),
+                recorded.receipt.command.as_str(),
+                recorded.receipt.replayed,
+            ),
+            (value, expected + 1, "system", "record_state", false)
+        );
+    }
+    let listed: InquelloStateListResponse = decode(list().await);
+    assert_eq!(listed.revision, 3);
+    let task_history: Vec<_> = listed.dimensions[0]
+        .records
+        .iter()
+        .map(|r| (r.value.as_str(), r.version, r.actor_ref.as_str()))
+        .collect();
+    assert_eq!(
+        task_history,
+        vec![
+            ("running", 2, "inquello-desktop"),
+            ("planned", 1, "inquello-desktop")
+        ]
+    );
+    assert_eq!(listed.dimensions[1].records[0].value, "execution_finished");
+    assert!(listed.dimensions[2..].iter().all(|d| d.records.is_empty()));
+
+    // A replay answers from the receipt.
+    let replay: InquelloStateRecordResponse = decode(
+        processor
+            .state_record(
+                DESKTOP,
+                state_params("op-3", 2, &task_id, "run", "execution_finished", "system"),
+            )
+            .await,
+    );
+    assert!(replay.receipt.replayed);
+}
+
+#[tokio::test]
+async fn state_refusals_carry_their_kinds() {
+    let Fixture {
+        dir: _dir,
+        processor,
+    } = fixture();
+    sign_in(&processor, DESKTOP, ALICE).await;
+    sign_in(&processor, OTHER, BOB).await;
+    let task_id = new_task(&processor, DESKTOP, "op-t").await;
+    let refused = |params| processor.state_record(DESKTOP, params);
+    assert_eq!(
+        kind(
+            refused(state_params(
+                "op",
+                0,
+                &task_id,
+                "review",
+                "requested",
+                "system"
+            ))
+            .await
+        ),
+        "human_actor_required"
+    );
+    assert_eq!(
+        kind(
+            refused(state_params(
+                "op",
+                0,
+                &task_id,
+                "approval_marker",
+                "noted_locally",
+                "runtime"
+            ))
+            .await
+        ),
+        "human_actor_required"
+    );
+    assert_eq!(
+        kind(
+            refused(state_params(
+                "op",
+                0,
+                &task_id,
+                "review",
+                "requested",
+                "human"
+            ))
+            .await
+        ),
+        "dimension_not_enabled"
+    );
+    assert_eq!(
+        kind(
+            refused(state_params(
+                "op",
+                0,
+                &task_id,
+                "delivery_marker",
+                "attempted",
+                "system"
+            ))
+            .await
+        ),
+        "dimension_not_enabled"
+    );
+    assert_eq!(
+        kind(refused(state_params("op", 0, &task_id, "run", "done", "system")).await),
+        "invalid_value"
+    );
+    let mut forged = state_params("op", 0, &task_id, "task", "planned", "human");
+    forged.actor_ref = Some(BOB.to_string());
+    assert_eq!(kind(refused(forged).await), "invalid");
+    let mut nameless = state_params("op", 0, &task_id, "task", "planned", "system");
+    nameless.actor_ref = None;
+    assert_eq!(kind(refused(nameless).await), "invalid");
+    assert_eq!(
+        kind(refused(state_params("op", 0, &task_id, "task", "planned", "model")).await),
+        "invalid"
+    );
+
+    let _: InquelloStateRecordResponse = decode(
+        refused(state_params(
+            "op-1", 0, &task_id, "task", "planned", "system",
+        ))
+        .await,
+    );
+    let stale = refused(state_params(
+        "op-2", 0, &task_id, "task", "running", "system",
+    ))
+    .await;
+    let data = stale
+        .as_ref()
+        .err()
+        .and_then(|error| error.data.clone())
+        .unwrap_or_default();
+    assert_eq!(data["inquello"]["kind"], "revision_conflict");
+    assert_eq!(data["inquello"]["actual"], 1);
+    assert_eq!(
+        kind(
+            refused(state_params(
+                "op-1", 0, &task_id, "task", "blocked", "system"
+            ))
+            .await
+        ),
+        "operation_conflict"
+    );
+
+    // Another principal: refused like an unknown Task, for reads and writes.
+    let unknown = uuid::Uuid::new_v4().to_string();
+    for id in [&task_id, &unknown] {
+        assert_eq!(
+            kind(
+                processor
+                    .state_list(
+                        OTHER,
+                        InquelloStateListParams {
+                            task_id: id.clone()
+                        }
+                    )
+                    .await
+            ),
+            "not_found"
+        );
+        assert_eq!(
+            kind(
+                processor
+                    .state_record(
+                        OTHER,
+                        state_params("op-b", 1, id, "task", "running", "system")
+                    )
+                    .await
+            ),
+            "not_found"
+        );
+    }
+}
+
+// ---- Effective policy and broader modes (Story 1.18) ---------------------------------
+
+const FULL_ACCESS_REACH: &str = execution_policy::BroadMode::FullAccess.reach();
+
+fn workspace_policy(
+    workspace: &str,
+    revision: u64,
+    execution: Option<serde_json::Value>,
+) -> InquelloWorkspaceExecutionPolicy {
+    InquelloWorkspaceExecutionPolicy {
+        workspace_id: workspace.to_string(),
+        policy_revision: revision,
+        authorization_epoch: revision + 10,
+        execution,
+    }
+}
+
+fn permissive() -> serde_json::Value {
+    json!({
+        "sandbox": "full_access",
+        "approvals": ["on_request", "untrusted", "never"],
+        "network": "allowed",
+        "allow_full_access": true,
+        "allow_no_prompt": true,
+    })
+}
+
+async fn effective(
+    processor: &InquelloRequestProcessor,
+    connection: ConnectionId,
+    policy: InquelloWorkspaceExecutionPolicy,
+    task_id: Option<&str>,
+    device: DeviceRequirements,
+    user: UserConfig,
+) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
+    processor
+        .policy_effective(
+            connection,
+            InquelloPolicyEffectiveParams {
+                workspace_policy: policy,
+                task_id: task_id.map(str::to_string),
+                task_folder: None,
+            },
+            device,
+            user,
+        )
+        .await
+}
+
+fn setting<'a>(
+    response: &'a InquelloPolicyEffectiveResponse,
+    name: &str,
+) -> &'a InquelloPolicySetting {
+    response
+        .settings
+        .iter()
+        .find(|setting| setting.name == name)
+        .unwrap_or_else(|| panic!("no {name} setting"))
+}
+
+fn broad_params(
+    op: &str,
+    expected: u64,
+    task_id: &str,
+    mode: &str,
+    confirmation: Option<&str>,
+    policy: InquelloWorkspaceExecutionPolicy,
+) -> InquelloBroadModeSetParams {
+    InquelloBroadModeSetParams {
+        operation_id: op.to_string(),
+        expected_revision: expected,
+        task_id: task_id.to_string(),
+        mode: mode.to_string(),
+        confirmation: confirmation.map(str::to_string),
+        actor_kind: "human".to_string(),
+        actor_ref: None,
+        workspace_policy: policy,
+    }
+}
+
+#[tokio::test]
+async fn the_effective_policy_names_its_sources_and_the_capability_contract() {
+    let Fixture {
+        dir: _dir,
+        processor,
+    } = fixture();
+    sign_in(&processor, DESKTOP, ALICE).await;
+
+    // No policy, no device requirements: the Inquello defaults.
+    let response: InquelloPolicyEffectiveResponse = decode(
+        effective(
+            &processor,
+            DESKTOP,
+            workspace_policy(WORKSPACE, 1, None),
+            None,
+            DeviceRequirements::default(),
+            UserConfig::default(),
+        )
+        .await,
+    );
+    assert_eq!(response.environment, "local_device");
+    assert_eq!(response.authorization_epoch, 11);
+    let names: Vec<&str> = response.settings.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(
+        names,
+        [
+            "sandbox",
+            "approval",
+            "network",
+            "mcp_tools",
+            "extensions",
+            "allow_local_mcp_servers",
+            "full_access",
+            "no_prompt"
+        ]
+    );
+    assert!(
+        response
+            .settings
+            .iter()
+            .all(|s| s.source.kind == "inquello_default")
+    );
+    assert_eq!(setting(&response, "sandbox").value, "workspace_write");
+    assert_eq!(setting(&response, "approval").value, "on_request");
+    assert_eq!(setting(&response, "full_access").value, "not_permitted");
+    assert_eq!(
+        setting(&response, "allow_local_mcp_servers").value,
+        "denied"
+    );
+    assert!(!response.device.configured);
+    assert_eq!(response.device.sandbox_modes, None);
+    assert!(response.task.is_none());
+    let ids: Vec<&str> = response
+        .capabilities
+        .iter()
+        .map(|c| c.id.as_str())
+        .collect();
+    assert_eq!(
+        ids,
+        [
+            "prompt_inspection",
+            "specialist_cyber_access",
+            "execution_sandbox"
+        ]
+    );
+    let sandbox = &response.capabilities[2];
+    assert!(sandbox.enabled);
+    assert_eq!(
+        sandbox.limits.first().map(String::as_str),
+        Some(
+            "Execution sandbox: local OS sandbox on this device; no hosted sandbox — V2 revisit (OQ-13)"
+        )
+    );
+    assert!(response.capabilities[..2].iter().all(|c| {
+        !c.enabled
+            && c.limits
+                .iter()
+                .any(|l| l == "Eligibility verification required before enablement")
+    }));
+
+    // Local MCP is an explicit Workspace exception, separate from Task sandbox reach.
+    let response: InquelloPolicyEffectiveResponse = decode(
+        effective(
+            &processor,
+            DESKTOP,
+            workspace_policy(
+                WORKSPACE,
+                4,
+                Some(json!({
+                    "mcp_tools": "allowed", "allow_local_mcp_servers": true,
+                })),
+            ),
+            None,
+            DeviceRequirements::default(),
+            UserConfig::default(),
+        )
+        .await,
+    );
+    let local_mcp = setting(&response, "allow_local_mcp_servers");
+    assert_eq!(local_mcp.value, "allowed");
+    assert!(!local_mcp.restricted);
+    assert_eq!(local_mcp.source.kind, "workspace_policy");
+    assert_eq!(local_mcp.source.revision, Some(4));
+
+    // Workspace restricts; device and user layers stricter still.
+    let response: InquelloPolicyEffectiveResponse = decode(
+        effective(
+            &processor,
+            DESKTOP,
+            workspace_policy(WORKSPACE, 4, Some(json!({ "sandbox": "read_only" }))),
+            None,
+            DeviceRequirements::default(),
+            UserConfig::default(),
+        )
+        .await,
+    );
+    let sandbox = setting(&response, "sandbox");
+    assert_eq!(
+        (sandbox.value.as_str(), sandbox.restricted),
+        ("read_only", true)
+    );
+    assert_eq!(
+        sandbox.source,
+        InquelloPolicySource {
+            kind: "workspace_policy".to_string(),
+            revision: Some(4)
+        }
+    );
+
+    let requirements: ConfigRequirementsReadResponse = serde_json::from_value(json!({
+        "requirements": {
+            "allowedSandboxModes": ["read-only", "workspace-write"],
+            "allowedApprovalPolicies": ["on-request", "untrusted"],
+        }
+    }))
+    .unwrap_or_else(|error| panic!("{error}"));
+    let device = InquelloRequestProcessor::device_requirements(&requirements);
+    let response: InquelloPolicyEffectiveResponse = decode(
+        effective(
+            &processor,
+            DESKTOP,
+            workspace_policy(WORKSPACE, 5, Some(permissive())),
+            None,
+            device,
+            UserConfig::default(),
+        )
+        .await,
+    );
+    assert!(response.device.configured);
+    assert_eq!(
+        response.device.sandbox_modes,
+        Some(vec!["read_only".to_string(), "workspace_write".to_string()])
+    );
+    assert_eq!(setting(&response, "sandbox").value, "workspace_write");
+    assert_eq!(
+        setting(&response, "sandbox").source.kind,
+        "device_requirements"
+    );
+    assert_eq!(
+        setting(&response, "full_access").source.kind,
+        "device_requirements"
+    );
+
+    let user = InquelloRequestProcessor::user_config(
+        &serde_json::from_value::<ConfigReadResponse>(json!({
+            "config": {},
+            "origins": {},
+            "layers": [{
+                "name": { "type": "user", "file": _dir.path().join("runtime-home").join("config.toml"), "profile": null },
+                "version": "1",
+                "config": { "sandbox_mode": "read-only", "approval_policy": "untrusted" },
+            }],
+        }))
+        .unwrap_or_else(|error| panic!("{error}")),
+    );
+    assert_eq!(user.sandbox, Some(SandboxLevel::ReadOnly));
+    assert_eq!(user.approval, Some(ApprovalBehaviour::Untrusted));
+    let response: InquelloPolicyEffectiveResponse = decode(
+        effective(
+            &processor,
+            DESKTOP,
+            workspace_policy(WORKSPACE, 5, Some(permissive())),
+            None,
+            DeviceRequirements::default(),
+            user,
+        )
+        .await,
+    );
+    assert_eq!(setting(&response, "sandbox").value, "read_only");
+    assert_eq!(setting(&response, "sandbox").source.kind, "user_config");
+    assert_eq!(setting(&response, "approval").source.kind, "user_config");
+
+    // A bad section is refused.
+    assert_eq!(
+        kind(
+            effective(
+                &processor,
+                DESKTOP,
+                workspace_policy(WORKSPACE, 5, Some(json!({ "hosted_sandbox": true }))),
+                None,
+                DeviceRequirements::default(),
+                UserConfig::default(),
+            )
+            .await
+        ),
+        "invalid"
+    );
+}
+
+#[tokio::test]
+async fn a_broad_mode_is_explicit_permitted_per_task_and_suspended_by_policy() {
+    let Fixture {
+        dir: _dir,
+        processor,
+    } = fixture();
+    sign_in(&processor, DESKTOP, ALICE).await;
+    let task_id = new_task(&processor, DESKTOP, "task-1").await;
+    let open = || workspace_policy(WORKSPACE, 2, Some(permissive()));
+    let closed = || workspace_policy(WORKSPACE, 3, Some(json!({ "allow_full_access": false })));
+
+    // Refused without permission, naming the rule; nothing is recorded.
+    let refused = processor
+        .broad_mode_set(
+            DESKTOP,
+            broad_params(
+                "op-1",
+                0,
+                &task_id,
+                "full_access",
+                Some(FULL_ACCESS_REACH),
+                closed(),
+            ),
+            DeviceRequirements::default(),
+            UserConfig::default(),
+        )
+        .await;
+    let error = refused
+        .err()
+        .unwrap_or_else(|| panic!("expected a refusal"));
+    assert_eq!(
+        error.data,
+        Some(
+            json!({ "inquello": { "kind": "broad_mode_not_permitted", "rule": "workspace_policy", "revision": 3 } })
+        )
+    );
+    assert!(error.message.contains("Workspace policy, revision 3"));
+    // Refused without the confirmation.
+    assert_eq!(
+        kind(
+            processor
+                .broad_mode_set(
+                    DESKTOP,
+                    broad_params("op-1", 0, &task_id, "full_access", None, open()),
+                    DeviceRequirements::default(),
+                    UserConfig::default(),
+                )
+                .await
+        ),
+        "invalid"
+    );
+    // Refused for a runtime actor.
+    let mut runtime = broad_params(
+        "op-1",
+        0,
+        &task_id,
+        "full_access",
+        Some(FULL_ACCESS_REACH),
+        open(),
+    );
+    runtime.actor_kind = "runtime".to_string();
+    runtime.actor_ref = Some("codex".to_string());
+    assert_eq!(
+        kind(
+            processor
+                .broad_mode_set(
+                    DESKTOP,
+                    runtime,
+                    DeviceRequirements::default(),
+                    UserConfig::default()
+                )
+                .await
+        ),
+        "human_actor_required"
+    );
+    // Refused with another Workspace's policy.
+    assert_eq!(
+        kind(
+            processor
+                .broad_mode_set(
+                    DESKTOP,
+                    broad_params(
+                        "op-1",
+                        0,
+                        &task_id,
+                        "full_access",
+                        Some(FULL_ACCESS_REACH),
+                        workspace_policy(OTHER_WORKSPACE, 2, Some(permissive())),
+                    ),
+                    DeviceRequirements::default(),
+                    UserConfig::default(),
+                )
+                .await
+        ),
+        "workspace_mismatch"
+    );
+    let read: InquelloBroadModeReadResponse = decode(
+        processor
+            .broad_mode_read(
+                DESKTOP,
+                InquelloBroadModeReadParams {
+                    task_id: task_id.clone(),
+                },
+            )
+            .await,
+    );
+    assert_eq!(
+        (
+            read.revision,
+            read.mode.as_str(),
+            read.workspace_id.as_str()
+        ),
+        (0, "standard", WORKSPACE)
+    );
+
+    // Permitted and confirmed: recorded, labelled with its reach.
+    let set: InquelloBroadModeSetResponse = decode(
+        processor
+            .broad_mode_set(
+                DESKTOP,
+                broad_params(
+                    "op-1",
+                    0,
+                    &task_id,
+                    "full_access",
+                    Some(FULL_ACCESS_REACH),
+                    open(),
+                ),
+                DeviceRequirements::default(),
+                UserConfig::default(),
+            )
+            .await,
+    );
+    assert_eq!(set.receipt.command, "set_broad_mode");
+    assert_eq!(set.task.broad_mode.status, "active");
+    assert_eq!(set.task.broad_mode.label, "Broader execution mode");
+    assert_eq!(set.task.broad_mode.reach, FULL_ACCESS_REACH);
+    assert_eq!(
+        set.task.thread_settings,
+        InquelloThreadSettings {
+            sandbox: "danger-full-access".to_string(),
+            approval_policy: "never".to_string(),
+            network_access: true,
+            mode: "full_access".to_string(),
+        }
+    );
+
+    // A tightened policy suspends it; the Task runs as standard.
+    let response: InquelloPolicyEffectiveResponse = decode(
+        effective(
+            &processor,
+            DESKTOP,
+            closed(),
+            Some(&task_id),
+            DeviceRequirements::default(),
+            UserConfig::default(),
+        )
+        .await,
+    );
+    let task = response.task.unwrap_or_else(|| panic!("a task policy"));
+    assert_eq!(task.broad_mode.recorded, "full_access");
+    assert_eq!(task.broad_mode.status, "suspended");
+    assert_eq!(task.broad_mode.effective_mode, "standard");
+    assert_eq!(
+        task.broad_mode.governing,
+        Some(InquelloPolicySource {
+            kind: "workspace_policy".to_string(),
+            revision: Some(3)
+        })
+    );
+    assert_eq!(task.thread_settings.sandbox, "workspace-write");
+    assert_eq!(task.thread_settings.approval_policy, "on-request");
+
+    // Another creator cannot read or set it; it looks like an unknown Task.
+    sign_in(&processor, OTHER, BOB).await;
+    assert_eq!(
+        kind(
+            processor
+                .broad_mode_read(
+                    OTHER,
+                    InquelloBroadModeReadParams {
+                        task_id: task_id.clone()
+                    }
+                )
+                .await
+        ),
+        "not_found"
+    );
+    assert_eq!(
+        kind(
+            effective(
+                &processor,
+                OTHER,
+                open(),
+                Some(&task_id),
+                DeviceRequirements::default(),
+                UserConfig::default()
+            )
+            .await
+        ),
+        "not_found"
+    );
+    assert_eq!(
+        kind(
+            processor
+                .broad_mode_set(
+                    OTHER,
+                    broad_params("op-2", 1, &task_id, "standard", None, open()),
+                    DeviceRequirements::default(),
+                    UserConfig::default(),
+                )
+                .await
+        ),
+        "not_found"
+    );
+}
+
+// ---- Story 1.19: the tool profile ------------------------------------------------
+
+fn make_folder(dir: &TempDir, task_id: &str) -> String {
+    let root = dir.path().join("tasks").join(task_id);
+    std::fs::create_dir_all(root.join("output")).unwrap_or_else(|error| panic!("{error}"));
+    root.to_string_lossy().into_owned()
+}
+
+#[cfg(windows)]
+struct WindowsGuestFixture<'a> {
+    dir: &'a TempDir,
+    task_id: &'a str,
+    node: PathBuf,
+    modules: PathBuf,
+    environment: Vec<(String, std::ffi::OsString)>,
+}
+
+#[cfg(windows)]
+impl<'a> WindowsGuestFixture<'a> {
+    fn new(dir: &'a TempDir, task_id: &'a str) -> Self {
+        let task_parent = dir.path().join("tasks");
+        assert!(
+            task_parent.is_dir()
+                && dir
+                    .path()
+                    .to_string_lossy()
+                    .replace('\\', "/")
+                    .to_lowercase()
+                    .starts_with("d:/"),
+            "native guest fixture requires an existing TempDir/tasks on D:"
+        );
+        let node = std::env::var_os("PATH")
+            .into_iter()
+            .flat_map(|value| std::env::split_paths(&value).collect::<Vec<_>>())
+            .filter(|path| path.is_absolute())
+            .map(|path| path.join("node.exe"))
+            .find(|path| path.is_file())
+            .and_then(|path| AbsolutePathBuf::from_absolute_path_checked(path).ok())
+            .and_then(|path| path.canonicalize().ok())
+            .map(AbsolutePathBuf::into_path_buf)
+            .unwrap_or_else(|| {
+                panic!("installed absolute node.exe is required; no download is attempted")
+            });
+        let modules =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../desktop/dist/main/runtime");
+        for name in ["wsl.js", "wsl-tasks.js", "wsl-data.js"] {
+            assert!(
+                modules.join(name).is_file(),
+                "build desktop first: missing {name}"
+            );
+        }
+        let mut environment = Vec::new();
+        for key in ["SystemRoot", "WINDIR", "USERPROFILE"] {
+            let value = std::env::var_os(key)
+                .unwrap_or_else(|| panic!("{key} is required for native guest preflight"));
+            environment.push((key.to_string(), value));
+        }
+        let system = PathBuf::from(&environment[0].1);
+        environment.push(("PATH".to_string(), system.join("System32").into_os_string()));
+        for key in ["TEMP", "TMP", "TMPDIR"] {
+            environment.push((key.to_string(), dir.path().as_os_str().to_owned()));
+        }
+        // Own cleanup before invoking any code that can create a profile,
+        // binding, transfer journal or guest Task.
+        let guard = Self {
+            dir,
+            task_id,
+            node,
+            modules,
+            environment,
+        };
+        guard.run("setup").unwrap_or_else(|error| panic!("{error}"));
+        guard
+    }
+
+    fn run(&self, action: &str) -> Result<(), String> {
+        let script = r#"
+const path = require('node:path');
+const [modules, taskParent, principal, taskId, action] = process.argv.slice(1);
+const { wslScope, preflightWsl } = require(path.join(modules, 'wsl.js'));
+const { WslTasks } = require(path.join(modules, 'wsl-tasks.js'));
+const { wslDataStorage } = require(path.join(modules, 'wsl-data.js'));
+(async () => {
+    const scope = wslScope(taskParent, principal);
+    console.log(JSON.stringify({ action, scope, taskId, taskParent, result: 'started' }));
+    if (action === 'setup') {
+        preflightWsl();
+        const tasks = new WslTasks(taskParent, principal);
+        await tasks.transition(taskId, 'linux');
+        const binding = tasks.binding(taskId);
+        if (binding?.scope !== scope || binding?.taskId !== taskId
+            || binding?.backend !== 'linux' || binding?.state !== 'ready') {
+            throw new Error('Real guest transition did not produce a ready binding');
+        }
+    } else if (action === 'cleanup') {
+        await wslDataStorage(taskParent, () => null).erase();
+        if (WslTasks.discoverScopes(taskParent).length !== 0) {
+            throw new Error('Owned guest profile cleanup was not complete');
+        }
+    } else {
+        throw new Error('Unknown fixture action');
+    }
+    console.log(JSON.stringify({ action, scope, taskId, result: 'passed' }));
+})().catch(error => { console.error(error); process.exitCode = 1; });
+"#;
+        let output = std::process::Command::new(&self.node)
+            .env_clear()
+            .envs(self.environment.iter().map(|(key, value)| (key, value)))
+            .current_dir(self.dir.path())
+            .args(["-e", script])
+            .arg(&self.modules)
+            .arg(self.dir.path().join("tasks"))
+            .arg(ALICE)
+            .arg(self.task_id)
+            .arg(action)
+            .output()
+            .map_err(|error| {
+                format!(
+                    "native guest {action} task={} failed to start: {error}",
+                    self.task_id
+                )
+            })?;
+        eprintln!(
+            "native guest {action} task={} status={}\n{}\n{}",
+            self.task_id,
+            output.status,
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr),
+        );
+        if !output.status.success() {
+            return Err(format!(
+                "native guest {action} failed for task {}; see fixture output",
+                self.task_id
+            ));
+        }
+        Ok(())
+    }
+}
+
+#[cfg(windows)]
+impl Drop for WindowsGuestFixture<'_> {
+    fn drop(&mut self) {
+        if let Err(error) = self.run("cleanup") {
+            if std::thread::panicking() {
+                // Preserve the original assertion and the cleanup evidence.
+                eprintln!("CLEANUP FAILED while unwinding: {error}");
+            } else {
+                panic!("{error}");
+            }
+        }
+    }
+}
+
+async fn task_profile(
+    processor: &InquelloRequestProcessor,
+    policy: InquelloWorkspaceExecutionPolicy,
+    task_id: &str,
+    folder: Option<String>,
+) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
+    processor
+        .policy_effective(
+            DESKTOP,
+            InquelloPolicyEffectiveParams {
+                workspace_policy: policy,
+                task_id: Some(task_id.to_string()),
+                task_folder: folder,
+            },
+            DeviceRequirements::default(),
+            UserConfig::default(),
+        )
+        .await
+}
+
+fn exec_params(
+    policy: InquelloWorkspaceExecutionPolicy,
+    task_id: &str,
+    folder: &str,
+    command: &[&str],
+) -> InquelloToolsExecParams {
+    InquelloToolsExecParams {
+        workspace_policy: policy,
+        task_id: task_id.to_string(),
+        task_folder: folder.to_string(),
+        command: command.iter().map(ToString::to_string).collect(),
+        timeout_ms: Some(5_000),
+        permission_request_id: None,
+        sandbox_probe_target: None,
+    }
+}
+
+#[tokio::test]
+async fn a_standard_task_profile_names_its_boundaries_and_runtime_form() {
+    let Fixture { dir, processor } = fixture();
+    sign_in(&processor, DESKTOP, ALICE).await;
+    let task_id = new_task(&processor, DESKTOP, "task-1").await;
+    let folder = make_folder(&dir, &task_id);
+    let policy = || {
+        workspace_policy(
+            WORKSPACE,
+            5,
+            Some(
+                json!({ "network": "allowed", "allowed_domains": ["example.org", "*.example.com"] }),
+            ),
+        )
+    };
+
+    // Without a folder: the reach only, and the Workspace's standard reach.
+    let response: InquelloPolicyEffectiveResponse =
+        decode(task_profile(&processor, policy(), &task_id, None).await);
+    assert!(response.reach.bounded);
+    let task = response.task.unwrap_or_else(|| panic!("no task"));
+    assert_eq!(task.reach, response.reach);
+    assert!(task.runtime_profile.is_none());
+    assert_eq!(
+        task.reach
+            .boundaries
+            .iter()
+            .map(|b| (b.kind.as_str(), b.access.as_str(), b.label.as_str()))
+            .collect::<Vec<_>>(),
+        [
+            ("working_folder", "write", "working folder (read/write)"),
+            ("output_folder", "write", "output folder"),
+            ("system", "read", "system (read-only)"),
+        ]
+    );
+    assert_eq!(task.reach.network, "listed");
+    assert_eq!(task.reach.domains, ["example.org", "*.example.com"]);
+    assert_eq!(
+        task.reach.network_source,
+        InquelloPolicySource {
+            kind: "workspace_policy".to_string(),
+            revision: Some(5)
+        }
+    );
+
+    // With the folder: the runtime's own permission-profile form.
+    let response: InquelloPolicyEffectiveResponse =
+        decode(task_profile(&processor, policy(), &task_id, Some(folder.clone())).await);
+    let runtime = response
+        .task
+        .and_then(|task| task.runtime_profile)
+        .unwrap_or_else(|| panic!("no runtime profile"));
+    let output = std::path::Path::new(&folder)
+        .join("output")
+        .to_string_lossy()
+        .into_owned();
+    assert_eq!(runtime.sandbox, "permission-profile");
+    assert_eq!(
+        runtime.permission_profile_id.as_deref(),
+        Some(format!("inquello-task-{task_id}").as_str())
+    );
+    assert_eq!(runtime.readable_roots, [folder.clone(), output.clone()]);
+    assert_eq!(runtime.writable_roots, [folder.clone(), output.clone()]);
+    assert_eq!(
+        runtime.network_allowlist,
+        Some(vec!["example.org".to_string(), "*.example.com".to_string()])
+    );
+    let table = runtime
+        .permission_profile
+        .unwrap_or_else(|| panic!("no permissions table"));
+    assert_eq!(table["filesystem"][":minimal"], "read");
+    assert_eq!(table["filesystem"][folder.as_str()], "write");
+    assert_eq!(table["filesystem"][output.as_str()], "write");
+    let exe = std::env::current_exe().unwrap_or_else(|error| panic!("{error}"));
+    assert_eq!(table["filesystem"][exe.to_string_lossy().as_ref()], "read");
+    assert_eq!(
+        table["filesystem"].as_object().map(serde_json::Map::len),
+        Some(4)
+    );
+    assert_eq!(
+        table["network"],
+        json!({ "enabled": true, "domains": { "example.org": "allow", "*.example.com": "allow" } })
+    );
+    // The table is a valid upstream permissions profile.
+    let parsed: Result<codex_config::permissions_toml::PermissionProfileToml, _> =
+        serde_json::from_value(table);
+    assert!(parsed.is_ok(), "{parsed:?}");
+
+    // A read-only ceiling: nothing writable, the folder read only.
+    let response: InquelloPolicyEffectiveResponse = decode(
+        task_profile(
+            &processor,
+            workspace_policy(WORKSPACE, 6, Some(json!({ "sandbox": "read_only" }))),
+            &task_id,
+            Some(folder.clone()),
+        )
+        .await,
+    );
+    let task = response.task.unwrap_or_else(|| panic!("no task"));
+    assert_eq!(task.reach.boundaries[0].label, "working folder (read-only)");
+    assert_eq!(task.reach.domains, Vec::<String>::new());
+    let runtime = task.runtime_profile.unwrap_or_else(|| panic!("no profile"));
+    assert_eq!(runtime.writable_roots, Vec::<String>::new());
+    assert_eq!(runtime.network_allowlist, Some(Vec::new()));
+    let table = runtime.permission_profile.unwrap_or_default();
+    assert_eq!(table["filesystem"][folder.as_str()], "read");
+    assert_eq!(table["network"], json!({ "enabled": true }));
+
+    // A folder not named after the Task, or without a Task, is refused.
+    assert_eq!(
+        kind(
+            task_profile(
+                &processor,
+                workspace_policy(WORKSPACE, 7, None),
+                &task_id,
+                Some(dir.path().join("x").to_string_lossy().into_owned())
+            )
+            .await
+        ),
+        "invalid"
+    );
+    assert_eq!(
+        kind(
+            processor
+                .policy_effective(
+                    DESKTOP,
+                    InquelloPolicyEffectiveParams {
+                        workspace_policy: workspace_policy(WORKSPACE, 7, None),
+                        task_id: None,
+                        task_folder: Some(folder),
+                    },
+                    DeviceRequirements::default(),
+                    UserConfig::default(),
+                )
+                .await
+        ),
+        "invalid"
+    );
+}
+
+// These tests plan host commands; they do not spawn them. Use actual native
+// executables so the positive path exercises resolution on every platform.
+#[cfg(windows)]
+fn windows_host_test_program(relative: &str) -> String {
+    let root = std::env::var_os("SystemRoot")
+        .unwrap_or_else(|| panic!("SystemRoot is required for native Windows fixtures"));
+    let path = PathBuf::from(root).join(relative);
+    assert!(
+        path.is_file(),
+        "native fixture is missing: {}",
+        path.display()
+    );
+    path.to_string_lossy().into_owned()
+}
+
+fn host_noop_command(unix_command: &[&str]) -> Vec<String> {
+    #[cfg(windows)]
+    {
+        let _ = unix_command;
+        words(&[
+            &windows_host_test_program(r"System32\WindowsPowerShell\v1.0\powershell.exe"),
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            "exit 0",
+        ])
+    }
+    #[cfg(not(windows))]
+    {
+        words(unix_command)
+    }
+}
+
+#[tokio::test]
+async fn a_permitted_full_access_profile_states_no_filesystem_limits() {
+    let Fixture { dir, processor } = fixture();
+    sign_in(&processor, DESKTOP, ALICE).await;
+    let task_id = new_task(&processor, DESKTOP, "task-1").await;
+    let folder = make_folder(&dir, &task_id);
+    let open = || workspace_policy(WORKSPACE, 2, Some(permissive()));
+    let _: InquelloBroadModeSetResponse = decode(
+        processor
+            .broad_mode_set(
+                DESKTOP,
+                broad_params(
+                    "op-1",
+                    0,
+                    &task_id,
+                    "full_access",
+                    Some(FULL_ACCESS_REACH),
+                    open(),
+                ),
+                DeviceRequirements::default(),
+                UserConfig::default(),
+            )
+            .await,
+    );
+    let response: InquelloPolicyEffectiveResponse =
+        decode(task_profile(&processor, open(), &task_id, Some(folder.clone())).await);
+    let task = response.task.unwrap_or_else(|| panic!("no task"));
+    assert!(!task.reach.bounded);
+    assert!(task.reach.boundaries.is_empty());
+    assert_eq!(task.reach.network, "unrestricted");
+    let runtime = task.runtime_profile.unwrap_or_else(|| panic!("no profile"));
+    assert_eq!(runtime.sandbox, "danger-full-access");
+    assert_eq!(runtime.permission_profile, None);
+    assert_eq!(runtime.network_allowlist, None);
+    // The Workspace's standard reach stays bounded.
+    assert!(response.reach.bounded);
+
+    let command_words = host_noop_command(&["true"]);
+    let command: Vec<_> = command_words.iter().map(String::as_str).collect();
+    let plan = processor
+        .tools_exec_plan(
+            DESKTOP,
+            exec_params(open(), &task_id, &folder, &command),
+            DeviceRequirements::default(),
+            UserConfig::default(),
+        )
+        .await
+        .unwrap_or_else(|error| panic!("{error:?}"));
+    assert_eq!(
+        plan.config_edits,
+        vec![("approvals_reviewer".to_string(), json!("user"))]
+    );
+    assert_eq!(
+        plan.exec.sandbox_policy,
+        Some(codex_app_server_protocol::SandboxPolicy::DangerFullAccess)
+    );
+    assert_eq!(plan.exec.permission_profile, None);
+    assert_eq!(plan.exec.command, command_words);
+}
+
+#[tokio::test]
+async fn tools_exec_plans_the_bounded_profile_for_the_creator_only() {
+    let Fixture { dir, processor } = fixture();
+    sign_in(&processor, DESKTOP, ALICE).await;
+    sign_in(&processor, OTHER, BOB).await;
+    let task_id = new_task(&processor, DESKTOP, "task-1").await;
+    let policy = || workspace_policy(WORKSPACE, 1, None);
+    let folder = dir.path().join("tasks").join(&task_id);
+    let folder_text = folder.to_string_lossy().into_owned();
+
+    // With no existing folder, resolution uses the host before the folder check.
+    let missing_command = host_noop_command(&["true"]);
+    let missing_argv: Vec<_> = missing_command.iter().map(String::as_str).collect();
+    // The folder must exist first.
+    let missing = processor
+        .tools_exec_plan(
+            DESKTOP,
+            exec_params(policy(), &task_id, &folder_text, &missing_argv),
+            DeviceRequirements::default(),
+            UserConfig::default(),
+        )
+        .await;
+    assert_eq!(
+        missing
+            .err()
+            .and_then(|error| error.data)
+            .map(|data| data["inquello"]["kind"].clone()),
+        Some(json!("task_folder_missing"))
+    );
+    make_folder(&dir, &task_id);
+    #[cfg(windows)]
+    let _guest = WindowsGuestFixture::new(&dir, &task_id);
+
+    let plan = processor
+        .tools_exec_plan(
+            DESKTOP,
+            exec_params(policy(), &task_id, &folder_text, &["sh", "-c", "true"]),
+            DeviceRequirements::default(),
+            UserConfig::default(),
+        )
+        .await
+        .unwrap_or_else(|error| panic!("{error:?}"));
+    assert_eq!(plan.config_edits.len(), 4);
+    assert_eq!(
+        plan.config_edits[3],
+        ("approvals_reviewer".to_string(), json!("user"))
+    );
+    assert_eq!(
+        plan.config_edits[0],
+        ("features.network_proxy".to_string(), json!(true))
+    );
+    assert_eq!(
+        plan.config_edits[1],
+        ("default_permissions".to_string(), json!(":read-only"))
+    );
+    let (key_path, table) = &plan.config_edits[2];
+    assert_eq!(key_path, &format!("permissions.inquello-task-{task_id}"));
+    assert_eq!(table["network"], json!({ "enabled": true }));
+    assert_eq!(
+        plan.exec.permission_profile.as_deref(),
+        Some(format!("inquello-task-{task_id}").as_str())
+    );
+    assert_eq!(plan.exec.sandbox_policy, None);
+    assert_eq!(plan.exec.cwd, Some(folder));
+    assert_eq!(plan.exec.command, ["sh", "-c", "true"]);
+    assert_eq!(plan.exec.timeout_ms, Some(5_000));
+
+    // Another principal, another Workspace or an empty command is refused.
+    let refused = |result: Result<ToolsExecPlan, JSONRPCErrorError>| {
+        result
+            .err()
+            .and_then(|error| error.data)
+            .and_then(|data| data["inquello"]["kind"].as_str().map(str::to_string))
+            .unwrap_or_default()
+    };
+    assert_eq!(
+        refused(
+            processor
+                .tools_exec_plan(
+                    OTHER,
+                    exec_params(policy(), &task_id, &folder_text, &["true"]),
+                    DeviceRequirements::default(),
+                    UserConfig::default(),
+                )
+                .await
+        ),
+        "not_found"
+    );
+    assert_eq!(
+        refused(
+            processor
+                .tools_exec_plan(
+                    DESKTOP,
+                    exec_params(
+                        workspace_policy(OTHER_WORKSPACE, 1, None),
+                        &task_id,
+                        &folder_text,
+                        &["true"]
+                    ),
+                    DeviceRequirements::default(),
+                    UserConfig::default(),
+                )
+                .await
+        ),
+        "workspace_mismatch"
+    );
+    assert_eq!(
+        refused(
+            processor
+                .tools_exec_plan(
+                    DESKTOP,
+                    exec_params(policy(), &task_id, &folder_text, &[]),
+                    DeviceRequirements::default(),
+                    UserConfig::default(),
+                )
+                .await
+        ),
+        "invalid"
+    );
+}
+
+// ---- Story 1.20: command rules and permission to act --------------------------------
+
+fn sourced(prefix: &[&str], decision: execution_policy::RuleDecision) -> SourcedRule {
+    SourcedRule {
+        rule: CommandRule::new(
+            prefix.iter().map(ToString::to_string).collect(),
+            decision,
+            None,
+        )
+        .unwrap_or_else(|error| panic!("{error}")),
+        source: RuleSource::WorkspacePolicy {
+            revision: Revision::new(1),
+        },
+    }
+}
+
+fn words(command: &[&str]) -> Vec<String> {
+    command.iter().map(ToString::to_string).collect()
+}
+
+#[cfg(windows)]
+#[test]
+fn windows_host_resolution_accepts_only_existing_drive_rooted_executables() {
+    let dir = TempDir::new().unwrap_or_else(|error| panic!("{error}"));
+    let exe = dir.path().join("Program.exe");
+    std::fs::write(&exe, b"resolution fixture").unwrap_or_else(|error| panic!("{error}"));
+    let lookup = ExecLookup {
+        cwd: Some(dir.path()),
+        search_path: Some(dir.path().as_os_str()),
+    };
+    let canonical = AbsolutePathBuf::from_absolute_path_checked(&exe)
+        .unwrap_or_else(|error| panic!("{error}"))
+        .canonicalize()
+        .unwrap_or_else(|error| panic!("{error}"))
+        .into_path_buf();
+    for spelling in [
+        exe.to_string_lossy().into_owned(),
+        exe.to_string_lossy().to_uppercase(),
+        exe.to_string_lossy().replace('\\', "/"),
+        dir.path()
+            .join(".")
+            .join("Program.exe")
+            .to_string_lossy()
+            .into_owned(),
+    ] {
+        assert_eq!(
+            resolve_program(&spelling, lookup),
+            Some(canonical.clone()),
+            "{spelling}"
+        );
+    }
+    let directory = dir.path().join("directory.exe");
+    std::fs::create_dir(&directory).unwrap_or_else(|error| panic!("{error}"));
+    let script = dir.path().join("script.cmd");
+    std::fs::write(&script, b"echo fixture").unwrap_or_else(|error| panic!("{error}"));
+    let rejected = [
+        String::new(),
+        "Program.exe".into(),
+        ".\\Program.exe".into(),
+        "D:Program.exe".into(),
+        "\\Program.exe".into(),
+        r"\\server\share\Program.exe".into(),
+        format!(r"\\?\{}", exe.display()),
+        format!(r"\\.\{}", exe.display()),
+        format!("{}:stream.exe", exe.display()),
+        format!("{}\0.exe", exe.display()),
+        dir.path()
+            .join("missing.exe")
+            .to_string_lossy()
+            .into_owned(),
+        directory.to_string_lossy().into_owned(),
+        script.to_string_lossy().into_owned(),
+    ];
+    for spelling in rejected {
+        assert_eq!(resolve_program(&spelling, lookup), None, "{spelling:?}");
+    }
+    let missing = dir
+        .path()
+        .join("missing.exe")
+        .to_string_lossy()
+        .into_owned();
+    // Rule tokens use literal forward slashes; backslashes are rejected by
+    // the existing domain grammar. Command argv retains its Windows spelling.
+    let rule_head = missing.replace('\\', "/");
+    let rules = vec![sourced(
+        &[&rule_head],
+        execution_policy::RuleDecision::Allow,
+    )];
+    let matches = matched_rules(&words(&[&missing]), &rules, lookup)
+        .unwrap_or_else(|error| panic!("{error:?}"));
+    assert_eq!(
+        matches.resolution,
+        execution_policy::ProgramResolution::Unresolved
+    );
+    assert_eq!(matches.matched, vec![false]);
+}
+
+#[cfg(windows)]
+#[test]
+fn windows_host_forbid_matches_canonical_case_and_symlink_aliases() {
+    use execution_policy::RuleDecision::*;
+    let dir = TempDir::new().unwrap_or_else(|error| panic!("{error}"));
+    let exe = dir.path().join("Program.exe");
+    let alias = dir.path().join("Alias.exe");
+    let other = dir.path().join("Other.exe");
+    for file in [&exe, &other] {
+        std::fs::write(file, b"resolution fixture").unwrap_or_else(|error| panic!("{error}"));
+    }
+    std::os::windows::fs::symlink_file(&exe, &alias)
+        .unwrap_or_else(|error| panic!("create fixture symlink: {error}"));
+    let lookup = ExecLookup {
+        cwd: None,
+        search_path: None,
+    };
+    let exe = exe.to_string_lossy().into_owned();
+    let alias = alias.to_string_lossy().into_owned();
+    let other = other.to_string_lossy().into_owned();
+    for head in [&exe, &alias, &exe.to_uppercase()] {
+        let rule_head = head.replace('\\', "/");
+        let other_head = other.replace('\\', "/");
+        let rules = vec![
+            sourced(&[&rule_head], Forbid),
+            sourced(&[&other_head], Allow),
+        ];
+        for command in [&exe, &alias, &exe.to_uppercase()] {
+            let argv = words(&[command, "-fixture"]);
+            let original = argv.clone();
+            let matches =
+                matched_rules(&argv, &rules, lookup).unwrap_or_else(|error| panic!("{error:?}"));
+            assert_eq!(
+                matches.resolution,
+                execution_policy::ProgramResolution::Resolved
+            );
+            assert_eq!(matches.matched, vec![true, false]);
+            assert_eq!(argv, original);
+        }
+    }
+    let bare = sourced(&["Program.exe"], Forbid);
+    assert_eq!(
+        matched_rules(&words(&[&exe]), &[bare], lookup)
+            .unwrap_or_else(|error| panic!("{error:?}"))
+            .matched,
+        vec![true]
+    );
+}
+
+#[cfg(windows)]
+#[test]
+fn windows_host_resolution_rejects_broken_links_and_non_executable_targets() {
+    let dir = TempDir::new().unwrap_or_else(|error| panic!("{error}"));
+    let lookup = ExecLookup {
+        cwd: None,
+        search_path: None,
+    };
+    for target in ["missing.exe", "script.cmd", "directory.exe"] {
+        let target_path = dir.path().join(target);
+        if target == "script.cmd" {
+            std::fs::write(&target_path, b"echo fixture").unwrap_or_else(|error| panic!("{error}"));
+        } else if target == "directory.exe" {
+            std::fs::create_dir(&target_path).unwrap_or_else(|error| panic!("{error}"));
+        }
+        let alias = dir.path().join(format!("alias-{target}.exe"));
+        if target == "directory.exe" {
+            std::os::windows::fs::symlink_dir(&target_path, &alias)
+                .unwrap_or_else(|error| panic!("create fixture directory symlink: {error}"));
+        } else {
+            std::os::windows::fs::symlink_file(&target_path, &alias)
+                .unwrap_or_else(|error| panic!("create fixture symlink: {error}"));
+        }
+        assert_eq!(resolve_program(&alias.to_string_lossy(), lookup), None);
+    }
+}
+
+/// A folder of stand-in programs (`#!/bin/sh` scripts) and a PATH over it,
+/// so matching resolves programs without depending on the host's layout.
+#[cfg(unix)]
+struct Programs {
+    dir: TempDir,
+    path: std::ffi::OsString,
+}
+
+#[cfg(unix)]
+impl Programs {
+    /// `bin/<name>` for each name; `usr/bin` and `bin` on PATH, in that order.
+    fn new(names: &[&str]) -> Self {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = TempDir::new().unwrap_or_else(|error| panic!("{error}"));
+        for sub in ["bin", "usr/bin", "links"] {
+            std::fs::create_dir_all(dir.path().join(sub)).unwrap_or_else(|error| panic!("{error}"));
+        }
+        for name in names {
+            let file = dir.path().join("bin").join(name);
+            std::fs::write(&file, "#!/bin/sh\n").unwrap_or_else(|error| panic!("{error}"));
+            std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o755))
+                .unwrap_or_else(|error| panic!("{error}"));
+        }
+        let path = std::env::join_paths([dir.path().join("usr/bin"), dir.path().join("bin")])
+            .unwrap_or_else(|error| panic!("{error}"));
+        Self { dir, path }
+    }
+
+    /// The canonical root (the temp folder may sit behind a symlink).
+    fn root(&self) -> PathBuf {
+        std::fs::canonicalize(self.dir.path()).unwrap_or_else(|error| panic!("{error}"))
+    }
+
+    fn at(&self, relative: &str) -> String {
+        self.root().join(relative).to_string_lossy().into_owned()
+    }
+
+    /// `relative` becomes a symlink to `target` (relative to the root).
+    fn link(&self, relative: &str, target: &str) {
+        std::os::unix::fs::symlink(self.root().join(target), self.root().join(relative))
+            .unwrap_or_else(|error| panic!("{error}"));
+    }
+
+    fn lookup(&self) -> ExecLookup<'_> {
+        ExecLookup {
+            cwd: Some(self.dir.path()),
+            search_path: Some(self.path.as_os_str()),
+        }
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn rules_match_through_the_runtime_exec_policy_prefix_matching() {
+    use execution_policy::RuleDecision::*;
+    let programs = Programs::new(&["git", "rm", "rmdir", "echo", "ls"]);
+    let rules = vec![
+        sourced(&["git", "push"], Prompt),
+        sourced(&["git"], Allow),
+        sourced(&["rm"], Forbid),
+        sourced(&["git", "push", "--force"], Forbid),
+    ];
+    let matched = |command: &[&str]| {
+        matched_rules(&words(command), &rules, programs.lookup())
+            .unwrap_or_else(|error| panic!("{error:?}"))
+            .matched
+    };
+    assert_eq!(
+        matched(&["git", "push", "origin"]),
+        vec![true, true, false, false]
+    );
+    assert_eq!(matched(&["git", "pull"]), vec![false, true, false, false]);
+    assert_eq!(matched(&["git"]), vec![false, true, false, false]);
+    assert_eq!(
+        matched(&["git", "push", "--force"]),
+        vec![true, true, false, true]
+    );
+    assert_eq!(matched(&["rmdir", "x"]), vec![false, false, false, false]);
+    assert_eq!(matched(&["echo", "rm"]), vec![false, false, false, false]);
+    assert!(
+        matched_rules(&words(&["ls"]), &[], programs.lookup())
+            .map(|matches| matches.matched)
+            .unwrap_or_default()
+            .is_empty()
+    );
+}
+
+/// Security fix 2026-11-05: a forbid on one path to a program blocks every
+/// other way of naming it: another path, the bare name through PATH, a
+/// symlink alias (absolute or relative to the working folder).
+#[cfg(unix)]
+#[test]
+fn a_forbid_on_a_program_blocks_its_other_paths_names_and_aliases() {
+    use execution_policy::RuleDecision::*;
+    let programs = Programs::new(&["sh", "true"]);
+    // `usr/bin/sh` -> `bin/sh`, as on a merged-/usr system; `links/alias` too.
+    programs.link("usr/bin/sh", "bin/sh");
+    programs.link("links/alias", "bin/sh");
+    let forbid = programs.at("bin/sh");
+    let rules = vec![sourced(&[forbid.as_str()], Forbid)];
+    let check = |command: &[&str]| {
+        let matches = matched_rules(&words(command), &rules, programs.lookup())
+            .unwrap_or_else(|error| panic!("{error:?}"));
+        assert_eq!(
+            matches.resolution,
+            execution_policy::ProgramResolution::Resolved,
+            "{command:?}"
+        );
+        matches.matched
+    };
+    let usr_sh = programs.at("usr/bin/sh");
+    let alias = programs.at("links/alias");
+    assert_eq!(check(&[forbid.as_str(), "-c", "true"]), vec![true]);
+    assert_eq!(check(&[usr_sh.as_str(), "-c", "true"]), vec![true]);
+    assert_eq!(check(&["sh", "-c", "true"]), vec![true]);
+    assert_eq!(check(&[alias.as_str(), "-c", "true"]), vec![true]);
+    assert_eq!(check(&["links/alias", "-c", "true"]), vec![true]);
+    assert_eq!(check(&["./links/alias"]), vec![true]);
+    assert_eq!(check(&["true"]), vec![false]);
+
+    // A rule naming the alias (or the bare name) forbids the program too.
+    for head in [alias.as_str(), "sh", usr_sh.as_str()] {
+        let rules = vec![sourced(&[head], Forbid)];
+        let matched = matched_rules(&words(&[forbid.as_str()]), &rules, programs.lookup())
+            .unwrap_or_else(|error| panic!("{error:?}"))
+            .matched;
+        assert_eq!(matched, vec![true], "{head}");
+    }
+    // A bare-name forbid also matches the file name of the literal path.
+    let rules = vec![sourced(&["sh"], Forbid)];
+    let matched = matched_rules(&words(&["/nowhere/sh"]), &rules, programs.lookup())
+        .unwrap_or_else(|error| panic!("{error:?}"));
+    assert_eq!(matched.matched, vec![true]);
+    assert_eq!(
+        matched.resolution,
+        execution_policy::ProgramResolution::Unresolved
+    );
+}
+
+/// An allow matches only the program the command resolves to: a link that
+/// carries an allowed name or path to another program borrows nothing,
+/// and the stricter rule on the real program still applies.
+#[cfg(unix)]
+#[test]
+fn an_allow_does_not_reach_another_program_through_a_link() {
+    use execution_policy::RuleDecision::*;
+    let programs = Programs::new(&["ls", "rm"]);
+    std::fs::create_dir_all(programs.root().join("trick"))
+        .unwrap_or_else(|error| panic!("{error}"));
+    programs.link("trick/ls", "bin/rm");
+    let real_ls = programs.at("bin/ls");
+    let rules = vec![
+        sourced(&[real_ls.as_str()], Allow),
+        sourced(&["ls"], Allow),
+        sourced(&[programs.at("bin/rm").as_str()], Prompt),
+    ];
+    let matched = |command: &[&str]| {
+        matched_rules(&words(command), &rules, programs.lookup())
+            .unwrap_or_else(|error| panic!("{error:?}"))
+            .matched
+    };
+    assert_eq!(matched(&["ls"]), vec![true, true, false]);
+    assert_eq!(matched(&[real_ls.as_str()]), vec![true, true, false]);
+    let trick = programs.at("trick/ls");
+    assert_eq!(matched(&[trick.as_str()]), vec![false, false, true]);
+    assert_eq!(matched(&["trick/ls"]), vec![false, false, true]);
+
+    // Evaluated: the trick asks under the rm prompt rule, the real ls is allowed.
+    let policy = execution_policy::effective_policy(
+        &workspace_layer(&workspace_policy(
+            WORKSPACE,
+            1,
+            Some(json!({ "approvals": ["untrusted"] })),
+        ))
+        .unwrap_or_else(|error| panic!("{error:?}")),
+        &DeviceRequirements::default(),
+        &UserConfig::default(),
+    );
+    let evaluate = |command: &[&str]| {
+        let command = words(command);
+        let matches = matched_rules(&command, &rules, programs.lookup())
+            .unwrap_or_else(|error| panic!("{error:?}"));
+        execution_policy::evaluate_resolved_command(
+            &command,
+            &rules,
+            &matches.matched,
+            &policy,
+            BroadModeStatus::Standard,
+            matches.resolution,
+        )
+    };
+    let tricked = evaluate(&[trick.as_str()]);
+    assert_eq!(tricked.decision, Prompt);
+    assert_eq!(
+        tricked.controlling_rule.map(|rule| rule.prefix),
+        Some(vec![programs.at("bin/rm")])
+    );
+    assert_eq!(evaluate(&["ls"]).decision, Allow);
+}
+
+/// A program that cannot be resolved matches no allow rule, even one that
+/// names it literally, and is never allowed by the asking behaviour.
+#[cfg(unix)]
+#[test]
+fn an_unresolved_program_is_not_allowed_by_literal_only_allow_rules() {
+    use execution_policy::RuleDecision::*;
+    let programs = Programs::new(&["ls"]);
+    let missing = programs.at("missing/ls");
+    let rules = vec![
+        sourced(&[missing.as_str()], Allow),
+        sourced(&["ls"], Allow),
+        sourced(&["./tool"], Allow),
+    ];
+    let policy = execution_policy::effective_policy(
+        &workspace_layer(&workspace_policy(WORKSPACE, 1, None))
+            .unwrap_or_else(|error| panic!("{error:?}")),
+        &DeviceRequirements::default(),
+        &UserConfig::default(),
+    );
+    for (command, lookup) in [
+        (missing.as_str(), programs.lookup()),
+        // No working folder known: a relative program cannot be resolved.
+        (
+            "./tool",
+            ExecLookup {
+                cwd: None,
+                search_path: programs.lookup().search_path,
+            },
+        ),
+        // No PATH known: a bare name cannot be resolved.
+        (
+            "ls",
+            ExecLookup {
+                cwd: programs.lookup().cwd,
+                search_path: None,
+            },
+        ),
+    ] {
+        let command = words(&[command]);
+        let matches =
+            matched_rules(&command, &rules, lookup).unwrap_or_else(|error| panic!("{error:?}"));
+        assert_eq!(matches.matched, vec![false, false, false], "{command:?}");
+        assert_eq!(
+            matches.resolution,
+            execution_policy::ProgramResolution::Unresolved
+        );
+        let evaluation = execution_policy::evaluate_resolved_command(
+            &command,
+            &rules,
+            &matches.matched,
+            &policy,
+            BroadModeStatus::Standard,
+            matches.resolution,
+        );
+        assert_eq!(evaluation.decision, Prompt, "{command:?}");
+        assert_eq!(evaluation.controlling_rule, None);
+    }
+}
+
+/// Through `inquello/tools/exec`'s plan: the Task's working folder and the
+/// runtime's PATH resolve the program before the Workspace rules apply.
+#[cfg(unix)]
+#[tokio::test]
+async fn tools_exec_applies_rules_to_the_resolved_program() {
+    let Fixture { dir, processor } = fixture();
+    let programs = Programs::new(&["sh", "ls"]);
+    programs.link("usr/bin/sh", "bin/sh");
+    let processor = processor.with_exec_search_path(Some(programs.path.clone()));
+    sign_in(&processor, DESKTOP, ALICE).await;
+    let task_id = new_task(&processor, DESKTOP, "task-1").await;
+    make_folder(&dir, &task_id);
+    let folder = dir.path().join("tasks").join(&task_id);
+    let folder_text = folder.to_string_lossy().into_owned();
+    std::os::unix::fs::symlink(programs.root().join("bin/sh"), folder.join("alias"))
+        .unwrap_or_else(|error| panic!("{error}"));
+    let forbid = programs.at("bin/sh");
+    let missing = programs.at("missing/ls");
+    let policy = || {
+        workspace_policy(
+            WORKSPACE,
+            1,
+            Some(json!({ "command_rules": [
+                { "prefix": [forbid], "decision": "forbid" },
+                { "prefix": [missing], "decision": "allow" },
+            ] })),
+        )
+    };
+    let usr_sh = programs.at("usr/bin/sh");
+    for command in [usr_sh.as_str(), "sh", "./alias"] {
+        let error = plan(
+            &processor,
+            DESKTOP,
+            exec_params(policy(), &task_id, &folder_text, &[command, "-c", "true"]),
+        )
+        .await
+        .err()
+        .unwrap_or_else(|| panic!("{command} was not refused"));
+        let (kind, evaluation) = refusal_of(&error);
+        assert_eq!(kind, "command_forbidden", "{command}");
+        assert_eq!(
+            evaluation["controllingRule"]["prefix"],
+            json!([forbid]),
+            "{command}"
+        );
+    }
+    let error = plan(
+        &processor,
+        DESKTOP,
+        exec_params(policy(), &task_id, &folder_text, &[missing.as_str()]),
+    )
+    .await
+    .err()
+    .unwrap_or_else(|| panic!("the unresolved program was not refused"));
+    let (kind, evaluation) = refusal_of(&error);
+    assert_eq!(kind, "permission_required");
+    assert_eq!(evaluation["controllingRule"], serde_json::Value::Null);
+    assert!(
+        plan(
+            &processor,
+            DESKTOP,
+            exec_params(policy(), &task_id, &folder_text, &["ls"])
+        )
+        .await
+        .is_ok()
+    );
+}
+
+fn refusal_of(error: &JSONRPCErrorError) -> (String, serde_json::Value) {
+    let data = error.data.clone().unwrap_or_default();
+    (
+        data["inquello"]["kind"]
+            .as_str()
+            .unwrap_or_default()
+            .to_string(),
+        data["inquello"]["evaluation"].clone(),
+    )
+}
+
+async fn plan(
+    processor: &InquelloRequestProcessor,
+    connection: ConnectionId,
+    params: InquelloToolsExecParams,
+) -> Result<ToolsExecPlan, JSONRPCErrorError> {
+    processor
+        .tools_exec_plan(
+            connection,
+            params,
+            DeviceRequirements::default(),
+            UserConfig::default(),
+        )
+        .await
+}
+
+async fn ask(
+    processor: &InquelloRequestProcessor,
+    connection: ConnectionId,
+    policy: InquelloWorkspaceExecutionPolicy,
+    task_id: &str,
+    command: &[&str],
+    op: &str,
+) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
+    processor
+        .permissions_request(
+            connection,
+            InquelloPermissionsRequestParams {
+                operation_id: op.to_string(),
+                request_id: uuid::Uuid::new_v4().to_string(),
+                workspace_policy: policy,
+                task_id: task_id.to_string(),
+                command: words(command),
+                origin: "tools_exec".to_string(),
+                ttl_ms: 600_000,
+            },
+            DeviceRequirements::default(),
+            UserConfig::default(),
+        )
+        .await
+}
+
+fn decide_params(
+    op: &str,
+    request_id: &str,
+    outcome: &str,
+    actor_kind: &str,
+    actor_ref: Option<&str>,
+) -> InquelloPermissionsDecideParams {
+    InquelloPermissionsDecideParams {
+        operation_id: op.to_string(),
+        request_id: request_id.to_string(),
+        expected_revision: 1,
+        outcome: outcome.to_string(),
+        actor_kind: actor_kind.to_string(),
+        actor_ref: actor_ref.map(str::to_string),
+    }
+}
+
+async fn set_rules(
+    processor: &InquelloRequestProcessor,
+    expected: u64,
+    rules: serde_json::Value,
+    op: &str,
+) -> Result<Option<ClientResponsePayload>, JSONRPCErrorError> {
+    processor
+        .user_rules_set(
+            DESKTOP,
+            InquelloUserRulesSetParams {
+                operation_id: op.to_string(),
+                expected_revision: expected,
+                rules: serde_json::from_value(rules).unwrap_or_else(|error| panic!("{error}")),
+            },
+        )
+        .await
+}
+
+#[tokio::test]
+async fn a_prompt_rule_needs_one_allowed_request_for_exactly_that_command() {
+    let Fixture { dir, processor } = fixture();
+    sign_in(&processor, DESKTOP, ALICE).await;
+    sign_in(&processor, OTHER, BOB).await;
+    let task_id = new_task(&processor, DESKTOP, "task-1").await;
+    let folder = make_folder(&dir, &task_id);
+    #[cfg(windows)]
+    let _guest = WindowsGuestFixture::new(&dir, &task_id);
+    let policy = || {
+        workspace_policy(
+            WORKSPACE,
+            4,
+            Some(json!({ "command_rules": [
+                { "prefix": ["git", "push"], "decision": "prompt", "note": "Leaves this device" },
+                { "prefix": ["rm"], "decision": "forbid" },
+            ] })),
+        )
+    };
+    let command = ["git", "push", "origin", "main"];
+
+    // Without a request: refused, with the decision record.
+    let error = plan(
+        &processor,
+        DESKTOP,
+        exec_params(policy(), &task_id, &folder, &command),
+    )
+    .await
+    .err()
+    .unwrap_or_else(|| panic!("a prompt ran without permission"));
+    let (kind, evaluation) = refusal_of(&error);
+    assert_eq!(kind, "permission_required");
+    assert_eq!(evaluation["decision"], json!("prompt"));
+    assert_eq!(evaluation["commandText"], json!("git push origin main"));
+    assert_eq!(
+        evaluation["controllingRule"]["prefix"],
+        json!(["git", "push"])
+    );
+    assert_eq!(
+        evaluation["source"]["label"],
+        json!("Workspace policy, revision 4")
+    );
+    assert_eq!(
+        evaluation["ruleText"],
+        json!("`git push` (prompt), from Workspace policy, revision 4")
+    );
+
+    // Forbid: refused before any request, rule and source named.
+    let error = plan(
+        &processor,
+        DESKTOP,
+        exec_params(policy(), &task_id, &folder, &["rm", "-rf", "output"]),
+    )
+    .await
+    .err()
+    .unwrap_or_else(|| panic!("a forbidden command was planned"));
+    let (kind, evaluation) = refusal_of(&error);
+    assert_eq!(kind, "command_forbidden");
+    assert_eq!(evaluation["source"]["kind"], json!("workspace_policy"));
+    let forbidden = ask(
+        &processor,
+        DESKTOP,
+        policy(),
+        &task_id,
+        &["rm", "x"],
+        "ask-rm",
+    )
+    .await;
+    assert_eq!(kind_of(forbidden), "command_forbidden");
+
+    // Request, list, allow, run once.
+    let asked: InquelloPermissionsRequestResponse =
+        decode(ask(&processor, DESKTOP, policy(), &task_id, &command, "ask-1").await);
+    assert_eq!(asked.request.label, "Permission to act");
+    assert_eq!(asked.request.status, "pending");
+    assert_eq!(asked.request.revision, 1);
+    let pending: InquelloPermissionsPendingResponse = decode(
+        processor
+            .permissions_pending(
+                DESKTOP,
+                InquelloPermissionsPendingParams {
+                    task_id: Some(task_id.clone()),
+                },
+            )
+            .await,
+    );
+    assert_eq!(pending.requests.len(), 1);
+    // Another principal sees nothing and cannot decide.
+    let theirs: InquelloPermissionsPendingResponse = decode(
+        processor
+            .permissions_pending(OTHER, InquelloPermissionsPendingParams { task_id: None })
+            .await,
+    );
+    assert!(theirs.requests.is_empty());
+    let request_id = asked.request.request_id.clone();
+    assert_eq!(
+        kind_of(
+            processor
+                .permissions_decide(
+                    OTHER,
+                    decide_params("op-x", &request_id, "allowed", "human", None)
+                )
+                .await
+        ),
+        "not_found"
+    );
+    // The reviewer is not available without a processing route.
+    assert_eq!(
+        kind_of(
+            processor
+                .permissions_decide(
+                    DESKTOP,
+                    decide_params(
+                        "op-r",
+                        &request_id,
+                        "allowed",
+                        "automated_reviewer",
+                        Some("auto")
+                    )
+                )
+                .await
+        ),
+        "reviewer_not_available"
+    );
+    let allowed: InquelloPermissionsDecideResponse = decode(
+        processor
+            .permissions_decide(
+                DESKTOP,
+                decide_params("op-allow", &request_id, "allowed", "human", None),
+            )
+            .await,
+    );
+    assert_eq!(allowed.request.status, "allowed");
+    assert_eq!(
+        allowed
+            .request
+            .decision
+            .as_ref()
+            .map(|d| d.actor_kind.as_str()),
+        Some("human")
+    );
+    assert_eq!(
+        allowed
+            .request
+            .decision
+            .as_ref()
+            .and_then(|d| d.label.clone()),
+        None
+    );
+    // A stale confirmation is no longer pending.
+    assert_eq!(
+        kind_of(
+            processor
+                .permissions_decide(
+                    DESKTOP,
+                    decide_params("op-late", &request_id, "denied", "human", None)
+                )
+                .await
+        ),
+        "request_not_pending"
+    );
+    let mut with_permission = exec_params(policy(), &task_id, &folder, &command);
+    with_permission.permission_request_id = Some(request_id.clone());
+    // Another command under the same permission is refused.
+    let mut other_command = exec_params(
+        policy(),
+        &task_id,
+        &folder,
+        &["git", "push", "origin", "other"],
+    );
+    other_command.permission_request_id = Some(request_id.clone());
+    assert_eq!(
+        refusal_of(
+            &plan(&processor, DESKTOP, other_command)
+                .await
+                .err()
+                .unwrap_or_else(|| panic!("ran"))
+        )
+        .0,
+        "permission_required"
+    );
+    let planned = plan(&processor, DESKTOP, with_permission.clone())
+        .await
+        .unwrap_or_else(|error| panic!("{error:?}"));
+    // Allow never lifts the sandbox: the bounded profile still applies.
+    assert_eq!(
+        planned.exec.permission_profile.as_deref(),
+        Some(format!("inquello-task-{task_id}").as_str())
+    );
+    assert_eq!(planned.exec.sandbox_policy, None);
+    assert_eq!(planned.exec.command, words(&command));
+    // Once only.
+    assert_eq!(
+        refusal_of(
+            &plan(&processor, DESKTOP, with_permission)
+                .await
+                .err()
+                .unwrap_or_else(|| panic!("ran twice"))
+        )
+        .0,
+        "permission_required"
+    );
+
+    // A denial runs nothing; the Task and its other requests continue.
+    let denied: InquelloPermissionsRequestResponse =
+        decode(ask(&processor, DESKTOP, policy(), &task_id, &command, "ask-2").await);
+    let kept: InquelloPermissionsRequestResponse = decode(
+        ask(
+            &processor,
+            DESKTOP,
+            policy(),
+            &task_id,
+            &["git", "push", "x"],
+            "ask-3",
+        )
+        .await,
+    );
+    let _: InquelloPermissionsDecideResponse = decode(
+        processor
+            .permissions_decide(
+                DESKTOP,
+                decide_params(
+                    "op-deny",
+                    &denied.request.request_id,
+                    "denied",
+                    "human",
+                    None,
+                ),
+            )
+            .await,
+    );
+    let mut after_denial = exec_params(policy(), &task_id, &folder, &command);
+    after_denial.permission_request_id = Some(denied.request.request_id.clone());
+    assert_eq!(
+        refusal_of(
+            &plan(&processor, DESKTOP, after_denial)
+                .await
+                .err()
+                .unwrap_or_else(|| panic!("ran"))
+        )
+        .0,
+        "permission_required"
+    );
+    let pending: InquelloPermissionsPendingResponse = decode(
+        processor
+            .permissions_pending(
+                DESKTOP,
+                InquelloPermissionsPendingParams {
+                    task_id: Some(task_id.clone()),
+                },
+            )
+            .await,
+    );
+    assert_eq!(
+        pending
+            .requests
+            .iter()
+            .map(|r| r.request_id.clone())
+            .collect::<Vec<_>>(),
+        vec![kept.request.request_id]
+    );
+    assert!(
+        plan(
+            &processor,
+            DESKTOP,
+            exec_params(policy(), &task_id, &folder, &["ls"])
+        )
+        .await
+        .is_ok()
+    );
+
+    // No state bleed: no review or approval state was written.
+    let states: InquelloStateListResponse = decode(
+        processor
+            .state_list(
+                DESKTOP,
+                InquelloStateListParams {
+                    task_id: task_id.clone(),
+                },
+            )
+            .await,
+    );
+    assert!(
+        states
+            .dimensions
+            .iter()
+            .all(|dimension| dimension.records.is_empty())
+    );
+    let _ = dir;
+}
+
+fn kind_of(result: Result<Option<ClientResponsePayload>, JSONRPCErrorError>) -> String {
+    kind(result)
+}
+
+#[tokio::test]
+async fn user_rules_only_ask_or_forbid_and_win_over_a_workspace_allow() {
+    let Fixture { dir, processor } = fixture();
+    sign_in(&processor, DESKTOP, ALICE).await;
+    let task_id = new_task(&processor, DESKTOP, "task-1").await;
+    let folder = make_folder(&dir, &task_id);
+    #[cfg(windows)]
+    let _guest = WindowsGuestFixture::new(&dir, &task_id);
+    let policy = || {
+        workspace_policy(
+            WORKSPACE,
+            2,
+            Some(json!({ "command_rules": [{ "prefix": ["curl"], "decision": "allow" }] })),
+        )
+    };
+    assert!(
+        plan(
+            &processor,
+            DESKTOP,
+            exec_params(
+                policy(),
+                &task_id,
+                &folder,
+                &["curl", "https://example.com/"]
+            )
+        )
+        .await
+        .is_ok()
+    );
+
+    assert_eq!(
+        kind(
+            set_rules(
+                &processor,
+                0,
+                json!([{ "prefix": ["curl"], "decision": "allow" }]),
+                "op-allow"
+            )
+            .await
+        ),
+        "user_rule_cannot_allow"
+    );
+    let set: InquelloUserRulesSetResponse = decode(
+        set_rules(
+            &processor,
+            0,
+            json!([{ "prefix": ["curl"], "decision": "forbid" }]),
+            "op-forbid",
+        )
+        .await,
+    );
+    assert_eq!(set.revision, 1);
+    assert_eq!(set.receipt.command, "set_user_rules");
+    let read: InquelloUserRulesReadResponse = decode(processor.user_rules_read(DESKTOP).await);
+    assert_eq!(read.revision, 1);
+    assert_eq!(read.rules[0].decision, "forbid");
+    let error = plan(
+        &processor,
+        DESKTOP,
+        exec_params(
+            policy(),
+            &task_id,
+            &folder,
+            &["curl", "https://example.com/"],
+        ),
+    )
+    .await
+    .err()
+    .unwrap_or_else(|| panic!("the person's forbid did not win"));
+    let (kind_text, evaluation) = refusal_of(&error);
+    assert_eq!(kind_text, "command_forbidden");
+    assert_eq!(evaluation["source"]["kind"], json!("user_rule"));
+    assert_eq!(evaluation["source"]["label"], json!("your rule"));
+    assert_eq!(
+        kind(set_rules(&processor, 0, json!([]), "op-stale").await),
+        "revision_conflict"
+    );
+
+    // The sandbox check is a fixed probe that rules never block.
+    let _: InquelloUserRulesSetResponse = decode(
+        set_rules(
+            &processor,
+            1,
+            json!([{ "prefix": ["/bin/sh"], "decision": "forbid" }]),
+            "op-sh",
+        )
+        .await,
+    );
+    let mut probe = exec_params(policy(), &task_id, &folder, &[]);
+    probe.sandbox_probe_target = Some("/somewhere".to_string());
+    let planned = plan(&processor, DESKTOP, probe)
+        .await
+        .unwrap_or_else(|error| panic!("{error:?}"));
+    assert_eq!(
+        planned.exec.command,
+        words(&[
+            "/bin/sh",
+            "-c",
+            "test ! -e \"$1\"",
+            "sandbox-check",
+            "/somewhere"
+        ])
+    );
+    let mut probe_with_command = exec_params(policy(), &task_id, &folder, &["ls"]);
+    probe_with_command.sandbox_probe_target = Some("/somewhere".to_string());
+    assert_eq!(
+        refusal_of(
+            &plan(&processor, DESKTOP, probe_with_command)
+                .await
+                .err()
+                .unwrap_or_else(|| panic!("planned"))
+        )
+        .0,
+        "invalid"
+    );
+    assert_eq!(
+        refusal_of(
+            &plan(
+                &processor,
+                DESKTOP,
+                exec_params(policy(), &task_id, &folder, &["/bin/sh", "-c", "true"])
+            )
+            .await
+            .err()
+            .unwrap_or_else(|| panic!("planned"))
+        )
+        .0,
+        "command_forbidden"
+    );
+}
+
+#[tokio::test]
+async fn the_effective_policy_lists_rules_and_the_reviewer_state() {
+    let Fixture {
+        dir: _dir,
+        processor,
+    } = fixture();
+    sign_in(&processor, DESKTOP, ALICE).await;
+    let default: InquelloPolicyEffectiveResponse = decode(
+        effective(
+            &processor,
+            DESKTOP,
+            workspace_policy(WORKSPACE, 1, None),
+            None,
+            DeviceRequirements::default(),
+            UserConfig::default(),
+        )
+        .await,
+    );
+    assert!(default.command_rules.is_empty());
+    assert_eq!(default.reviewer.state, "off");
+    assert!(!default.reviewer.enabled);
+    assert_eq!(default.reviewer.runtime_setting, "user");
+    let on: InquelloPolicyEffectiveResponse = decode(
+        effective(
+            &processor,
+            DESKTOP,
+            workspace_policy(
+                WORKSPACE,
+                3,
+                Some(json!({
+                    "automatic_permission_review": true,
+                    "command_rules": [{ "prefix": ["git", "push"], "decision": "prompt" }],
+                })),
+            ),
+            None,
+            DeviceRequirements::default(),
+            UserConfig::default(),
+        )
+        .await,
+    );
+    assert_eq!(on.reviewer.state, "not_available");
+    assert_eq!(
+        on.reviewer.label,
+        "Automated permission review: not available (no verified eligible Task route)"
+    );
+    assert_eq!(on.reviewer.runtime_setting, "user");
+    assert_eq!(on.command_rules.len(), 1);
+    assert_eq!(
+        on.command_rules[0].source.label,
+        "Workspace policy, revision 3"
+    );
+    assert_eq!(on.command_rules[0].rule.decision, "prompt");
+}
+
+#[tokio::test]
+async fn an_untrusted_asking_behaviour_asks_before_an_unmatched_command() {
+    let Fixture { dir, processor } = fixture();
+    sign_in(&processor, DESKTOP, ALICE).await;
+    let task_id = new_task(&processor, DESKTOP, "task-1").await;
+    let folder = make_folder(&dir, &task_id);
+    let policy = workspace_policy(WORKSPACE, 1, Some(json!({ "approvals": ["untrusted"] })));
+    let error = plan(
+        &processor,
+        DESKTOP,
+        exec_params(policy, &task_id, &folder, &["ls"]),
+    )
+    .await
+    .err()
+    .unwrap_or_else(|| panic!("an untrusted command ran without asking"));
+    let (kind_text, evaluation) = refusal_of(&error);
+    assert_eq!(kind_text, "permission_required");
+    assert_eq!(evaluation["source"]["kind"], json!("approval_behaviour"));
+    assert_eq!(evaluation["controllingRule"], serde_json::Value::Null);
+}
+
+#[tokio::test]
+async fn actual_native_create_keeps_draft_and_mixed_tree_projection_never_exposes_foreign_ids() {
+    use inquello_domain::organise::OrganiseStore;
+    let f = fixture();
+    let processor = &f.processor;
+    sign_in(processor, DESKTOP, ALICE).await;
+    let own: InquelloTaskResponse = decode(
+        processor
+            .task_create(DESKTOP, task_params("owned-draft-projection", None, None))
+            .await,
+    );
+    let unavailable: InquelloTaskResponse = decode(
+        processor
+            .task_create(
+                DESKTOP,
+                task_params("unavailable-draft-projection", None, None),
+            )
+            .await,
+    );
+    sign_in(processor, OTHER, BOB).await;
+    let peer: InquelloTaskResponse = decode(
+        processor
+            .task_create(OTHER, task_params("peer-draft-projection", None, None))
+            .await,
+    );
+    let (store, actor) = processor.context(DESKTOP).await.expect("context");
+    assert!(
+        store
+            .task_is_native_draft(actor.principal_id, &own.task.task_id)
+            .await
+            .expect("provenance")
+    );
+    assert_eq!(
+        store
+            .task_data_tier(actor.principal_id, &own.task.task_id)
+            .await
+            .expect("tier"),
+        None
+    );
+    let load = |id: String| {
+        let store = store.clone();
+        async move {
+            store
+                .load_task(TaskId::parse(&id).expect("id"))
+                .await
+                .expect("load")
+                .expect("task")
+        }
+    };
+    let own = load(own.task.task_id).await;
+    let unavailable = load(unavailable.task.task_id).await;
+    let peer = load(peer.task.task_id).await;
+    assert!(matches!(
+        private_task_tree_item(&own, actor, WORKSPACE, true),
+        Some(Ok(_))
+    ));
+    let denied = private_task_tree_item(&unavailable, actor, WORKSPACE, false)
+        .expect("owned unavailable")
+        .expect_err("no protected task");
+    let json = serde_json::to_value(denied).expect("safe item");
+    assert_eq!(json.as_object().expect("object").len(), 2);
+    assert!(json.get("title").is_none());
+    assert!(private_task_tree_item(&peer, actor, WORKSPACE, false).is_none());
+    assert!(private_task_tree_item(&own, actor, OTHER_WORKSPACE, false).is_none());
+}
+
+/// Guest resolution (owner decision 2026-11-05): a bounded Windows command
+/// runs in the Linux guest, so its program and the rules' programs are
+/// resolved there, over the guest channel (a fake here), with the same
+/// rules: the strictest outcome wins and an allow counts only against the
+/// resolved program. None of these guest paths need exist on this host.
+#[tokio::test]
+async fn command_rules_match_the_program_resolved_inside_the_guest() {
+    use crate::inquello_program::ProgramResolver;
+    use crate::inquello_program::tests::guest;
+    use crate::inquello_program::tests::ubuntu;
+    use execution_policy::RuleDecision::*;
+    let rules = vec![
+        sourced(&["/bin/sh"], Forbid),
+        sourced(&["/usr/bin/true"], Allow),
+    ];
+    let policy = execution_policy::effective_policy(
+        &workspace_layer(&workspace_policy(WORKSPACE, 1, None))
+            .unwrap_or_else(|error| panic!("{error:?}")),
+        &DeviceRequirements::default(),
+        &UserConfig::default(),
+    );
+    let evaluate = |command: &[String], resolutions: &Resolutions| {
+        let matches = matched_resolved_rules(command, &rules, resolutions)
+            .unwrap_or_else(|error| panic!("{error:?}"));
+        let evaluation = execution_policy::evaluate_resolved_command(
+            command,
+            &rules,
+            &matches.matched,
+            &policy,
+            BroadModeStatus::Standard,
+            matches.resolution,
+        );
+        (matches, evaluation)
+    };
+    let resolver = guest(ubuntu());
+    for program in ["sh", "/usr/bin/sh", "/usr/bin/dash", "/bin/dash"] {
+        let command = words(&[program, "-c", "id"]);
+        let resolutions = resolver.resolve_all(&program_words(&command, &rules)).await;
+        let (matches, evaluation) = evaluate(&command, &resolutions);
+        assert_eq!(
+            matches.resolution,
+            execution_policy::ProgramResolution::Resolved,
+            "{program}"
+        );
+        assert_eq!(evaluation.decision, Forbid, "{program}");
+    }
+    // The allowed program, named bare: allowed, because it resolved to it.
+    let command = words(&["true"]);
+    let resolutions = resolver.resolve_all(&program_words(&command, &rules)).await;
+    assert_eq!(evaluate(&command, &resolutions).1.decision, Allow);
+    // A link named `true` in the guest Task folder is `touch`: the allow on
+    // `/usr/bin/true` does not reach it (only the default behaviour applies).
+    let command = words(&["./true"]);
+    let resolutions = resolver.resolve_all(&program_words(&command, &rules)).await;
+    assert_eq!(resolutions.get("./true"), Some("/usr/bin/touch"));
+    let (matches, evaluation) = evaluate(&command, &resolutions);
+    assert_eq!(matches.matched, vec![false, false]);
+    assert_eq!(evaluation.controlling_rule, None);
+
+    // Guest unreachable, or resolution timed out: unresolved, so it asks.
+    let mut down = ubuntu();
+    down.unreachable = true;
+    let mut slow = ubuntu();
+    slow.hang = true;
+    let command = words(&["true"]);
+    for resolutions in [
+        guest(down)
+            .resolve_all(&program_words(&command, &rules))
+            .await,
+        crate::inquello_program::resolve_within(
+            &guest(slow),
+            &program_words(&command, &rules),
+            std::time::Duration::from_millis(50),
+        )
+        .await,
+    ] {
+        let (matches, evaluation) = evaluate(&command, &resolutions);
+        assert_eq!(
+            matches.resolution,
+            execution_policy::ProgramResolution::Unresolved
+        );
+        assert_eq!(matches.matched, vec![false, false]);
+        assert_eq!(evaluation.decision, Prompt);
+    }
+    // A forbid named by its literal path still wins without the guest.
+    let command = words(&["/bin/sh"]);
+    let (_, evaluation) = evaluate(&command, &Resolutions::unresolved());
+    assert_eq!(evaluation.decision, Forbid);
+}
+
+/// Off Windows a bounded Task's command runs on this host, so the
+/// tools/exec placement resolves it here and never contacts a guest.
+#[cfg(unix)]
+#[tokio::test]
+async fn a_bounded_placement_resolves_on_this_host_off_windows() {
+    let programs = Programs::new(&["ls"]);
+    let policy = execution_policy::effective_policy(
+        &workspace_layer(&workspace_policy(WORKSPACE, 1, None))
+            .unwrap_or_else(|error| panic!("{error:?}")),
+        &DeviceRequirements::default(),
+        &UserConfig::default(),
+    );
+    assert!(execution_policy::tool_reach(&policy, BroadModeStatus::Standard).bounded);
+    let placement = ExecPlacement::BoundedGuest {
+        host: programs.lookup(),
+        guest: crate::inquello_wsl::GuestTarget::Connect {
+            scope: "0".repeat(64),
+            task_id: "00000000-0000-4000-8000-000000000001".into(),
+        },
+    };
+    let resolutions = placement
+        .resolve(&words(&["ls"]), &policy, BroadModeStatus::Standard)
+        .await;
+    assert_eq!(resolutions.get("ls"), Some(programs.at("bin/ls").as_str()));
+}

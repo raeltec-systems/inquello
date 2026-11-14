@@ -1,3 +1,5 @@
+# Current 2026-11-05 amendment: original header below is the historical 84-story selection.
+# Owner-approved 1.31 and current lifecycle/dependency additions are additional; status is not source evidence.
 # Scope: approved Increment 1 only (Epics 1–6, 84 stories).
 # Planning tracker; no implementation authorization. Full roadmap remains in epics.md.
 # Deterministic-equivalent fallback; see sprint-scope-2026-10-27.json.
@@ -146,4 +148,24 @@ development_status:
   6-3-inspect-authorise-and-verify-a-bounded-external-update-again: backlog
   6-4-handle-responses-actions-and-retests-without-agent-closure: backlog
   6-5-complete-first-increment-fixture-validation-and-deferral-acc: backlog
+  # 2026-11-05 current lifecycle additions; all existing implementation states are preserved.
+  # Recurrence composes 12.1-12.6/12.8 with 10.3 and 13.1; see current scope/dependencies.
+  # Broader retained V1 remains in epics.md, not excluded by absence from this tracker.
+  6-6-establish-source-backed-organisation-and-first-engagement-context: backlog
+  6-7-prepare-and-revise-risk-based-organisational-coverage-plans: backlog
+  10-3-compact-and-resume-long-work-with-durable-references: backlog
+  12-1-run-a-procedure-non-interactively-with-structured-versioned-results: backlog
+  12-2-bind-service-identities-before-unattended-enablement: backlog
+  12-3-revoke-unattended-credentials-without-assuming-seat-removal-is-enough: backlog
+  12-4-reassign-work-reviews-and-unattended-jobs-on-departure: backlog
+  12-5-configure-schedule-and-event-mandates-in-automations: backlog
+  12-6-report-run-outcomes-and-prevent-duplicate-effects: backlog
+  12-8-verify-revocation-and-duplicate-effect-safety-for-unattended-routes: backlog
+  13-1-extend-retained-material-policy-to-all-remaining-enabled-categories: backlog
+  epic-10: backlog
+  epic-10-retrospective: optional
+  epic-12: backlog
+  epic-12-retrospective: optional
+  epic-13: backlog
+  epic-13-retrospective: optional
 action_items: []

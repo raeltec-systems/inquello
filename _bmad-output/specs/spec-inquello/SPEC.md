@@ -2,11 +2,13 @@
 id: SPEC-inquello
 status: final
 created: 2026-10-27
-updated: 2026-10-27
+updated: 2026-11-05
 companions:
   - scope-and-gates.md
   - glossary.md
   - collaboration-and-memory.md
+  - lifecycle-and-readiness.md
+  - ../../planning-artifacts/capability-reuse-inventory-2026-11-05.md
   - ../../planning-artifacts/prds/prd-inquello-2026-10-26/prd.md
   - ../../planning-artifacts/prds/prd-inquello-2026-10-26/addendum.md
   - ../../planning-artifacts/ux-designs/ux-inquello-2026-10-26/DESIGN.md
@@ -27,7 +29,7 @@ sources: []
 
 ## Why
 
-Inquello brings the Codex-style working experience to internal audit, external audit, advisory and IT/IS audit: bring existing material, direct agent work, inspect and revise outputs, and continue in existing tools. The aim is lower total human effort through accepted delivery while preserving accuracy, traceability, confidentiality and judgment. One organisation's audit team supplies first validation; it does not narrow the eventual audience or mandate an Engagement for ad hoc Tasks. Vocabulary: [glossary](glossary.md).
+Inquello gives internal audit teams connected, source-backed organisational understanding and an agent that performs supported audit work alongside them. It helps teams cover more significant risks and develop defensible, business-relevant conclusions without repeatedly rebuilding context. Auditors retain direction, judgment and approval. V1 serves one organisation and internal audit team across coverage planning, engagements and follow-up, including a supported recurring check. Reuse the compatible Codex foundation; benefits and actual capability readiness remain to be demonstrated. Ad hoc Tasks remain available. Vocabulary: [glossary](glossary.md).
 
 ## Capabilities
 
@@ -49,11 +51,11 @@ Inquello brings the Codex-style working experience to internal audit, external a
 
 - **CAP-5** — Use attributable context (V1)
   - **intent:** Provide supported files, folders, documents, data, visuals, selections, annotations and application context.
-  - **success:** Relied-on inputs retain origin/version, scope and limits; missing material, snapshot freshness and saved/live state are explicit; incomplete inputs never imply full Coverage.
+  - **success:** Relied-on inputs retain origin/version, scope and limits; missing material, snapshot freshness and saved/live state are explicit; incomplete inputs never imply full Coverage. Guided setup/settings and agent assistance organise available strategy, objectives, audit-universe context and useful history, showing readiness and gaps for intended work without requiring every source or making all setup conversational.
 
 - **CAP-6** — Produce checkable analysis (V1)
   - **intent:** Perform permitted calculations, queries, transformations, scripts, shell/code work and full-population or sample-based analysis under the chosen Method.
-  - **success:** Known-result fixtures reconcile; inputs, parameters, derivations, exclusions, duplicates and actual Coverage are inspectable; changed inputs trigger recalculation or stale marking.
+  - **success:** Known-result fixtures reconcile; inputs, parameters, derivations, exclusions, duplicates and actual Coverage are inspectable; changed inputs trigger recalculation or stale marking. For supported substantial work, reconcile completed, excluded, failed and unfinished scope and demonstrate recovery without silent omissions or duplicate effects. Spot checks or a completed model turn do not prove coverage; faithful execution remains distinct from professional judgment of procedure suitability.
 
 - **CAP-7** — Create and deliver editable artifacts (V1)
   - **intent:** Create, revise, inspect and externally continue supported spreadsheets, documents, presentations, datasets, scripts and visuals, including explicitly shared, published or hosted outputs.
@@ -77,7 +79,7 @@ Inquello brings the Codex-style working experience to internal audit, external a
 
 - **CAP-12** — Run programmatic and continuous work (V1)
   - **intent:** Initiate supported batch/SDK/non-interactive work and bounded schedules/events with declared inputs, Method, identity, limits, destination and escalation.
-  - **success:** Versioned structured results/streams are available where supported; actual Coverage and missing/unrun/incomplete/failed/no-exception outcomes differ; duplicates cannot cause uncontrolled repeated effects.
+  - **success:** Versioned structured results/streams are available where supported; actual Coverage and missing/unrun/incomplete/failed/no-exception outcomes differ; duplicates cannot cause uncontrolled repeated effects. The V1 journey includes a supported recurring audit check with visible results, interruptions and retained progress. Reuse inherited queue/sleep mechanisms; qualify protected invocation, host availability, missed-run/restart handling and current authority before enabling the selected check.
 
 - **CAP-13** — Delegate and compare alternatives (V1)
   - **intent:** Delegate focused work, inspect and consolidate results, and explore side chats, forks and alternate analyses without losing origin.
@@ -107,9 +109,9 @@ Inquello brings the Codex-style working experience to internal audit, external a
   - **intent:** Govern access, retention, deletion, export and recovery for working files/history, shared context, evidence references, derived knowledge, logs and telemetry held by Inquello.
   - **success:** Enabled routes enforce current rights across sources and derivatives; held categories remain distinct from external authoritative records; export/recovery declares losses; usage counts never represent accepted work or Coverage.
 
-- **CAP-20** — Support external-record practice (V1)
-  - **intent:** Coordinate planning, procedures, evidence exchange, analysis, workpapers, review, reporting, responses, follow-up and approved stakeholder communication using artifacts and external systems.
-  - **success:** External-audit, advisory and technical examples follow their Methods without mandatory control/deficiency objects; agent completion never professionally closes a Finding.
+- **CAP-20** — Support end-to-end internal-audit practice (V1)
+  - **intent:** Connect engagement objectives, scope, risks, criteria and work programme to procedures, evidence, workpapers, review, findings, conclusions, reports, actions and follow-up using working artifacts and designated external authority.
+  - **success:** The team inspects and revises connected work under its Method; technical and internal advisory work need no mandatory control/deficiency objects. Formal conclusions/sign-off remain human. Report issuance, management-reported completion, implementation confirmation and risk acceptance are distinct; unresolved matters return to coverage planning. External-audit-specific workflows/standards retain future applicability, not V1 acceptance.
 
 - **CAP-21** — Verify external delivery (V1)
   - **intent:** Inspect, authorise and verify bounded changes at a named external audit-record destination, with import/export fallback.
@@ -131,11 +133,16 @@ Inquello brings the Codex-style working experience to internal audit, external a
   - **intent:** Select permitted record mode through Organisation/Workspace configuration and deliberately migrate to an identified destination.
   - **success:** Tasks/Engagements never silently switch authority; transferred records, artifacts, relationships/history and losses are identified and verified; operational systems remain separate.
 
+- **CAP-26** — Prepare risk-based audit coverage (V1)
+  - **intent:** Help the manager assess priorities and prepare, review and change an audit plan from available strategy, objectives, audit universe, risk information, past findings and outstanding actions.
+  - **success:** Sourced basis, coverage choices, omissions and changes are inspectable; manager review and applicable governance approval evidence remain distinct. Follow-up results and unresolved matters inform subsequent planning. No native authority, staffing suite, board portal or universal personal-CAE click is implied.
+
 ## Constraints
 
-- Preserve all P01–P22 groups, 41 V1 FRs, three V2 FRs, ten NFRs, eight journeys and the complete mapped inventory. The pending epic reconciliation must record dependency-correct increments and explicit deferrals with old-to-new traceability (OQ-10); deferrals remain unmet scope and cannot establish full parity. See [scope and gates](scope-and-gates.md).
+- Preserve P01–P22, FR-1–44 and CAP-1–25; add FR-45/CAP-26 and UJ-9/10 without renumbering. V1 has 42 FRs and ten journeys; native FR-38/40/42 remain V2. Retain every compatible Codex capability and documented model route, using the [per-feature inventory](../../planning-artifacts/capability-reuse-inventory-2026-11-05.md) to distinguish inheritance, exposure/adaptation, external dependencies and qualification. Unverified is not absent; partial integration is not parity. See [scope and gates](scope-and-gates.md).
 - V1 uses supported working files and external authoritative audit records, including scheduled, approved unattended and continuous work. Only V2 adds native authority/lifecycle/migration; V2 foundations do not gate V1.
-- Implement the adopted [Architecture Spine](../../planning-artifacts/architecture/architecture-inquello-2026-10-26/ARCHITECTURE-SPINE.md) AD-1–AD-17 with stable identifiers and current revisions, and the [DESIGN](../../planning-artifacts/ux-designs/ux-inquello-2026-10-26/DESIGN.md)/[EXPERIENCE](../../planning-artifacts/ux-designs/ux-inquello-2026-10-26/EXPERIENCE.md) contracts. Detailed implementation, tokens, components and surface/state rules remain binding companions.
+- Implement the adopted [Architecture Spine](../../planning-artifacts/architecture/architecture-inquello-2026-10-26/ARCHITECTURE-SPINE.md) stable AD identifiers and current adopted revisions, and the [DESIGN](../../planning-artifacts/ux-designs/ux-inquello-2026-10-26/DESIGN.md)/[EXPERIENCE](../../planning-artifacts/ux-designs/ux-inquello-2026-10-26/EXPERIENCE.md) contracts. Detailed implementation, tokens, components and surface/state rules remain binding companions.
+- Where GIAS applies, support at-least-annual documented risk assessment and dynamic plan updates (9.4), coordination and conditional documented reliance retaining responsibility (9.5), and applicable work-programme approval before implementation and prompt approval of changes (13.6). This does not impose a universal software cadence or personal-CAE click.
 - Keep execution permission, local edits, agent checks, human review, Professional Approval and Delivery distinct. Formal V1 acceptance follows the designated external authority and actual Method; no universal extra sign-off applies to reversible actions.
 - Retain attributable source/version, input scope, Method/version/parameters/departures, derivations, actual population/coverage and uncertainty. Relevant evidence, Method, policy or output changes stale affected decision applicability, even when output bytes do not change.
 - Preserve supported saved-file identity, unrelated content and intervening human edits; distinguish saved, live and remote-record access. Disclose unsupported destructive conversions beforehand; resolve conflicts or leave changes unapplied.
@@ -152,7 +159,7 @@ Inquello brings the Codex-style working experience to internal audit, external a
 - First validation ships the desktop client first, mirroring Codex clients, with Excel, Word, PowerPoint and CSV; no named external record system, import/export only. Operate at single-team scale with no service promises; availability, latency, recovery and accessibility targets follow first validation. The full target is unchanged.
 - Method distribution, extension management and usage control inherit Codex mechanisms (Workspace/local/plugin skills, plugin marketplaces, MCP configuration, Agent Security managed policy; plan/workspace usage limits, model/reasoning/speed selection, usage inspection, enterprise analytics). No Inquello-specific catalogue, approval workflow or budget values for first validation; add only on usage evidence.
 - The hybrid shared Inquello service owns identity and authorisation: Workspace membership, audit-team roles, Engagement membership and the differing internal-audit and external-audit models. Inference-provider sign-in (ChatGPT subscription, Claude, Azure, Bedrock, Vertex) only selects and authorises the inference route and never stands in for Inquello identity (OQ-14).
-- Tasks are private by default; file/folder/review-package sharing need not disclose a conversation and whole Task sharing is explicit. Recipients must access the selected artifact version and permitted supporting context on their computer, not merely a sender-local path.
+- Tasks are private by default; administrator status alone never grants access to private content. File/folder/review-package sharing need not disclose a conversation and whole Task sharing is explicit. Recipients must access the selected artifact version and permitted supporting context on their computer, not merely a sender-local path.
 - Basic revocation, active-agent cessation and derivative access controls ship with the first team-enabled increment; advanced unattended-job reassignment can follow with automation. Already downloaded/exported copies cannot be recalled.
 - Local desktop execution/files plus shared identity/permissions/review coordination do not select vendor, budget, region or detailed protocols; no automatic all-source upload.
 - Local storage/tool execution is not local inference. Cloud-model agent work requires its model connection for both private and shared Tasks; shared-derived use additionally requires live Inquello authority. Pause affected work on dependency loss and preserve supported progress. Local models are not a current priority; no automatic fallback, offline agent mode or new offline editor is committed.
@@ -167,11 +174,12 @@ Inquello brings the Codex-style working experience to internal audit, external a
 - Equating agent completion, a generated report, a closed Task, Keep/Revert or a reviewer-agent role with assurance, Professional Approval or remediation.
 - A hosted agent browser or hosted sandbox in V1. **Revisit in V2** (OQ-13).
 - Presuming continuous two-way synchronisation or a guest portal as accepted baseline; these remain explicit choices rather than permanent prohibitions.
-- Prioritising audit-universe/portfolio planning, staffing/capacity/budget suites, organisation-wide assurance mapping, quality-programme administration or a general workflow builder; ordinary Engagement planning/follow-up remain V1.
+- External-audit-specific workflows/standards, audit-firm multi-client switching, complex large-team staffing/capacity/budget suites, broad integration-marketplace supply or custom connectors for every system, automatic migration of every historical system, organisation-wide assurance-map administration, quality-programme administration or a general workflow builder. Compatible inherited extension mechanisms and practical file intake remain in scope; risk-based coverage planning and supported recurring work are V1.
 - Claiming proven demand, savings, final naming clearance, functioning prototype integrations or transferable hosted-service eligibility from document adoption.
 
 ## Success signal
 
+- Demonstrate the complete internal-audit journey and supported recurring check with inspectable linkage and human decisions. Assess coverage of significant risks first, quality/relevance second, then comfortable direction/review, capacity and reduced rework. Counts of processed records alone do not establish risk coverage. The [lifecycle and readiness contract](lifecycle-and-readiness.md) defines evidence and dependence-point gates without invented targets.
 - Demonstrate applicable A01–A18 and exact W1–W3/M1 outcomes for enabled routes, including same-file external edits, denial/revocation, interruption, conflict and uncertain Delivery. An internal audit team validates on task types it picks during validation planning, comparing matched task classes through human acceptance for total effort, traceability, cost and recovery; report wrong/missed results, correction burden, authority failures and artifact/effect loss, including failed/abandoned work and denominators. No runtime acceptance is claimed yet; numerical thresholds follow the first baseline.
 
 ## Assumptions
@@ -179,7 +187,7 @@ Inquello brings the Codex-style working experience to internal audit, external a
 Inherited only; owners and revisit triggers remain in [scope and gates](scope-and-gates.md#inherited-assumptions).
 
 - **AS-1:** Journey personas/scenarios are illustrative, not observed practitioner sessions.
-- **AS-2:** Gate owners are proposed role assignments, not confirmed appointments.
+- **AS-2:** Israel is the current product decision owner; other audit/security/design/validation role appointments remain proposed until assigned.
 - **AS-UX1:** S05–S13 placements are derived and require walkthroughs.
 - **AS-UX2:** Responsive and secondary-client arrangements require content-fit validation.
 - **AS-UX3:** Interaction completion remains unproved on actual hosts/integrations.
@@ -196,6 +204,7 @@ Contract adoption does not establish implementation readiness. Open gates block 
 
 - **OQ-15:** Which external-audit client/confidentiality/independence boundaries govern cross-client knowledge? Resolve before enabling that reuse.
 - **OQ-16A resolved:** The clarified technical direction was adopted in Sentinel_f111d58b637c8191a30a23234ec55314; detailed SC-1–6 contracts are architect-derived. No implementation authorization follows.
-- **OQ-16B:** Establish actual identity issuer, operator/hosting/region, retained-data/recovery policy and route eligibility before real shared data; technical proposal approval does not approve procurement or deployment.
+- **OQ-16B:** Auth0/customer-onboarding direction is selected; verify actual tenant/issuer, operator/hosting/region, retained-data/recovery policy and route eligibility before real shared data. Selection is not operational acceptance or permission for new procurement/deployment.
+- **OQ-17–20:** Specify setup/procedure readiness, recurring-check contract, lifecycle authority/export and pilot proof/use/commercial details before their respective reliance points; see [lifecycle and readiness](lifecycle-and-readiness.md).
 
-- **CR-1 design recorded:** The Claude companion fixes the native Messages adapter ownership and normalized protocol contract; implementation and actual route acceptance remain work to perform. Pinned Responses-only configuration is not drop-in compatibility. Subscription integration remains separately conditional.
+- **CR-1 design recorded:** The Claude companion fixes the native Messages adapter ownership and normalized protocol contract; the adapter is authored in current source, while actual provider/route acceptance remains governed by current engineering evidence. Source presence is not actual route qualification; Responses-only configuration is not drop-in Messages compatibility. Subscription integration remains separately conditional.

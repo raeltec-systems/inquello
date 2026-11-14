@@ -1,0 +1,18 @@
+
+> inquello-desktop@0.0.0 build D:\Projects\inquello\desktop
+> tsc -p tsconfig.build.json && tsc -p tsconfig.renderer.json --noEmit && node scripts/check-data-policy.cjs && vite build
+
+src/renderer/Shell/MessageMarkdown.tsx(17,43): error TS2307: Cannot find module 'react-markdown' or its corresponding type declarations.
+src/renderer/Shell/MessageMarkdown.tsx(18,23): error TS2307: Cannot find module 'remark-gfm' or its corresponding type declarations.
+src/renderer/Shell/MessageMarkdown.tsx(19,64): error TS2307: Cannot find module 'rehype-sanitize' or its corresponding type declarations.
+src/renderer/Shell/MessageMarkdown.tsx(87,7): error TS7031: Binding element 'href' implicitly has an 'any' type.
+src/renderer/Shell/MessageMarkdown.tsx(87,13): error TS7031: Binding element 'children' implicitly has an 'any' type.
+src/renderer/Shell/MessageMarkdown.tsx(87,23): error TS7031: Binding element 'node' implicitly has an 'any' type.
+src/renderer/Shell/MessageMarkdown.tsx(94,11): error TS7031: Binding element 'children' implicitly has an 'any' type.
+src/renderer/Shell/MessageMarkdown.tsx(98,8): error TS7031: Binding element 'children' implicitly has an 'any' type.
+src/renderer/Shell/MessageMarkdown.tsx(98,18): error TS7031: Binding element 'style' implicitly has an 'any' type.
+src/renderer/Shell/MessageMarkdown.tsx(99,8): error TS7031: Binding element 'children' implicitly has an 'any' type.
+src/renderer/Shell/MessageMarkdown.tsx(99,18): error TS7031: Binding element 'style' implicitly has an 'any' type.
+src/renderer/Shell/MessageMarkdown.tsx(100,9): error TS7031: Binding element 'children' implicitly has an 'any' type.
+src/renderer/Shell/MessageMarkdown.tsx(103,11): error TS7031: Binding element 'checked' implicitly has an 'any' type.
+ ELIFECYCLE  Command failed with exit code 2.

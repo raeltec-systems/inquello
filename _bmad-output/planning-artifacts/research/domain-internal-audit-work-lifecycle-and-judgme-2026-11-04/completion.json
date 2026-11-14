@@ -1,0 +1,27 @@
+{
+  "status": "complete",
+  "intent": "process",
+  "type": "domain",
+  "report": "D:\\Projects\\inquello\\_bmad-output\\planning-artifacts\\research\\domain-internal-audit-work-lifecycle-and-judgme-2026-11-04\\research.md",
+  "imports": "D:\\Projects\\inquello\\_bmad-output\\planning-artifacts\\research\\domain-internal-audit-work-lifecycle-and-judgme-2026-11-04\\imports",
+  "glossary": "D:\\Projects\\inquello\\_bmad-output\\planning-artifacts\\research\\domain-internal-audit-work-lifecycle-and-judgme-2026-11-04\\glossary.md",
+  "contradictions": "D:\\Projects\\inquello\\_bmad-output\\planning-artifacts\\research\\domain-internal-audit-work-lifecycle-and-judgme-2026-11-04\\contradictions.md",
+  "quality_checks": "D:\\Projects\\inquello\\_bmad-output\\planning-artifacts\\research\\domain-internal-audit-work-lifecycle-and-judgme-2026-11-04\\review-checks.md",
+  "source_set": "All five confirmed; report 5 Claude by user confirmation; original stays in Space by reference.",
+  "claims": {
+    "verified": 22,
+    "unverified": 2,
+    "overturned": 4
+  },
+  "claims_scope": "Selected synthesis load-bearing claims, not all imported assertions.",
+  "open_questions": [
+    "Claude production date unknown.",
+    "Unselected imported mandatory assertions require exact primary verification before reliance.",
+    "Organisation, jurisdiction, methodology and detailed topical applicability remain to be established.",
+    "Prevalence, sampling norms, adoption and effort claims lack verified representative empirical evidence.",
+    "PRD/SPEC/UX/architecture/epic reconciliation, including native-record phasing, remains planning work."
+  ],
+  "next_step": "bmad-correct-course [CC], then bmad-prd [PRD] Update for approved changes; preserve Epic 1.",
+  "external_handoffs": [],
+  "preserved": "PRD, source code, tests, tracked original imports and preexisting local changes."
+}

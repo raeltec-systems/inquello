@@ -1,0 +1,29 @@
+{
+  "at": "2026-11-09T21:17:29.277Z",
+  "focused": {
+    "files": 7,
+    "passed": 90,
+    "failed": 0,
+    "logSha256": "c2d7ed80654c24c949374399c292b09d74b1e29f628b75e50bffa49b4a56700f"
+  },
+  "build": {
+    "offline": true,
+    "at": "2026-11-09T21:16:31.9627753Z",
+    "exitCode": 0,
+    "logSha256": "74e4b9df62a3b79f1e592c5dd75c1ea4dc60cf787dffe30f950834ecdcbaf685"
+  },
+  "sourceManifestSha256": "4abef56e4bfa72a0857512d0fa9013dbed4a8abddd9e419060081b32a23a36cc",
+  "diffSha256": "c0ccc8f1c96434a3283c58ed51d74ed61895f3bae8590688c543d4bce3d1bac0",
+  "changedFiles": [
+    "desktop/src/renderer/Shell/Shell.tsx",
+    "desktop/test/navigation-recovery-shell.test.tsx"
+  ],
+  "engineAndNativeArtifactsUnchanged": true,
+  "manifestSha256": "1c92c4f9411e9319d4f8c613ee5e952a6c1c57beb1bfdef0728c1cae434813a5",
+  "desktopDistSha256": "38c366a51be867a05c6043111afcf0117719981a84f39829132d4a64f2302af8",
+  "metadataAndArtifactHashChecksPassed": true,
+  "normalRunnerRestarted": false,
+  "november7Evidence": "historical; does not cover changed renderer bytes",
+  "liveProviderAcceptance": "pending",
+  "modelPromptsSent": 0
+}

@@ -1,0 +1,8 @@
+Get-FileHash : The term 'Get-FileHash' is not recognized as the name of a cmdlet, function, script file, or operable 
+program. Check the spelling of the name, or if a path was included, verify that the path is correct and try again.
+At D:\Projects\inquello\.tmp\epic1-live-acceptance-20261109\resume.ps1:13 char:126
++ ... ff1bc229c0bbc012cb9bc89cb09a7e3';manifestSha256=(Get-FileHash -Algori ...
++                                                      ~~~~~~~~~~~~
+    + CategoryInfo          : ObjectNotFound: (Get-FileHash:String) [], ParentContainsErrorRecordException
+    + FullyQualifiedErrorId : CommandNotFoundException
+ 

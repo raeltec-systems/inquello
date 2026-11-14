@@ -1,0 +1,3585 @@
+[33m(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - ESM syntax in a file loaded as CommonJS (vitest.config.ts:1:1). Use a `.mjs` extension or set `"type": "module"` in the closest package.json
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.[39m
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.5 [39m[90mD:/Projects/inquello/desktop[39m
+
+ [31m❯[39m test/providers-action-recovery.test.tsx [2m([22m[2m10 tests[22m[2m | [22m[31m5 failed[39m[2m)[22m[33m 6380[2mms[22m[39m
+   [31m❯[39m provider action recovery after synchronous throw [2m(5)[22m
+[31m     [31m×[31m Claude store releases pending controls, protects input and allows a deliberate retry[39m[33m 1444[2mms[22m[39m
+[31m     [31m×[31m Claude check releases pending controls, protects input and allows a deliberate retry[39m[33m 1128[2mms[22m[39m
+[31m     [31m×[31m Claude remove releases pending controls, protects input and allows a deliberate retry[39m[33m 1081[2mms[22m[39m
+[31m     [31m×[31m OpenAI connect releases pending controls, protects input and allows a deliberate retry[39m[33m 1090[2mms[22m[39m
+[31m     [31m×[31m OpenAI disconnect releases pending controls, protects input and allows a deliberate retry[39m[33m 1055[2mms[22m[39m
+   [32m✓[39m provider action recovery after rejected promise [2m(5)[22m
+     [32m✓[39m Claude store releases pending controls, protects input and allows a deliberate retry[32m 137[2mms[22m[39m
+     [32m✓[39m Claude check releases pending controls, protects input and allows a deliberate retry[32m 116[2mms[22m[39m
+     [32m✓[39m Claude remove releases pending controls, protects input and allows a deliberate retry[32m 127[2mms[22m[39m
+     [32m✓[39m OpenAI connect releases pending controls, protects input and allows a deliberate retry[32m 115[2mms[22m[39m
+     [32m✓[39m OpenAI disconnect releases pending controls, protects input and allows a deliberate retry[32m 82[2mms[22m[39m
+ [32m✓[39m test/providers-block.test.tsx [2m([22m[2m22 tests[22m[2m)[22m[33m 1654[2mms[22m[39m
+   [32m✓[39m Providers block [2m(6)[22m
+     [33m[2m✓[22m[39m checks the key only when asked, and removes it[33m 449[2mms[22m[39m
+ [32m✓[39m test/settings-route.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 4884[2mms[22m[39m
+   [33m[2m✓[22m[39m reconnect provider-claude-key mounts and focuses its actual provider control without actions[33m 4625[2mms[22m[39m
+ [32m✓[39m test/provider-consent-renderer.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[33m 370[2mms[22m[39m
+ [32m✓[39m test/provider-consent-ui.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[33m 442[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 5 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m test/providers-action-recovery.test.tsx[2m > [22mprovider action recovery after synchronous throw[2m > [22mClaude store releases pending controls, protects input and allows a deliberate retry
+[31m[1mTestingLibraryElementError[22m[39m: Unable to find an element with the text: The request did not complete.. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"specimen-account specimen-providers"[39m
+      [33mdata-claude-state[39m=[32m"stored-unverified"[39m
+      [33mdata-claude-storage[39m=[32m"os-backed"[39m
+      [33mdata-codex-account[39m=[32m"apiKey"[39m
+      [33mdata-codex-state[39m=[32m"connected"[39m
+      [33mdata-providers[39m=[32m""[39m
+    [36m>[39m
+      [36m<h3>[39m
+        [0mConnect your AI providers[0m
+      [36m</h3>[39m
+      [36m<p[39m
+        [33mclass[39m=[32m"specimen-account-note"[39m
+      [36m>[39m
+        [0mConnect an account, then choose a model in your conversation. Provider credentials stay separate from your Inquello identity.[0m
+      [36m</p>[39m
+      [36m<p[39m
+        [33mclass[39m=[32m"specimen-account-note"[39m
+      [36m>[39m
+        [0mA stored key or connected account does not establish model access or qualification.[0m
+      [36m</p>[39m
+      [36m<span[39m
+        [33mclass[39m=[32m"iq-action"[39m
+      [36m>[39m
+        [36m<button[39m
+          [33maria-describedby[39m=[32m"_r_0_"[39m
+          [33maria-disabled[39m=[32m"true"[39m
+          [33mclass[39m=[32m"iq-button iq-button--quiet iq-button--md"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-button-label"[39m
+          [36m>[39m
+            [0mRefresh provider status[0m
+          [36m</span>[39m
+        [36m</button>[39m
+        [36m<span[39m
+          [33mclass[39m=[32m"iq-note"[39m
+          [33mid[39m=[32m"_r_0_"[39m
+        [36m>[39m
+          [0mAnother provider action is in progress.[0m
+        [36m</span>[39m
+      [36m</span>[39m
+      [36m<dl[39m
+        [33mclass[39m=[32m"specimen-account-states"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"specimen-account-state"[39m
+        [36m>[39m
+          [36m<dt>[39m
+            [0mClaude API key[0m
+          [36m</dt>[39m
+          [36m<dd>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-status-chip iq-status-chip--other"[39m
+              [33mdata-status[39m=[32m"provider-claude-stored-unverified"[39m
+            [36m>[39m
+              [0mKey stored, not checked[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"specimen-account-note"[39m
+            [36m>[39m
+              [0mSynthetic stored key[0m
+            [36m</span>[39m
+          [36m</dd>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"specimen-account-state"[39m
+        [36m>[39m
+          [36m<dt>[39m
+            [0mKey storage[0m
+          [36m</dt>[39m
+          [36m<dd[39m
+            [33mclass[39m=[32m"specimen-account-note"[39m
+          [36m>[39m
+            [0mThe key is kept encrypted with this computer's credential store.[0m
+          [36m</dd>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"specimen-account-state"[39m
+        [36m>[39m
+          [36m<dt>[39m
+            [0mOpenAI connection[0m
+          [36m</dt>[39m
+          [36m<dd>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-status-chip iq-status-chip--other"[39m
+              [33mdata-status[39m=[32m"provider-codex-connected"[39m
+            [36m>[39m
+              [0mConnected[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"specimen-account-note"[39m
+            [36m>[39m
+              [0mSigned in with an API key, held in the OS keyring.[0m
+            [36m</span>[39m
+          [36m</dd>[39m
+        [36m</div>[39m
+      [36m</dl>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"specimen-provider-form"[39m
+        [33mdata-provider-claude[39m=[32m""[39m
+      [36m>[39m
+        [36m<h4>[39m
+          [0mAnthropic API[0m
+        [36m</h4>[39m
+        [36m<p[39m
+          [33mclass[39m=[32m"specimen-account-note"[39m
+        [36m>[39m
+          [0mUse your Anthropic API credits. Store your key, then optionally check account access. Check key does not send a prompt or test the selected model.[0m
+        [36m</p>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"iq-field"[39m
+        [36m>[39m
+          [36m<label[39m
+            [33mclass[39m=[32m"iq-field-label"[39m
+            [33mfor[39m=[32m"provider-claude-key"[39m
+          [36m>[39m
+            [0mClaude API key[0m
+          [36m</label>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-field-instruction"[39m
+            [33mid[39m=[32m"provider-claude-key-instruction"[39m
+          [36m>[39m
+            [0mStored by Inquello's main process; never shown again.[0m
+          [36m</span>[39m
+          [36m<input[39m
+            [33maria-describedby[39m=[32m"provider-claude-key-instruction"[39m
+            [33mautocomplete[39m=[32m"off"[39m
+            [33mclass[39m=[32m"iq-field-control"[39m
+            [33mid[39m=[32m"provider-claude-key"[39m
+            [33mtype[39m=[32m"password"[39m
+            [33mvalue[39m=[32m""[39m
+          [36m/>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"specimen-account-actions"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-busy[39m=[32m"true"[39m
+              [33maria-describedby[39m=[32m"_r_2_"[39m
+              [33mclass[39m=[32m"iq-button iq-button--primary iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"claude-store"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"iq-spinner"[39m
+              [36m/>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mStore key[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_2_"[39m
+            [36m>[39m
+              [0mIn progress[0m
+            [36m</span>[39m
+          [36m</span>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-describedby[39m=[32m"_r_3_"[39m
+              [33maria-disabled[39m=[32m"true"[39m
+              [33mclass[39m=[32m"iq-button iq-button--secondary iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"claude-verify"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mCheck key[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_3_"[39m
+            [36m>[39m
+              [0mAnother provider action is in progress.[0m
+            [36m</span>[39m
+          [36m</span>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-describedby[39m=[32m"_r_4_"[39m
+              [33maria-disabled[39m=[32m"true"[39m
+              [33mclass[39m=[32m"iq-button iq-button--quiet iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"claude-remove"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mRemove key[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_4_"[39m
+            [36m>[39m
+              [0mAnother provider action is in progress.[0m
+            [36m</span>[39m
+          [36m</span>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"specimen-provider-form"[39m
+        [33mdata-provider-codex[39m=[32m""[39m
+      [36m>[39m
+        [36m<h4>[39m
+          [0mOpenAI[0m
+        [36m</h4>[39m
+        [36m<p[39m
+          [33mclass[39m=[32m"specimen-account-note"[39m
+        [36m>[39m
+          [0mChoose your workspace in chat to manage its OpenAI permission. You can still connect your personal account.[0m
+        [36m</p>[39m
+        [36m<p[39m
+          [33mclass[39m=[32m"specimen-account-note"[39m
+        [36m>[39m
+          [0mUse your OpenAI API credits with an API key. A ChatGPT subscription is separate.[0m
+        [36m</p>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"iq-field"[39m
+        [36m>[39m
+          [36m<label[39m
+            [33mclass[39m=[32m"iq-field-label"[39m
+            [33mfor[39m=[32m"provider-codex-key"[39m
+          [36m>[39m
+            [0mOpenAI API key[0m
+          [36m</label>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-field-instruction"[39m
+            [33mid[39m=[32m"provider-codex-key-instruction"[39m
+          [36m>[39m
+            [0mStored securely in this computer’s credential store.[0m
+          [36m</span>[39m
+          [36m<input[39m
+            [33maria-describedby[39m=[32m"provider-codex-key-instruction"[39m
+            [33mautocomplete[39m=[32m"off"[39m
+            [33mclass[39m=[32m"iq-field-control"[39m
+            [33mid[39m=[32m"provider-codex-key"[39m
+            [33mtype[39m=[32m"password"[39m
+            [33mvalue[39m=[32m""[39m
+          [36m/>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"specimen-account-actions"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-describedby[39m=[32m"_r_6_"[39m
+              [33maria-disabled[39m=[32m"true"[39m
+              [33mclass[39m=[32m"iq-button iq-button--primary iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"codex-api-key"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mConnect with API key[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_6_"[39m
+            [36m>[39m
+              [0mAnother provider action is in progress.[0m
+            [36m</span>[39m
+          [36m</span>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-describedby[39m=[32m"_r_7_"[39m
+              [33maria-disabled[39m=[32m"true"[39m
+              [33mclass[39m=[32m"iq-button iq-button--secondary iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"codex-chatgpt"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mSign in with ChatGPT[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_7_"[39m
+            [36m>[39m
+              [0mChatGPT sign-in is not available for a supported model in this build. Use an OpenAI API key.[0m
+            [36m</span>[39m
+          [36m</span>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-describedby[39m=[32m"_r_8_"[39m
+              [33maria-disabled[39m=[32m"true"[39m
+              [33mclass[39m=[32m"iq-button iq-button--quiet iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"codex-logout"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mDisconnect[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_8_"[39m
+            [36m>[39m
+              [0mAnother provider action is in progress.[0m
+            [36m</span>[39m
+          [36m</span>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"specimen-account specimen-providers"[39m
+      [33mdata-claude-state[39m=[32m"stored-unverified"[39m
+      [33mdata-claude-storage[39m=[32m"os-backed"[39m
+      [33mdata-codex-account[39m=[32m"apiKey"[39m
+      [33mdata-codex-state[39m=[32m"connected"[39m
+      [33mdata-providers[39m=[32m""[39m
+    [36m>[39m
+      [36m<h3>[39m
+        [0mConnect your AI providers[0m
+      [36m</h3>[39m
+      [36m<p[39m
+        [33mclass[39m=[32m"specimen-account-note"[39m
+      [36m>[39m
+        [0mConnect an account, then choose a model in your conversation. Provider credentials stay separate from your Inquello identity.[0m
+      [36m</p>[39m
+      [36m<p[39m
+        [33mclass[39m=[32m"specimen-account-note"[39m
+      [36m>[39m
+        [0mA stored key or connected account does not establish model access or qualification.[0m
+      [36m</p>[39m
+      [36m<span[39m
+        [33mclass[39m=[32m"iq-action"[39m
+      [36m>[39m
+        [36m<button[39m
+          [33maria-describedby[39m=[32m"_r_0_"[39m
+          [33maria-disabled[39m=[32m"true"[39m
+          [33mclass[39m=[32m"iq-button iq-button--quiet iq-button--md"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-button-label"[39m
+          [36m>[39m
+            [0mRefresh provider status[0m
+          [36m</span>[39m
+        [36m</button>[39m
+        [36m<span[39m
+          [33mclass[39m=[32m"iq-note"[39m
+          [33mid[39m=[32m"_r_0_"[39m
+        [36m>[39m
+          [0mAnother provider action is in progress.[0m
+        [36m</span>[39m
+      [36m</span>[39m
+      [36m<dl[39m
+        [33mclass[39m=[32m"specimen-account-states"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"specimen-account-state"[39m
+        [36m>[39m
+          [36m<dt>[39m
+            [0mClaude API key[0m
+          [36m</dt>[39m
+          [36m<dd>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-status-chip iq-status-chip--other"[39m
+              [33mdata-status[39m=[32m"provider-claude-stored-unverified"[39m
+            [36m>[39m
+              [0mKey stored, not checked[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"specimen-account-note"[39m
+            [36m>[39m
+              [0mSynthetic stored key[0m
+            [36m</span>[39m
+          [36m</dd>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"specimen-account-state"[39m
+        [36m>[39m
+          [36m<dt>[39m
+            [0mKey storage[0m
+          [36m</dt>[39m
+          [36m<dd[39m
+            [33mclass[39m=[32m"specimen-account-note"[39m
+          [36m>[39m
+            [0mThe key is kept encrypted with this computer's credential store.[0m
+          [36m</dd>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"specimen-account-state"[39m
+        [36m>[39m
+          [36m<dt>[39m
+            [0mOpenAI connection[0m
+          [36m</dt>[39m
+          [36m<dd>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-status-chip iq-status-chip--other"[39m
+              [33mdata-status[39m=[32m"provider-codex-connected"[39m
+            [36m>[39m
+              [0mConnected[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"specimen-account-note"[39m
+            [36m>[39m
+              [0mSigned in with an API key, held in the OS keyring.[0m
+            [36m</span>[39m
+          [36m</dd>[39m
+        [36m</div>[39m
+      [36m</dl>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"specimen-provider-form"[39m
+        [33mdata-provider-claude[39m=[32m""[39m
+      [36m>[39m
+        [36m<h4>[39m
+          [0mAnthropic API[0m
+        [36m</h4>[39m
+        [36m<p[39m
+          [33mclass[39m=[32m"specimen-account-note"[39m
+        [36m>[39m
+          [0mUse your Anthropic API credits. Store your key, then optionally check account access. Check key does not send a prompt or test the selected model.[0m
+        [36m</p>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"iq-field"[39m
+        [36m>[39m
+          [36m<label[39m
+            [33mclass[39m=[32m"iq-field-label"[39m
+            [33mfor[39m=[32m"provider-claude-key"[39m
+          [36m>[39m
+            [0mClaude API key[0m
+          [36m</label>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-field-instruction"[39m
+            [33mid[39m=[32m"provider-claude-key-instruction"[39m
+          [36m>[39m
+            [0mStored by Inquello's main process; never shown again.[0m
+          [36m</span>[39m
+          [36m<input[39m
+            [33maria-describedby[39m=[32m"provider-claude-key-instruction"[39m
+            [33mautocomplete[39m=[32m"off"[39m
+            [33mclass[39m=[32m"iq-field-control"[39m
+            [33mid[39m=[32m"provider-claude-key"[39m
+            [33mtype[39m=[32m"password"[39m
+            [33mvalue[39m=[32m""[39m
+          [36m/>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"specimen-account-actions"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-busy[39m=[32m"true"[39m
+              [33maria-describedby[39m=[32m"_r_2_"[39m
+              [33mclass[39m=[32m"iq-button iq-button--primary iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"claude-store"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"iq-spinner"[39m
+              [36m/>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mStore key[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_2_"[39m
+            [36m>[39m
+              [0mIn progress[0m
+            [36m</span>[39m
+          [36m</span>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-describedby[39m=[32m"_r_3_"[39m
+              [33maria-disabled[39m=[32m"true"[39m
+              [33mclass[39m=[32m"iq-button iq-button--secondary iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"claude-verify"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mCheck key[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_3_"[39m
+            [36m>[39m
+              [0mAnother provider action is in progress.[0m
+            [36m</span>[39m
+          [36m</span>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-describedby[39m=[32m"_r_4_"[39m
+              [33maria-disabled[39m=[32m"true"[39m
+              [33mclass[39m=[32m"iq-button iq-button--quiet iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"claude-remove"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mRemove key[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_4_"[39m
+            [36m>[39m
+              [0mAnother provider action is in progress.[0m
+            [36m</span>[39m
+          [36m</span>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"specimen-provider-form"[39m
+        [33mdata-provider-codex[39m=[32m""[39m
+      [36m>[39m
+        [36m<h4>[39m
+          [0mOpenAI[0m
+        [36m</h4>[39m
+        [36m<p[39m
+          [33mclass[39m=[32m"specimen-account-note"[39m
+        [36m>[39m
+          [0mChoose your workspace in chat to manage its OpenAI permission. You can still connect your personal account.[0m
+        [36m</p>[39m
+        [36m<p[39m
+          [33mclass[39m=[32m"specimen-account-note"[39m
+        [36m>[39m
+          [0mUse your OpenAI API credits with an API key. A ChatGPT subscription is separate.[0m
+        [36m</p>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"iq-field"[39m
+        [36m>[39m
+          [36m<label[39m
+            [33mclass[39m=[32m"iq-field-label"[39m
+            [33mfor[39m=[32m"provider-codex-key"[39m
+          [36m>[39m
+            [0mOpenAI API key[0m
+          [36m</label>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-field-instruction"[39m
+            [33mid[39m=[32m"provider-codex-key-instruction"[39m
+          [36m>[39m
+            [0mStored securely in this computer’s credential store.[0m
+          [36m</span>[39m
+          [36m<input[39m
+            [33maria-describedby[39m=[32m"provider-codex-key-instruction"[39m
+            [33mautocomplete[39m=[32m"off"[39m
+            [33mclass[39m=[32m"iq-field-control"[39m
+            [33mid[39m=[32m"provider-codex-key"[39m
+            [33mtype[39m=[32m"password"[39m
+            [33mvalue[39m=[32m""[39m
+          [36m/>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"specimen-account-actions"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-describedby[39m=[32m"_r_6_"[39m
+              [33maria-disabled[39m=[32m"true"[39m
+              [33mclass[39m=[32m"iq-button iq-button--primary iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"codex-api-key"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mConnect with API key[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_6_"[39m
+            [36m>[39m
+              [0mAnother provider action is in progress.[0m
+            [36m</span>[39m
+          [36m</span>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-describedby[39m=[32m"_r_7_"[39m
+              [33maria-disabled[39m=[32m"true"[39m
+              [33mclass[39m=[32m"iq-button iq-button--secondary iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"codex-chatgpt"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mSign in with ChatGPT[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_7_"[39m
+            [36m>[39m
+              [0mChatGPT sign-in is not available for a supported model in this build. Use an OpenAI API key.[0m
+            [36m</span>[39m
+          [36m</span>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-describedby[39m=[32m"_r_8_"[39m
+              [33maria-disabled[39m=[32m"true"[39m
+              [33mclass[39m=[32m"iq-button iq-button--quiet iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"codex-logout"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mDisconnect[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_8_"[39m
+            [36m>[39m
+              [0mAnother provider action is in progress.[0m
+            [36m</span>[39m
+          [36m</span>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+[90m [2m❯[22m waitForWrapper node_modules/.pnpm/@testing-library+dom@10.4.2/node_modules/@testing-library/dom/dist/wait-for.js:[2m163:27[22m[39m
+[90m [2m❯[22m node_modules/.pnpm/@testing-library+dom@10.4.2/node_modules/@testing-library/dom/dist/query-helpers.js:[2m86:33[22m[39m
+[36m [2m❯[22m test/providers-action-recovery.test.tsx:[2m37:23[22m[39m
+    [90m 35|[39m   const button=screen.getByRole('button',{name:testCase.button});
+    [90m 36|[39m   fireEvent.click(button);
+    [90m 37|[39m   expect(await screen.findByText('The request did not complete.')).toB…
+    [90m   |[39m                       [31m^[39m
+    [90m 38|[39m   await waitFor(()=>expect(button.getAttribute('aria-busy')).toBeNull(…
+    [90m 39|[39m   expect(screen.getByRole('button',{name:'Refresh provider status'}).g…
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m test/providers-action-recovery.test.tsx[2m > [22mprovider action recovery after synchronous throw[2m > [22mClaude check releases pending controls, protects input and allows a deliberate retry
+[31m[1mTestingLibraryElementError[22m[39m: Unable to find an element with the text: The request did not complete.. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"specimen-account specimen-providers"[39m
+      [33mdata-claude-state[39m=[32m"stored-unverified"[39m
+      [33mdata-claude-storage[39m=[32m"os-backed"[39m
+      [33mdata-codex-account[39m=[32m"apiKey"[39m
+      [33mdata-codex-state[39m=[32m"connected"[39m
+      [33mdata-providers[39m=[32m""[39m
+    [36m>[39m
+      [36m<h3>[39m
+        [0mConnect your AI providers[0m
+      [36m</h3>[39m
+      [36m<p[39m
+        [33mclass[39m=[32m"specimen-account-note"[39m
+      [36m>[39m
+        [0mConnect an account, then choose a model in your conversation. Provider credentials stay separate from your Inquello identity.[0m
+      [36m</p>[39m
+      [36m<p[39m
+        [33mclass[39m=[32m"specimen-account-note"[39m
+      [36m>[39m
+        [0mA stored key or connected account does not establish model access or qualification.[0m
+      [36m</p>[39m
+      [36m<span[39m
+        [33mclass[39m=[32m"iq-action"[39m
+      [36m>[39m
+        [36m<button[39m
+          [33maria-describedby[39m=[32m"_r_9_"[39m
+          [33maria-disabled[39m=[32m"true"[39m
+          [33mclass[39m=[32m"iq-button iq-button--quiet iq-button--md"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-button-label"[39m
+          [36m>[39m
+            [0mRefresh provider status[0m
+          [36m</span>[39m
+        [36m</button>[39m
+        [36m<span[39m
+          [33mclass[39m=[32m"iq-note"[39m
+          [33mid[39m=[32m"_r_9_"[39m
+        [36m>[39m
+          [0mAnother provider action is in progress.[0m
+        [36m</span>[39m
+      [36m</span>[39m
+      [36m<dl[39m
+        [33mclass[39m=[32m"specimen-account-states"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"specimen-account-state"[39m
+        [36m>[39m
+          [36m<dt>[39m
+            [0mClaude API key[0m
+          [36m</dt>[39m
+          [36m<dd>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-status-chip iq-status-chip--other"[39m
+              [33mdata-status[39m=[32m"provider-claude-stored-unverified"[39m
+            [36m>[39m
+              [0mKey stored, not checked[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"specimen-account-note"[39m
+            [36m>[39m
+              [0mSynthetic stored key[0m
+            [36m</span>[39m
+          [36m</dd>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"specimen-account-state"[39m
+        [36m>[39m
+          [36m<dt>[39m
+            [0mKey storage[0m
+          [36m</dt>[39m
+          [36m<dd[39m
+            [33mclass[39m=[32m"specimen-account-note"[39m
+          [36m>[39m
+            [0mThe key is kept encrypted with this computer's credential store.[0m
+          [36m</dd>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"specimen-account-state"[39m
+        [36m>[39m
+          [36m<dt>[39m
+            [0mOpenAI connection[0m
+          [36m</dt>[39m
+          [36m<dd>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-status-chip iq-status-chip--other"[39m
+              [33mdata-status[39m=[32m"provider-codex-connected"[39m
+            [36m>[39m
+              [0mConnected[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"specimen-account-note"[39m
+            [36m>[39m
+              [0mSigned in with an API key, held in the OS keyring.[0m
+            [36m</span>[39m
+          [36m</dd>[39m
+        [36m</div>[39m
+      [36m</dl>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"specimen-provider-form"[39m
+        [33mdata-provider-claude[39m=[32m""[39m
+      [36m>[39m
+        [36m<h4>[39m
+          [0mAnthropic API[0m
+        [36m</h4>[39m
+        [36m<p[39m
+          [33mclass[39m=[32m"specimen-account-note"[39m
+        [36m>[39m
+          [0mUse your Anthropic API credits. Store your key, then optionally check account access. Check key does not send a prompt or test the selected model.[0m
+        [36m</p>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"iq-field"[39m
+        [36m>[39m
+          [36m<label[39m
+            [33mclass[39m=[32m"iq-field-label"[39m
+            [33mfor[39m=[32m"provider-claude-key"[39m
+          [36m>[39m
+            [0mClaude API key[0m
+          [36m</label>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-field-instruction"[39m
+            [33mid[39m=[32m"provider-claude-key-instruction"[39m
+          [36m>[39m
+            [0mStored by Inquello's main process; never shown again.[0m
+          [36m</span>[39m
+          [36m<input[39m
+            [33maria-describedby[39m=[32m"provider-claude-key-instruction"[39m
+            [33mautocomplete[39m=[32m"off"[39m
+            [33mclass[39m=[32m"iq-field-control"[39m
+            [33mid[39m=[32m"provider-claude-key"[39m
+            [33mtype[39m=[32m"password"[39m
+            [33mvalue[39m=[32m""[39m
+          [36m/>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"specimen-account-actions"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-describedby[39m=[32m"_r_b_"[39m
+              [33maria-disabled[39m=[32m"true"[39m
+              [33mclass[39m=[32m"iq-button iq-button--primary iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"claude-store"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mStore key[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_b_"[39m
+            [36m>[39m
+              [0mAnother provider action is in progress.[0m
+            [36m</span>[39m
+          [36m</span>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-busy[39m=[32m"true"[39m
+              [33maria-describedby[39m=[32m"_r_c_"[39m
+              [33mclass[39m=[32m"iq-button iq-button--secondary iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"claude-verify"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"iq-spinner"[39m
+              [36m/>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mCheck key[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_c_"[39m
+            [36m>[39m
+              [0mChecking[0m
+            [36m</span>[39m
+          [36m</span>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-describedby[39m=[32m"_r_d_"[39m
+              [33maria-disabled[39m=[32m"true"[39m
+              [33mclass[39m=[32m"iq-button iq-button--quiet iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"claude-remove"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mRemove key[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_d_"[39m
+            [36m>[39m
+              [0mAnother provider action is in progress.[0m
+            [36m</span>[39m
+          [36m</span>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"specimen-provider-form"[39m
+        [33mdata-provider-codex[39m=[32m""[39m
+      [36m>[39m
+        [36m<h4>[39m
+          [0mOpenAI[0m
+        [36m</h4>[39m
+        [36m<p[39m
+          [33mclass[39m=[32m"specimen-account-note"[39m
+        [36m>[39m
+          [0mChoose your workspace in chat to manage its OpenAI permission. You can still connect your personal account.[0m
+        [36m</p>[39m
+        [36m<p[39m
+          [33mclass[39m=[32m"specimen-account-note"[39m
+        [36m>[39m
+          [0mUse your OpenAI API credits with an API key. A ChatGPT subscription is separate.[0m
+        [36m</p>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"iq-field"[39m
+        [36m>[39m
+          [36m<label[39m
+            [33mclass[39m=[32m"iq-field-label"[39m
+            [33mfor[39m=[32m"provider-codex-key"[39m
+          [36m>[39m
+            [0mOpenAI API key[0m
+          [36m</label>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-field-instruction"[39m
+            [33mid[39m=[32m"provider-codex-key-instruction"[39m
+          [36m>[39m
+            [0mStored securely in this computer’s credential store.[0m
+          [36m</span>[39m
+          [36m<input[39m
+            [33maria-describedby[39m=[32m"provider-codex-key-instruction"[39m
+            [33mautocomplete[39m=[32m"off"[39m
+            [33mclass[39m=[32m"iq-field-control"[39m
+            [33mid[39m=[32m"provider-codex-key"[39m
+            [33mtype[39m=[32m"password"[39m
+            [33mvalue[39m=[32m""[39m
+          [36m/>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"specimen-account-actions"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-describedby[39m=[32m"_r_f_"[39m
+              [33maria-disabled[39m=[32m"true"[39m
+              [33mclass[39m=[32m"iq-button iq-button--primary iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"codex-api-key"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mConnect with API key[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_f_"[39m
+            [36m>[39m
+              [0mAnother provider action is in progress.[0m
+            [36m</span>[39m
+          [36m</span>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-describedby[39m=[32m"_r_g_"[39m
+              [33maria-disabled[39m=[32m"true"[39m
+              [33mclass[39m=[32m"iq-button iq-button--secondary iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"codex-chatgpt"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mSign in with ChatGPT[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_g_"[39m
+            [36m>[39m
+              [0mChatGPT sign-in is not available for a supported model in this build. Use an OpenAI API key.[0m
+            [36m</span>[39m
+          [36m</span>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-describedby[39m=[32m"_r_h_"[39m
+              [33maria-disabled[39m=[32m"true"[39m
+              [33mclass[39m=[32m"iq-button iq-button--quiet iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"codex-logout"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mDisconnect[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_h_"[39m
+            [36m>[39m
+              [0mAnother provider action is in progress.[0m
+            [36m</span>[39m
+          [36m</span>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"specimen-account specimen-providers"[39m
+      [33mdata-claude-state[39m=[32m"stored-unverified"[39m
+      [33mdata-claude-storage[39m=[32m"os-backed"[39m
+      [33mdata-codex-account[39m=[32m"apiKey"[39m
+      [33mdata-codex-state[39m=[32m"connected"[39m
+      [33mdata-providers[39m=[32m""[39m
+    [36m>[39m
+      [36m<h3>[39m
+        [0mConnect your AI providers[0m
+      [36m</h3>[39m
+      [36m<p[39m
+        [33mclass[39m=[32m"specimen-account-note"[39m
+      [36m>[39m
+        [0mConnect an account, then choose a model in your conversation. Provider credentials stay separate from your Inquello identity.[0m
+      [36m</p>[39m
+      [36m<p[39m
+        [33mclass[39m=[32m"specimen-account-note"[39m
+      [36m>[39m
+        [0mA stored key or connected account does not establish model access or qualification.[0m
+      [36m</p>[39m
+      [36m<span[39m
+        [33mclass[39m=[32m"iq-action"[39m
+      [36m>[39m
+        [36m<button[39m
+          [33maria-describedby[39m=[32m"_r_9_"[39m
+          [33maria-disabled[39m=[32m"true"[39m
+          [33mclass[39m=[32m"iq-button iq-button--quiet iq-button--md"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-button-label"[39m
+          [36m>[39m
+            [0mRefresh provider status[0m
+          [36m</span>[39m
+        [36m</button>[39m
+        [36m<span[39m
+          [33mclass[39m=[32m"iq-note"[39m
+          [33mid[39m=[32m"_r_9_"[39m
+        [36m>[39m
+          [0mAnother provider action is in progress.[0m
+        [36m</span>[39m
+      [36m</span>[39m
+      [36m<dl[39m
+        [33mclass[39m=[32m"specimen-account-states"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"specimen-account-state"[39m
+        [36m>[39m
+          [36m<dt>[39m
+            [0mClaude API key[0m
+          [36m</dt>[39m
+          [36m<dd>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-status-chip iq-status-chip--other"[39m
+              [33mdata-status[39m=[32m"provider-claude-stored-unverified"[39m
+            [36m>[39m
+              [0mKey stored, not checked[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"specimen-account-note"[39m
+            [36m>[39m
+              [0mSynthetic stored key[0m
+            [36m</span>[39m
+          [36m</dd>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"specimen-account-state"[39m
+        [36m>[39m
+          [36m<dt>[39m
+            [0mKey storage[0m
+          [36m</dt>[39m
+          [36m<dd[39m
+            [33mclass[39m=[32m"specimen-account-note"[39m
+          [36m>[39m
+            [0mThe key is kept encrypted with this computer's credential store.[0m
+          [36m</dd>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"specimen-account-state"[39m
+        [36m>[39m
+          [36m<dt>[39m
+            [0mOpenAI connection[0m
+          [36m</dt>[39m
+          [36m<dd>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-status-chip iq-status-chip--other"[39m
+              [33mdata-status[39m=[32m"provider-codex-connected"[39m
+            [36m>[39m
+              [0mConnected[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"specimen-account-note"[39m
+            [36m>[39m
+              [0mSigned in with an API key, held in the OS keyring.[0m
+            [36m</span>[39m
+          [36m</dd>[39m
+        [36m</div>[39m
+      [36m</dl>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"specimen-provider-form"[39m
+        [33mdata-provider-claude[39m=[32m""[39m
+      [36m>[39m
+        [36m<h4>[39m
+          [0mAnthropic API[0m
+        [36m</h4>[39m
+        [36m<p[39m
+          [33mclass[39m=[32m"specimen-account-note"[39m
+        [36m>[39m
+          [0mUse your Anthropic API credits. Store your key, then optionally check account access. Check key does not send a prompt or test the selected model.[0m
+        [36m</p>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"iq-field"[39m
+        [36m>[39m
+          [36m<label[39m
+            [33mclass[39m=[32m"iq-field-label"[39m
+            [33mfor[39m=[32m"provider-claude-key"[39m
+          [36m>[39m
+            [0mClaude API key[0m
+          [36m</label>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-field-instruction"[39m
+            [33mid[39m=[32m"provider-claude-key-instruction"[39m
+          [36m>[39m
+            [0mStored by Inquello's main process; never shown again.[0m
+          [36m</span>[39m
+          [36m<input[39m
+            [33maria-describedby[39m=[32m"provider-claude-key-instruction"[39m
+            [33mautocomplete[39m=[32m"off"[39m
+            [33mclass[39m=[32m"iq-field-control"[39m
+            [33mid[39m=[32m"provider-claude-key"[39m
+            [33mtype[39m=[32m"password"[39m
+            [33mvalue[39m=[32m""[39m
+          [36m/>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"specimen-account-actions"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-describedby[39m=[32m"_r_b_"[39m
+              [33maria-disabled[39m=[32m"true"[39m
+              [33mclass[39m=[32m"iq-button iq-button--primary iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"claude-store"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mStore key[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_b_"[39m
+            [36m>[39m
+              [0mAnother provider action is in progress.[0m
+            [36m</span>[39m
+          [36m</span>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-busy[39m=[32m"true"[39m
+              [33maria-describedby[39m=[32m"_r_c_"[39m
+              [33mclass[39m=[32m"iq-button iq-button--secondary iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"claude-verify"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"iq-spinner"[39m
+              [36m/>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mCheck key[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_c_"[39m
+            [36m>[39m
+              [0mChecking[0m
+            [36m</span>[39m
+          [36m</span>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-describedby[39m=[32m"_r_d_"[39m
+              [33maria-disabled[39m=[32m"true"[39m
+              [33mclass[39m=[32m"iq-button iq-button--quiet iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"claude-remove"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mRemove key[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_d_"[39m
+            [36m>[39m
+              [0mAnother provider action is in progress.[0m
+            [36m</span>[39m
+          [36m</span>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"specimen-provider-form"[39m
+        [33mdata-provider-codex[39m=[32m""[39m
+      [36m>[39m
+        [36m<h4>[39m
+          [0mOpenAI[0m
+        [36m</h4>[39m
+        [36m<p[39m
+          [33mclass[39m=[32m"specimen-account-note"[39m
+        [36m>[39m
+          [0mChoose your workspace in chat to manage its OpenAI permission. You can still connect your personal account.[0m
+        [36m</p>[39m
+        [36m<p[39m
+          [33mclass[39m=[32m"specimen-account-note"[39m
+        [36m>[39m
+          [0mUse your OpenAI API credits with an API key. A ChatGPT subscription is separate.[0m
+        [36m</p>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"iq-field"[39m
+        [36m>[39m
+          [36m<label[39m
+            [33mclass[39m=[32m"iq-field-label"[39m
+            [33mfor[39m=[32m"provider-codex-key"[39m
+          [36m>[39m
+            [0mOpenAI API key[0m
+          [36m</label>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-field-instruction"[39m
+            [33mid[39m=[32m"provider-codex-key-instruction"[39m
+          [36m>[39m
+            [0mStored securely in this computer’s credential store.[0m
+          [36m</span>[39m
+          [36m<input[39m
+            [33maria-describedby[39m=[32m"provider-codex-key-instruction"[39m
+            [33mautocomplete[39m=[32m"off"[39m
+            [33mclass[39m=[32m"iq-field-control"[39m
+            [33mid[39m=[32m"provider-codex-key"[39m
+            [33mtype[39m=[32m"password"[39m
+            [33mvalue[39m=[32m""[39m
+          [36m/>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"specimen-account-actions"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-describedby[39m=[32m"_r_f_"[39m
+              [33maria-disabled[39m=[32m"true"[39m
+              [33mclass[39m=[32m"iq-button iq-button--primary iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"codex-api-key"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mConnect with API key[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_f_"[39m
+            [36m>[39m
+              [0mAnother provider action is in progress.[0m
+            [36m</span>[39m
+          [36m</span>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-describedby[39m=[32m"_r_g_"[39m
+              [33maria-disabled[39m=[32m"true"[39m
+              [33mclass[39m=[32m"iq-button iq-button--secondary iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"codex-chatgpt"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mSign in with ChatGPT[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_g_"[39m
+            [36m>[39m
+              [0mChatGPT sign-in is not available for a supported model in this build. Use an OpenAI API key.[0m
+            [36m</span>[39m
+          [36m</span>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-describedby[39m=[32m"_r_h_"[39m
+              [33maria-disabled[39m=[32m"true"[39m
+              [33mclass[39m=[32m"iq-button iq-button--quiet iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"codex-logout"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mDisconnect[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_h_"[39m
+            [36m>[39m
+              [0mAnother provider action is in progress.[0m
+            [36m</span>[39m
+          [36m</span>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+[90m [2m❯[22m waitForWrapper node_modules/.pnpm/@testing-library+dom@10.4.2/node_modules/@testing-library/dom/dist/wait-for.js:[2m163:27[22m[39m
+[90m [2m❯[22m node_modules/.pnpm/@testing-library+dom@10.4.2/node_modules/@testing-library/dom/dist/query-helpers.js:[2m86:33[22m[39m
+[36m [2m❯[22m test/providers-action-recovery.test.tsx:[2m37:23[22m[39m
+    [90m 35|[39m   const button=screen.getByRole('button',{name:testCase.button});
+    [90m 36|[39m   fireEvent.click(button);
+    [90m 37|[39m   expect(await screen.findByText('The request did not complete.')).toB…
+    [90m   |[39m                       [31m^[39m
+    [90m 38|[39m   await waitFor(()=>expect(button.getAttribute('aria-busy')).toBeNull(…
+    [90m 39|[39m   expect(screen.getByRole('button',{name:'Refresh provider status'}).g…
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m test/providers-action-recovery.test.tsx[2m > [22mprovider action recovery after synchronous throw[2m > [22mClaude remove releases pending controls, protects input and allows a deliberate retry
+[31m[1mTestingLibraryElementError[22m[39m: Unable to find an element with the text: The request did not complete.. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"specimen-account specimen-providers"[39m
+      [33mdata-claude-state[39m=[32m"stored-unverified"[39m
+      [33mdata-claude-storage[39m=[32m"os-backed"[39m
+      [33mdata-codex-account[39m=[32m"apiKey"[39m
+      [33mdata-codex-state[39m=[32m"connected"[39m
+      [33mdata-providers[39m=[32m""[39m
+    [36m>[39m
+      [36m<h3>[39m
+        [0mConnect your AI providers[0m
+      [36m</h3>[39m
+      [36m<p[39m
+        [33mclass[39m=[32m"specimen-account-note"[39m
+      [36m>[39m
+        [0mConnect an account, then choose a model in your conversation. Provider credentials stay separate from your Inquello identity.[0m
+      [36m</p>[39m
+      [36m<p[39m
+        [33mclass[39m=[32m"specimen-account-note"[39m
+      [36m>[39m
+        [0mA stored key or connected account does not establish model access or qualification.[0m
+      [36m</p>[39m
+      [36m<span[39m
+        [33mclass[39m=[32m"iq-action"[39m
+      [36m>[39m
+        [36m<button[39m
+          [33maria-describedby[39m=[32m"_r_i_"[39m
+          [33maria-disabled[39m=[32m"true"[39m
+          [33mclass[39m=[32m"iq-button iq-button--quiet iq-button--md"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-button-label"[39m
+          [36m>[39m
+            [0mRefresh provider status[0m
+          [36m</span>[39m
+        [36m</button>[39m
+        [36m<span[39m
+          [33mclass[39m=[32m"iq-note"[39m
+          [33mid[39m=[32m"_r_i_"[39m
+        [36m>[39m
+          [0mAnother provider action is in progress.[0m
+        [36m</span>[39m
+      [36m</span>[39m
+      [36m<dl[39m
+        [33mclass[39m=[32m"specimen-account-states"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"specimen-account-state"[39m
+        [36m>[39m
+          [36m<dt>[39m
+            [0mClaude API key[0m
+          [36m</dt>[39m
+          [36m<dd>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-status-chip iq-status-chip--other"[39m
+              [33mdata-status[39m=[32m"provider-claude-stored-unverified"[39m
+            [36m>[39m
+              [0mKey stored, not checked[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"specimen-account-note"[39m
+            [36m>[39m
+              [0mSynthetic stored key[0m
+            [36m</span>[39m
+          [36m</dd>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"specimen-account-state"[39m
+        [36m>[39m
+          [36m<dt>[39m
+            [0mKey storage[0m
+          [36m</dt>[39m
+          [36m<dd[39m
+            [33mclass[39m=[32m"specimen-account-note"[39m
+          [36m>[39m
+            [0mThe key is kept encrypted with this computer's credential store.[0m
+          [36m</dd>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"specimen-account-state"[39m
+        [36m>[39m
+          [36m<dt>[39m
+            [0mOpenAI connection[0m
+          [36m</dt>[39m
+          [36m<dd>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-status-chip iq-status-chip--other"[39m
+              [33mdata-status[39m=[32m"provider-codex-connected"[39m
+            [36m>[39m
+              [0mConnected[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"specimen-account-note"[39m
+            [36m>[39m
+              [0mSigned in with an API key, held in the OS keyring.[0m
+            [36m</span>[39m
+          [36m</dd>[39m
+        [36m</div>[39m
+      [36m</dl>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"specimen-provider-form"[39m
+        [33mdata-provider-claude[39m=[32m""[39m
+      [36m>[39m
+        [36m<h4>[39m
+          [0mAnthropic API[0m
+        [36m</h4>[39m
+        [36m<p[39m
+          [33mclass[39m=[32m"specimen-account-note"[39m
+        [36m>[39m
+          [0mUse your Anthropic API credits. Store your key, then optionally check account access. Check key does not send a prompt or test the selected model.[0m
+        [36m</p>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"iq-field"[39m
+        [36m>[39m
+          [36m<label[39m
+            [33mclass[39m=[32m"iq-field-label"[39m
+            [33mfor[39m=[32m"provider-claude-key"[39m
+          [36m>[39m
+            [0mClaude API key[0m
+          [36m</label>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-field-instruction"[39m
+            [33mid[39m=[32m"provider-claude-key-instruction"[39m
+          [36m>[39m
+            [0mStored by Inquello's main process; never shown again.[0m
+          [36m</span>[39m
+          [36m<input[39m
+            [33maria-describedby[39m=[32m"provider-claude-key-instruction"[39m
+            [33mautocomplete[39m=[32m"off"[39m
+            [33mclass[39m=[32m"iq-field-control"[39m
+            [33mid[39m=[32m"provider-claude-key"[39m
+            [33mtype[39m=[32m"password"[39m
+            [33mvalue[39m=[32m""[39m
+          [36m/>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"specimen-account-actions"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-describedby[39m=[32m"_r_k_"[39m
+              [33maria-disabled[39m=[32m"true"[39m
+              [33mclass[39m=[32m"iq-button iq-button--primary iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"claude-store"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mStore key[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_k_"[39m
+            [36m>[39m
+              [0mAnother provider action is in progress.[0m
+            [36m</span>[39m
+          [36m</span>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-describedby[39m=[32m"_r_l_"[39m
+              [33maria-disabled[39m=[32m"true"[39m
+              [33mclass[39m=[32m"iq-button iq-button--secondary iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"claude-verify"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mCheck key[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_l_"[39m
+            [36m>[39m
+              [0mAnother provider action is in progress.[0m
+            [36m</span>[39m
+          [36m</span>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-busy[39m=[32m"true"[39m
+              [33maria-describedby[39m=[32m"_r_m_"[39m
+              [33mclass[39m=[32m"iq-button iq-button--quiet iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"claude-remove"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"iq-spinner"[39m
+              [36m/>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mRemove key[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_m_"[39m
+            [36m>[39m
+              [0mIn progress[0m
+            [36m</span>[39m
+          [36m</span>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"specimen-provider-form"[39m
+        [33mdata-provider-codex[39m=[32m""[39m
+      [36m>[39m
+        [36m<h4>[39m
+          [0mOpenAI[0m
+        [36m</h4>[39m
+        [36m<p[39m
+          [33mclass[39m=[32m"specimen-account-note"[39m
+        [36m>[39m
+          [0mChoose your workspace in chat to manage its OpenAI permission. You can still connect your personal account.[0m
+        [36m</p>[39m
+        [36m<p[39m
+          [33mclass[39m=[32m"specimen-account-note"[39m
+        [36m>[39m
+          [0mUse your OpenAI API credits with an API key. A ChatGPT subscription is separate.[0m
+        [36m</p>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"iq-field"[39m
+        [36m>[39m
+          [36m<label[39m
+            [33mclass[39m=[32m"iq-field-label"[39m
+            [33mfor[39m=[32m"provider-codex-key"[39m
+          [36m>[39m
+            [0mOpenAI API key[0m
+          [36m</label>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-field-instruction"[39m
+            [33mid[39m=[32m"provider-codex-key-instruction"[39m
+          [36m>[39m
+            [0mStored securely in this computer’s credential store.[0m
+          [36m</span>[39m
+          [36m<input[39m
+            [33maria-describedby[39m=[32m"provider-codex-key-instruction"[39m
+            [33mautocomplete[39m=[32m"off"[39m
+            [33mclass[39m=[32m"iq-field-control"[39m
+            [33mid[39m=[32m"provider-codex-key"[39m
+            [33mtype[39m=[32m"password"[39m
+            [33mvalue[39m=[32m""[39m
+          [36m/>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"specimen-account-actions"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-describedby[39m=[32m"_r_o_"[39m
+              [33maria-disabled[39m=[32m"true"[39m
+              [33mclass[39m=[32m"iq-button iq-button--primary iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"codex-api-key"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mConnect with API key[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_o_"[39m
+            [36m>[39m
+              [0mAnother provider action is in progress.[0m
+            [36m</span>[39m
+          [36m</span>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-describedby[39m=[32m"_r_p_"[39m
+              [33maria-disabled[39m=[32m"true"[39m
+              [33mclass[39m=[32m"iq-button iq-button--secondary iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"codex-chatgpt"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mSign in with ChatGPT[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_p_"[39m
+            [36m>[39m
+              [0mChatGPT sign-in is not available for a supported model in this build. Use an OpenAI API key.[0m
+            [36m</span>[39m
+          [36m</span>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-describedby[39m=[32m"_r_q_"[39m
+              [33maria-disabled[39m=[32m"true"[39m
+              [33mclass[39m=[32m"iq-button iq-button--quiet iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"codex-logout"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mDisconnect[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_q_"[39m
+            [36m>[39m
+              [0mAnother provider action is in progress.[0m
+            [36m</span>[39m
+          [36m</span>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"specimen-account specimen-providers"[39m
+      [33mdata-claude-state[39m=[32m"stored-unverified"[39m
+      [33mdata-claude-storage[39m=[32m"os-backed"[39m
+      [33mdata-codex-account[39m=[32m"apiKey"[39m
+      [33mdata-codex-state[39m=[32m"connected"[39m
+      [33mdata-providers[39m=[32m""[39m
+    [36m>[39m
+      [36m<h3>[39m
+        [0mConnect your AI providers[0m
+      [36m</h3>[39m
+      [36m<p[39m
+        [33mclass[39m=[32m"specimen-account-note"[39m
+      [36m>[39m
+        [0mConnect an account, then choose a model in your conversation. Provider credentials stay separate from your Inquello identity.[0m
+      [36m</p>[39m
+      [36m<p[39m
+        [33mclass[39m=[32m"specimen-account-note"[39m
+      [36m>[39m
+        [0mA stored key or connected account does not establish model access or qualification.[0m
+      [36m</p>[39m
+      [36m<span[39m
+        [33mclass[39m=[32m"iq-action"[39m
+      [36m>[39m
+        [36m<button[39m
+          [33maria-describedby[39m=[32m"_r_i_"[39m
+          [33maria-disabled[39m=[32m"true"[39m
+          [33mclass[39m=[32m"iq-button iq-button--quiet iq-button--md"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-button-label"[39m
+          [36m>[39m
+            [0mRefresh provider status[0m
+          [36m</span>[39m
+        [36m</button>[39m
+        [36m<span[39m
+          [33mclass[39m=[32m"iq-note"[39m
+          [33mid[39m=[32m"_r_i_"[39m
+        [36m>[39m
+          [0mAnother provider action is in progress.[0m
+        [36m</span>[39m
+      [36m</span>[39m
+      [36m<dl[39m
+        [33mclass[39m=[32m"specimen-account-states"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"specimen-account-state"[39m
+        [36m>[39m
+          [36m<dt>[39m
+            [0mClaude API key[0m
+          [36m</dt>[39m
+          [36m<dd>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-status-chip iq-status-chip--other"[39m
+              [33mdata-status[39m=[32m"provider-claude-stored-unverified"[39m
+            [36m>[39m
+              [0mKey stored, not checked[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"specimen-account-note"[39m
+            [36m>[39m
+              [0mSynthetic stored key[0m
+            [36m</span>[39m
+          [36m</dd>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"specimen-account-state"[39m
+        [36m>[39m
+          [36m<dt>[39m
+            [0mKey storage[0m
+          [36m</dt>[39m
+          [36m<dd[39m
+            [33mclass[39m=[32m"specimen-account-note"[39m
+          [36m>[39m
+            [0mThe key is kept encrypted with this computer's credential store.[0m
+          [36m</dd>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"specimen-account-state"[39m
+        [36m>[39m
+          [36m<dt>[39m
+            [0mOpenAI connection[0m
+          [36m</dt>[39m
+          [36m<dd>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-status-chip iq-status-chip--other"[39m
+              [33mdata-status[39m=[32m"provider-codex-connected"[39m
+            [36m>[39m
+              [0mConnected[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"specimen-account-note"[39m
+            [36m>[39m
+              [0mSigned in with an API key, held in the OS keyring.[0m
+            [36m</span>[39m
+          [36m</dd>[39m
+        [36m</div>[39m
+      [36m</dl>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"specimen-provider-form"[39m
+        [33mdata-provider-claude[39m=[32m""[39m
+      [36m>[39m
+        [36m<h4>[39m
+          [0mAnthropic API[0m
+        [36m</h4>[39m
+        [36m<p[39m
+          [33mclass[39m=[32m"specimen-account-note"[39m
+        [36m>[39m
+          [0mUse your Anthropic API credits. Store your key, then optionally check account access. Check key does not send a prompt or test the selected model.[0m
+        [36m</p>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"iq-field"[39m
+        [36m>[39m
+          [36m<label[39m
+            [33mclass[39m=[32m"iq-field-label"[39m
+            [33mfor[39m=[32m"provider-claude-key"[39m
+          [36m>[39m
+            [0mClaude API key[0m
+          [36m</label>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-field-instruction"[39m
+            [33mid[39m=[32m"provider-claude-key-instruction"[39m
+          [36m>[39m
+            [0mStored by Inquello's main process; never shown again.[0m
+          [36m</span>[39m
+          [36m<input[39m
+            [33maria-describedby[39m=[32m"provider-claude-key-instruction"[39m
+            [33mautocomplete[39m=[32m"off"[39m
+            [33mclass[39m=[32m"iq-field-control"[39m
+            [33mid[39m=[32m"provider-claude-key"[39m
+            [33mtype[39m=[32m"password"[39m
+            [33mvalue[39m=[32m""[39m
+          [36m/>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"specimen-account-actions"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-describedby[39m=[32m"_r_k_"[39m
+              [33maria-disabled[39m=[32m"true"[39m
+              [33mclass[39m=[32m"iq-button iq-button--primary iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"claude-store"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mStore key[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_k_"[39m
+            [36m>[39m
+              [0mAnother provider action is in progress.[0m
+            [36m</span>[39m
+          [36m</span>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-describedby[39m=[32m"_r_l_"[39m
+              [33maria-disabled[39m=[32m"true"[39m
+              [33mclass[39m=[32m"iq-button iq-button--secondary iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"claude-verify"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mCheck key[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_l_"[39m
+            [36m>[39m
+              [0mAnother provider action is in progress.[0m
+            [36m</span>[39m
+          [36m</span>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-busy[39m=[32m"true"[39m
+              [33maria-describedby[39m=[32m"_r_m_"[39m
+              [33mclass[39m=[32m"iq-button iq-button--quiet iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"claude-remove"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"iq-spinner"[39m
+              [36m/>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mRemove key[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_m_"[39m
+            [36m>[39m
+              [0mIn progress[0m
+            [36m</span>[39m
+          [36m</span>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"specimen-provider-form"[39m
+        [33mdata-provider-codex[39m=[32m""[39m
+      [36m>[39m
+        [36m<h4>[39m
+          [0mOpenAI[0m
+        [36m</h4>[39m
+        [36m<p[39m
+          [33mclass[39m=[32m"specimen-account-note"[39m
+        [36m>[39m
+          [0mChoose your workspace in chat to manage its OpenAI permission. You can still connect your personal account.[0m
+        [36m</p>[39m
+        [36m<p[39m
+          [33mclass[39m=[32m"specimen-account-note"[39m
+        [36m>[39m
+          [0mUse your OpenAI API credits with an API key. A ChatGPT subscription is separate.[0m
+        [36m</p>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"iq-field"[39m
+        [36m>[39m
+          [36m<label[39m
+            [33mclass[39m=[32m"iq-field-label"[39m
+            [33mfor[39m=[32m"provider-codex-key"[39m
+          [36m>[39m
+            [0mOpenAI API key[0m
+          [36m</label>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-field-instruction"[39m
+            [33mid[39m=[32m"provider-codex-key-instruction"[39m
+          [36m>[39m
+            [0mStored securely in this computer’s credential store.[0m
+          [36m</span>[39m
+          [36m<input[39m
+            [33maria-describedby[39m=[32m"provider-codex-key-instruction"[39m
+            [33mautocomplete[39m=[32m"off"[39m
+            [33mclass[39m=[32m"iq-field-control"[39m
+            [33mid[39m=[32m"provider-codex-key"[39m
+            [33mtype[39m=[32m"password"[39m
+            [33mvalue[39m=[32m""[39m
+          [36m/>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"specimen-account-actions"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-describedby[39m=[32m"_r_o_"[39m
+              [33maria-disabled[39m=[32m"true"[39m
+              [33mclass[39m=[32m"iq-button iq-button--primary iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"codex-api-key"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mConnect with API key[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_o_"[39m
+            [36m>[39m
+              [0mAnother provider action is in progress.[0m
+            [36m</span>[39m
+          [36m</span>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-describedby[39m=[32m"_r_p_"[39m
+              [33maria-disabled[39m=[32m"true"[39m
+              [33mclass[39m=[32m"iq-button iq-button--secondary iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"codex-chatgpt"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mSign in with ChatGPT[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_p_"[39m
+            [36m>[39m
+              [0mChatGPT sign-in is not available for a supported model in this build. Use an OpenAI API key.[0m
+            [36m</span>[39m
+          [36m</span>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-describedby[39m=[32m"_r_q_"[39m
+              [33maria-disabled[39m=[32m"true"[39m
+              [33mclass[39m=[32m"iq-button iq-button--quiet iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"codex-logout"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mDisconnect[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_q_"[39m
+            [36m>[39m
+              [0mAnother provider action is in progress.[0m
+            [36m</span>[39m
+          [36m</span>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+[90m [2m❯[22m waitForWrapper node_modules/.pnpm/@testing-library+dom@10.4.2/node_modules/@testing-library/dom/dist/wait-for.js:[2m163:27[22m[39m
+[90m [2m❯[22m node_modules/.pnpm/@testing-library+dom@10.4.2/node_modules/@testing-library/dom/dist/query-helpers.js:[2m86:33[22m[39m
+[36m [2m❯[22m test/providers-action-recovery.test.tsx:[2m37:23[22m[39m
+    [90m 35|[39m   const button=screen.getByRole('button',{name:testCase.button});
+    [90m 36|[39m   fireEvent.click(button);
+    [90m 37|[39m   expect(await screen.findByText('The request did not complete.')).toB…
+    [90m   |[39m                       [31m^[39m
+    [90m 38|[39m   await waitFor(()=>expect(button.getAttribute('aria-busy')).toBeNull(…
+    [90m 39|[39m   expect(screen.getByRole('button',{name:'Refresh provider status'}).g…
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m test/providers-action-recovery.test.tsx[2m > [22mprovider action recovery after synchronous throw[2m > [22mOpenAI connect releases pending controls, protects input and allows a deliberate retry
+[31m[1mTestingLibraryElementError[22m[39m: Unable to find an element with the text: The request did not complete.. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"specimen-account specimen-providers"[39m
+      [33mdata-claude-state[39m=[32m"stored-unverified"[39m
+      [33mdata-claude-storage[39m=[32m"os-backed"[39m
+      [33mdata-codex-account[39m=[32m"apiKey"[39m
+      [33mdata-codex-state[39m=[32m"connected"[39m
+      [33mdata-providers[39m=[32m""[39m
+    [36m>[39m
+      [36m<h3>[39m
+        [0mConnect your AI providers[0m
+      [36m</h3>[39m
+      [36m<p[39m
+        [33mclass[39m=[32m"specimen-account-note"[39m
+      [36m>[39m
+        [0mConnect an account, then choose a model in your conversation. Provider credentials stay separate from your Inquello identity.[0m
+      [36m</p>[39m
+      [36m<p[39m
+        [33mclass[39m=[32m"specimen-account-note"[39m
+      [36m>[39m
+        [0mA stored key or connected account does not establish model access or qualification.[0m
+      [36m</p>[39m
+      [36m<span[39m
+        [33mclass[39m=[32m"iq-action"[39m
+      [36m>[39m
+        [36m<button[39m
+          [33maria-describedby[39m=[32m"_r_r_"[39m
+          [33maria-disabled[39m=[32m"true"[39m
+          [33mclass[39m=[32m"iq-button iq-button--quiet iq-button--md"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-button-label"[39m
+          [36m>[39m
+            [0mRefresh provider status[0m
+          [36m</span>[39m
+        [36m</button>[39m
+        [36m<span[39m
+          [33mclass[39m=[32m"iq-note"[39m
+          [33mid[39m=[32m"_r_r_"[39m
+        [36m>[39m
+          [0mAnother provider action is in progress.[0m
+        [36m</span>[39m
+      [36m</span>[39m
+      [36m<dl[39m
+        [33mclass[39m=[32m"specimen-account-states"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"specimen-account-state"[39m
+        [36m>[39m
+          [36m<dt>[39m
+            [0mClaude API key[0m
+          [36m</dt>[39m
+          [36m<dd>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-status-chip iq-status-chip--other"[39m
+              [33mdata-status[39m=[32m"provider-claude-stored-unverified"[39m
+            [36m>[39m
+              [0mKey stored, not checked[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"specimen-account-note"[39m
+            [36m>[39m
+              [0mSynthetic stored key[0m
+            [36m</span>[39m
+          [36m</dd>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"specimen-account-state"[39m
+        [36m>[39m
+          [36m<dt>[39m
+            [0mKey storage[0m
+          [36m</dt>[39m
+          [36m<dd[39m
+            [33mclass[39m=[32m"specimen-account-note"[39m
+          [36m>[39m
+            [0mThe key is kept encrypted with this computer's credential store.[0m
+          [36m</dd>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"specimen-account-state"[39m
+        [36m>[39m
+          [36m<dt>[39m
+            [0mOpenAI connection[0m
+          [36m</dt>[39m
+          [36m<dd>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-status-chip iq-status-chip--other"[39m
+              [33mdata-status[39m=[32m"provider-codex-connected"[39m
+            [36m>[39m
+              [0mConnected[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"specimen-account-note"[39m
+            [36m>[39m
+              [0mSigned in with an API key, held in the OS keyring.[0m
+            [36m</span>[39m
+          [36m</dd>[39m
+        [36m</div>[39m
+      [36m</dl>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"specimen-provider-form"[39m
+        [33mdata-provider-claude[39m=[32m""[39m
+      [36m>[39m
+        [36m<h4>[39m
+          [0mAnthropic API[0m
+        [36m</h4>[39m
+        [36m<p[39m
+          [33mclass[39m=[32m"specimen-account-note"[39m
+        [36m>[39m
+          [0mUse your Anthropic API credits. Store your key, then optionally check account access. Check key does not send a prompt or test the selected model.[0m
+        [36m</p>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"iq-field"[39m
+        [36m>[39m
+          [36m<label[39m
+            [33mclass[39m=[32m"iq-field-label"[39m
+            [33mfor[39m=[32m"provider-claude-key"[39m
+          [36m>[39m
+            [0mClaude API key[0m
+          [36m</label>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-field-instruction"[39m
+            [33mid[39m=[32m"provider-claude-key-instruction"[39m
+          [36m>[39m
+            [0mStored by Inquello's main process; never shown again.[0m
+          [36m</span>[39m
+          [36m<input[39m
+            [33maria-describedby[39m=[32m"provider-claude-key-instruction"[39m
+            [33mautocomplete[39m=[32m"off"[39m
+            [33mclass[39m=[32m"iq-field-control"[39m
+            [33mid[39m=[32m"provider-claude-key"[39m
+            [33mtype[39m=[32m"password"[39m
+            [33mvalue[39m=[32m""[39m
+          [36m/>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"specimen-account-actions"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-describedby[39m=[32m"_r_t_"[39m
+              [33maria-disabled[39m=[32m"true"[39m
+              [33mclass[39m=[32m"iq-button iq-button--primary iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"claude-store"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mStore key[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_t_"[39m
+            [36m>[39m
+              [0mAnother provider action is in progress.[0m
+            [36m</span>[39m
+          [36m</span>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-describedby[39m=[32m"_r_u_"[39m
+              [33maria-disabled[39m=[32m"true"[39m
+              [33mclass[39m=[32m"iq-button iq-button--secondary iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"claude-verify"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mCheck key[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_u_"[39m
+            [36m>[39m
+              [0mAnother provider action is in progress.[0m
+            [36m</span>[39m
+          [36m</span>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-describedby[39m=[32m"_r_v_"[39m
+              [33maria-disabled[39m=[32m"true"[39m
+              [33mclass[39m=[32m"iq-button iq-button--quiet iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"claude-remove"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mRemove key[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_v_"[39m
+            [36m>[39m
+              [0mAnother provider action is in progress.[0m
+            [36m</span>[39m
+          [36m</span>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"specimen-provider-form"[39m
+        [33mdata-provider-codex[39m=[32m""[39m
+      [36m>[39m
+        [36m<h4>[39m
+          [0mOpenAI[0m
+        [36m</h4>[39m
+        [36m<p[39m
+          [33mclass[39m=[32m"specimen-account-note"[39m
+        [36m>[39m
+          [0mChoose your workspace in chat to manage its OpenAI permission. You can still connect your personal account.[0m
+        [36m</p>[39m
+        [36m<p[39m
+          [33mclass[39m=[32m"specimen-account-note"[39m
+        [36m>[39m
+          [0mUse your OpenAI API credits with an API key. A ChatGPT subscription is separate.[0m
+        [36m</p>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"iq-field"[39m
+        [36m>[39m
+          [36m<label[39m
+            [33mclass[39m=[32m"iq-field-label"[39m
+            [33mfor[39m=[32m"provider-codex-key"[39m
+          [36m>[39m
+            [0mOpenAI API key[0m
+          [36m</label>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-field-instruction"[39m
+            [33mid[39m=[32m"provider-codex-key-instruction"[39m
+          [36m>[39m
+            [0mStored securely in this computer’s credential store.[0m
+          [36m</span>[39m
+          [36m<input[39m
+            [33maria-describedby[39m=[32m"provider-codex-key-instruction"[39m
+            [33mautocomplete[39m=[32m"off"[39m
+            [33mclass[39m=[32m"iq-field-control"[39m
+            [33mid[39m=[32m"provider-codex-key"[39m
+            [33mtype[39m=[32m"password"[39m
+            [33mvalue[39m=[32m""[39m
+          [36m/>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"specimen-account-actions"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-busy[39m=[32m"true"[39m
+              [33maria-describedby[39m=[32m"_r_11_"[39m
+              [33mclass[39m=[32m"iq-button iq-button--primary iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"codex-api-key"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"iq-spinner"[39m
+              [36m/>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mConnect with API key[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_11_"[39m
+            [36m>[39m
+              [0mIn progress[0m
+            [36m</span>[39m
+          [36m</span>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-describedby[39m=[32m"_r_12_"[39m
+              [33maria-disabled[39m=[32m"true"[39m
+              [33mclass[39m=[32m"iq-button iq-button--secondary iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"codex-chatgpt"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mSign in with ChatGPT[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_12_"[39m
+            [36m>[39m
+              [0mChatGPT sign-in is not available for a supported model in this build. Use an OpenAI API key.[0m
+            [36m</span>[39m
+          [36m</span>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-describedby[39m=[32m"_r_13_"[39m
+              [33maria-disabled[39m=[32m"true"[39m
+              [33mclass[39m=[32m"iq-button iq-button--quiet iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"codex-logout"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mDisconnect[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_13_"[39m
+            [36m>[39m
+              [0mAnother provider action is in progress.[0m
+            [36m</span>[39m
+          [36m</span>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"specimen-account specimen-providers"[39m
+      [33mdata-claude-state[39m=[32m"stored-unverified"[39m
+      [33mdata-claude-storage[39m=[32m"os-backed"[39m
+      [33mdata-codex-account[39m=[32m"apiKey"[39m
+      [33mdata-codex-state[39m=[32m"connected"[39m
+      [33mdata-providers[39m=[32m""[39m
+    [36m>[39m
+      [36m<h3>[39m
+        [0mConnect your AI providers[0m
+      [36m</h3>[39m
+      [36m<p[39m
+        [33mclass[39m=[32m"specimen-account-note"[39m
+      [36m>[39m
+        [0mConnect an account, then choose a model in your conversation. Provider credentials stay separate from your Inquello identity.[0m
+      [36m</p>[39m
+      [36m<p[39m
+        [33mclass[39m=[32m"specimen-account-note"[39m
+      [36m>[39m
+        [0mA stored key or connected account does not establish model access or qualification.[0m
+      [36m</p>[39m
+      [36m<span[39m
+        [33mclass[39m=[32m"iq-action"[39m
+      [36m>[39m
+        [36m<button[39m
+          [33maria-describedby[39m=[32m"_r_r_"[39m
+          [33maria-disabled[39m=[32m"true"[39m
+          [33mclass[39m=[32m"iq-button iq-button--quiet iq-button--md"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-button-label"[39m
+          [36m>[39m
+            [0mRefresh provider status[0m
+          [36m</span>[39m
+        [36m</button>[39m
+        [36m<span[39m
+          [33mclass[39m=[32m"iq-note"[39m
+          [33mid[39m=[32m"_r_r_"[39m
+        [36m>[39m
+          [0mAnother provider action is in progress.[0m
+        [36m</span>[39m
+      [36m</span>[39m
+      [36m<dl[39m
+        [33mclass[39m=[32m"specimen-account-states"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"specimen-account-state"[39m
+        [36m>[39m
+          [36m<dt>[39m
+            [0mClaude API key[0m
+          [36m</dt>[39m
+          [36m<dd>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-status-chip iq-status-chip--other"[39m
+              [33mdata-status[39m=[32m"provider-claude-stored-unverified"[39m
+            [36m>[39m
+              [0mKey stored, not checked[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"specimen-account-note"[39m
+            [36m>[39m
+              [0mSynthetic stored key[0m
+            [36m</span>[39m
+          [36m</dd>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"specimen-account-state"[39m
+        [36m>[39m
+          [36m<dt>[39m
+            [0mKey storage[0m
+          [36m</dt>[39m
+          [36m<dd[39m
+            [33mclass[39m=[32m"specimen-account-note"[39m
+          [36m>[39m
+            [0mThe key is kept encrypted with this computer's credential store.[0m
+          [36m</dd>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"specimen-account-state"[39m
+        [36m>[39m
+          [36m<dt>[39m
+            [0mOpenAI connection[0m
+          [36m</dt>[39m
+          [36m<dd>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-status-chip iq-status-chip--other"[39m
+              [33mdata-status[39m=[32m"provider-codex-connected"[39m
+            [36m>[39m
+              [0mConnected[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"specimen-account-note"[39m
+            [36m>[39m
+              [0mSigned in with an API key, held in the OS keyring.[0m
+            [36m</span>[39m
+          [36m</dd>[39m
+        [36m</div>[39m
+      [36m</dl>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"specimen-provider-form"[39m
+        [33mdata-provider-claude[39m=[32m""[39m
+      [36m>[39m
+        [36m<h4>[39m
+          [0mAnthropic API[0m
+        [36m</h4>[39m
+        [36m<p[39m
+          [33mclass[39m=[32m"specimen-account-note"[39m
+        [36m>[39m
+          [0mUse your Anthropic API credits. Store your key, then optionally check account access. Check key does not send a prompt or test the selected model.[0m
+        [36m</p>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"iq-field"[39m
+        [36m>[39m
+          [36m<label[39m
+            [33mclass[39m=[32m"iq-field-label"[39m
+            [33mfor[39m=[32m"provider-claude-key"[39m
+          [36m>[39m
+            [0mClaude API key[0m
+          [36m</label>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-field-instruction"[39m
+            [33mid[39m=[32m"provider-claude-key-instruction"[39m
+          [36m>[39m
+            [0mStored by Inquello's main process; never shown again.[0m
+          [36m</span>[39m
+          [36m<input[39m
+            [33maria-describedby[39m=[32m"provider-claude-key-instruction"[39m
+            [33mautocomplete[39m=[32m"off"[39m
+            [33mclass[39m=[32m"iq-field-control"[39m
+            [33mid[39m=[32m"provider-claude-key"[39m
+            [33mtype[39m=[32m"password"[39m
+            [33mvalue[39m=[32m""[39m
+          [36m/>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"specimen-account-actions"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-describedby[39m=[32m"_r_t_"[39m
+              [33maria-disabled[39m=[32m"true"[39m
+              [33mclass[39m=[32m"iq-button iq-button--primary iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"claude-store"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mStore key[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_t_"[39m
+            [36m>[39m
+              [0mAnother provider action is in progress.[0m
+            [36m</span>[39m
+          [36m</span>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-describedby[39m=[32m"_r_u_"[39m
+              [33maria-disabled[39m=[32m"true"[39m
+              [33mclass[39m=[32m"iq-button iq-button--secondary iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"claude-verify"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mCheck key[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_u_"[39m
+            [36m>[39m
+              [0mAnother provider action is in progress.[0m
+            [36m</span>[39m
+          [36m</span>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-describedby[39m=[32m"_r_v_"[39m
+              [33maria-disabled[39m=[32m"true"[39m
+              [33mclass[39m=[32m"iq-button iq-button--quiet iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"claude-remove"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mRemove key[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_v_"[39m
+            [36m>[39m
+              [0mAnother provider action is in progress.[0m
+            [36m</span>[39m
+          [36m</span>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"specimen-provider-form"[39m
+        [33mdata-provider-codex[39m=[32m""[39m
+      [36m>[39m
+        [36m<h4>[39m
+          [0mOpenAI[0m
+        [36m</h4>[39m
+        [36m<p[39m
+          [33mclass[39m=[32m"specimen-account-note"[39m
+        [36m>[39m
+          [0mChoose your workspace in chat to manage its OpenAI permission. You can still connect your personal account.[0m
+        [36m</p>[39m
+        [36m<p[39m
+          [33mclass[39m=[32m"specimen-account-note"[39m
+        [36m>[39m
+          [0mUse your OpenAI API credits with an API key. A ChatGPT subscription is separate.[0m
+        [36m</p>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"iq-field"[39m
+        [36m>[39m
+          [36m<label[39m
+            [33mclass[39m=[32m"iq-field-label"[39m
+            [33mfor[39m=[32m"provider-codex-key"[39m
+          [36m>[39m
+            [0mOpenAI API key[0m
+          [36m</label>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-field-instruction"[39m
+            [33mid[39m=[32m"provider-codex-key-instruction"[39m
+          [36m>[39m
+            [0mStored securely in this computer’s credential store.[0m
+          [36m</span>[39m
+          [36m<input[39m
+            [33maria-describedby[39m=[32m"provider-codex-key-instruction"[39m
+            [33mautocomplete[39m=[32m"off"[39m
+            [33mclass[39m=[32m"iq-field-control"[39m
+            [33mid[39m=[32m"provider-codex-key"[39m
+            [33mtype[39m=[32m"password"[39m
+            [33mvalue[39m=[32m""[39m
+          [36m/>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"specimen-account-actions"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-busy[39m=[32m"true"[39m
+              [33maria-describedby[39m=[32m"_r_11_"[39m
+              [33mclass[39m=[32m"iq-button iq-button--primary iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"codex-api-key"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"iq-spinner"[39m
+              [36m/>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mConnect with API key[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_11_"[39m
+            [36m>[39m
+              [0mIn progress[0m
+            [36m</span>[39m
+          [36m</span>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-describedby[39m=[32m"_r_12_"[39m
+              [33maria-disabled[39m=[32m"true"[39m
+              [33mclass[39m=[32m"iq-button iq-button--secondary iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"codex-chatgpt"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mSign in with ChatGPT[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_12_"[39m
+            [36m>[39m
+              [0mChatGPT sign-in is not available for a supported model in this build. Use an OpenAI API key.[0m
+            [36m</span>[39m
+          [36m</span>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-describedby[39m=[32m"_r_13_"[39m
+              [33maria-disabled[39m=[32m"true"[39m
+              [33mclass[39m=[32m"iq-button iq-button--quiet iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"codex-logout"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mDisconnect[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_13_"[39m
+            [36m>[39m
+              [0mAnother provider action is in progress.[0m
+            [36m</span>[39m
+          [36m</span>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+[90m [2m❯[22m waitForWrapper node_modules/.pnpm/@testing-library+dom@10.4.2/node_modules/@testing-library/dom/dist/wait-for.js:[2m163:27[22m[39m
+[90m [2m❯[22m node_modules/.pnpm/@testing-library+dom@10.4.2/node_modules/@testing-library/dom/dist/query-helpers.js:[2m86:33[22m[39m
+[36m [2m❯[22m test/providers-action-recovery.test.tsx:[2m37:23[22m[39m
+    [90m 35|[39m   const button=screen.getByRole('button',{name:testCase.button});
+    [90m 36|[39m   fireEvent.click(button);
+    [90m 37|[39m   expect(await screen.findByText('The request did not complete.')).toB…
+    [90m   |[39m                       [31m^[39m
+    [90m 38|[39m   await waitFor(()=>expect(button.getAttribute('aria-busy')).toBeNull(…
+    [90m 39|[39m   expect(screen.getByRole('button',{name:'Refresh provider status'}).g…
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m test/providers-action-recovery.test.tsx[2m > [22mprovider action recovery after synchronous throw[2m > [22mOpenAI disconnect releases pending controls, protects input and allows a deliberate retry
+[31m[1mTestingLibraryElementError[22m[39m: Unable to find an element with the text: The request did not complete.. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"specimen-account specimen-providers"[39m
+      [33mdata-claude-state[39m=[32m"stored-unverified"[39m
+      [33mdata-claude-storage[39m=[32m"os-backed"[39m
+      [33mdata-codex-account[39m=[32m"apiKey"[39m
+      [33mdata-codex-state[39m=[32m"connected"[39m
+      [33mdata-providers[39m=[32m""[39m
+    [36m>[39m
+      [36m<h3>[39m
+        [0mConnect your AI providers[0m
+      [36m</h3>[39m
+      [36m<p[39m
+        [33mclass[39m=[32m"specimen-account-note"[39m
+      [36m>[39m
+        [0mConnect an account, then choose a model in your conversation. Provider credentials stay separate from your Inquello identity.[0m
+      [36m</p>[39m
+      [36m<p[39m
+        [33mclass[39m=[32m"specimen-account-note"[39m
+      [36m>[39m
+        [0mA stored key or connected account does not establish model access or qualification.[0m
+      [36m</p>[39m
+      [36m<span[39m
+        [33mclass[39m=[32m"iq-action"[39m
+      [36m>[39m
+        [36m<button[39m
+          [33maria-describedby[39m=[32m"_r_14_"[39m
+          [33maria-disabled[39m=[32m"true"[39m
+          [33mclass[39m=[32m"iq-button iq-button--quiet iq-button--md"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-button-label"[39m
+          [36m>[39m
+            [0mRefresh provider status[0m
+          [36m</span>[39m
+        [36m</button>[39m
+        [36m<span[39m
+          [33mclass[39m=[32m"iq-note"[39m
+          [33mid[39m=[32m"_r_14_"[39m
+        [36m>[39m
+          [0mAnother provider action is in progress.[0m
+        [36m</span>[39m
+      [36m</span>[39m
+      [36m<dl[39m
+        [33mclass[39m=[32m"specimen-account-states"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"specimen-account-state"[39m
+        [36m>[39m
+          [36m<dt>[39m
+            [0mClaude API key[0m
+          [36m</dt>[39m
+          [36m<dd>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-status-chip iq-status-chip--other"[39m
+              [33mdata-status[39m=[32m"provider-claude-stored-unverified"[39m
+            [36m>[39m
+              [0mKey stored, not checked[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"specimen-account-note"[39m
+            [36m>[39m
+              [0mSynthetic stored key[0m
+            [36m</span>[39m
+          [36m</dd>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"specimen-account-state"[39m
+        [36m>[39m
+          [36m<dt>[39m
+            [0mKey storage[0m
+          [36m</dt>[39m
+          [36m<dd[39m
+            [33mclass[39m=[32m"specimen-account-note"[39m
+          [36m>[39m
+            [0mThe key is kept encrypted with this computer's credential store.[0m
+          [36m</dd>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"specimen-account-state"[39m
+        [36m>[39m
+          [36m<dt>[39m
+            [0mOpenAI connection[0m
+          [36m</dt>[39m
+          [36m<dd>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-status-chip iq-status-chip--other"[39m
+              [33mdata-status[39m=[32m"provider-codex-connected"[39m
+            [36m>[39m
+              [0mConnected[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"specimen-account-note"[39m
+            [36m>[39m
+              [0mSigned in with an API key, held in the OS keyring.[0m
+            [36m</span>[39m
+          [36m</dd>[39m
+        [36m</div>[39m
+      [36m</dl>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"specimen-provider-form"[39m
+        [33mdata-provider-claude[39m=[32m""[39m
+      [36m>[39m
+        [36m<h4>[39m
+          [0mAnthropic API[0m
+        [36m</h4>[39m
+        [36m<p[39m
+          [33mclass[39m=[32m"specimen-account-note"[39m
+        [36m>[39m
+          [0mUse your Anthropic API credits. Store your key, then optionally check account access. Check key does not send a prompt or test the selected model.[0m
+        [36m</p>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"iq-field"[39m
+        [36m>[39m
+          [36m<label[39m
+            [33mclass[39m=[32m"iq-field-label"[39m
+            [33mfor[39m=[32m"provider-claude-key"[39m
+          [36m>[39m
+            [0mClaude API key[0m
+          [36m</label>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-field-instruction"[39m
+            [33mid[39m=[32m"provider-claude-key-instruction"[39m
+          [36m>[39m
+            [0mStored by Inquello's main process; never shown again.[0m
+          [36m</span>[39m
+          [36m<input[39m
+            [33maria-describedby[39m=[32m"provider-claude-key-instruction"[39m
+            [33mautocomplete[39m=[32m"off"[39m
+            [33mclass[39m=[32m"iq-field-control"[39m
+            [33mid[39m=[32m"provider-claude-key"[39m
+            [33mtype[39m=[32m"password"[39m
+            [33mvalue[39m=[32m""[39m
+          [36m/>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"specimen-account-actions"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-describedby[39m=[32m"_r_16_"[39m
+              [33maria-disabled[39m=[32m"true"[39m
+              [33mclass[39m=[32m"iq-button iq-button--primary iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"claude-store"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mStore key[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_16_"[39m
+            [36m>[39m
+              [0mAnother provider action is in progress.[0m
+            [36m</span>[39m
+          [36m</span>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-describedby[39m=[32m"_r_17_"[39m
+              [33maria-disabled[39m=[32m"true"[39m
+              [33mclass[39m=[32m"iq-button iq-button--secondary iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"claude-verify"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mCheck key[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_17_"[39m
+            [36m>[39m
+              [0mAnother provider action is in progress.[0m
+            [36m</span>[39m
+          [36m</span>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-describedby[39m=[32m"_r_18_"[39m
+              [33maria-disabled[39m=[32m"true"[39m
+              [33mclass[39m=[32m"iq-button iq-button--quiet iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"claude-remove"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mRemove key[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_18_"[39m
+            [36m>[39m
+              [0mAnother provider action is in progress.[0m
+            [36m</span>[39m
+          [36m</span>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"specimen-provider-form"[39m
+        [33mdata-provider-codex[39m=[32m""[39m
+      [36m>[39m
+        [36m<h4>[39m
+          [0mOpenAI[0m
+        [36m</h4>[39m
+        [36m<p[39m
+          [33mclass[39m=[32m"specimen-account-note"[39m
+        [36m>[39m
+          [0mChoose your workspace in chat to manage its OpenAI permission. You can still connect your personal account.[0m
+        [36m</p>[39m
+        [36m<p[39m
+          [33mclass[39m=[32m"specimen-account-note"[39m
+        [36m>[39m
+          [0mUse your OpenAI API credits with an API key. A ChatGPT subscription is separate.[0m
+        [36m</p>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"iq-field"[39m
+        [36m>[39m
+          [36m<label[39m
+            [33mclass[39m=[32m"iq-field-label"[39m
+            [33mfor[39m=[32m"provider-codex-key"[39m
+          [36m>[39m
+            [0mOpenAI API key[0m
+          [36m</label>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-field-instruction"[39m
+            [33mid[39m=[32m"provider-codex-key-instruction"[39m
+          [36m>[39m
+            [0mStored securely in this computer’s credential store.[0m
+          [36m</span>[39m
+          [36m<input[39m
+            [33maria-describedby[39m=[32m"provider-codex-key-instruction"[39m
+            [33mautocomplete[39m=[32m"off"[39m
+            [33mclass[39m=[32m"iq-field-control"[39m
+            [33mid[39m=[32m"provider-codex-key"[39m
+            [33mtype[39m=[32m"password"[39m
+            [33mvalue[39m=[32m""[39m
+          [36m/>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"specimen-account-actions"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-describedby[39m=[32m"_r_1a_"[39m
+              [33maria-disabled[39m=[32m"true"[39m
+              [33mclass[39m=[32m"iq-button iq-button--primary iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"codex-api-key"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mConnect with API key[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_1a_"[39m
+            [36m>[39m
+              [0mAnother provider action is in progress.[0m
+            [36m</span>[39m
+          [36m</span>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-describedby[39m=[32m"_r_1b_"[39m
+              [33maria-disabled[39m=[32m"true"[39m
+              [33mclass[39m=[32m"iq-button iq-button--secondary iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"codex-chatgpt"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mSign in with ChatGPT[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_1b_"[39m
+            [36m>[39m
+              [0mChatGPT sign-in is not available for a supported model in this build. Use an OpenAI API key.[0m
+            [36m</span>[39m
+          [36m</span>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-busy[39m=[32m"true"[39m
+              [33maria-describedby[39m=[32m"_r_1c_"[39m
+              [33mclass[39m=[32m"iq-button iq-button--quiet iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"codex-logout"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"iq-spinner"[39m
+              [36m/>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mDisconnect[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_1c_"[39m
+            [36m>[39m
+              [0mIn progress[0m
+            [36m</span>[39m
+          [36m</span>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<div[39m
+      [33mclass[39m=[32m"specimen-account specimen-providers"[39m
+      [33mdata-claude-state[39m=[32m"stored-unverified"[39m
+      [33mdata-claude-storage[39m=[32m"os-backed"[39m
+      [33mdata-codex-account[39m=[32m"apiKey"[39m
+      [33mdata-codex-state[39m=[32m"connected"[39m
+      [33mdata-providers[39m=[32m""[39m
+    [36m>[39m
+      [36m<h3>[39m
+        [0mConnect your AI providers[0m
+      [36m</h3>[39m
+      [36m<p[39m
+        [33mclass[39m=[32m"specimen-account-note"[39m
+      [36m>[39m
+        [0mConnect an account, then choose a model in your conversation. Provider credentials stay separate from your Inquello identity.[0m
+      [36m</p>[39m
+      [36m<p[39m
+        [33mclass[39m=[32m"specimen-account-note"[39m
+      [36m>[39m
+        [0mA stored key or connected account does not establish model access or qualification.[0m
+      [36m</p>[39m
+      [36m<span[39m
+        [33mclass[39m=[32m"iq-action"[39m
+      [36m>[39m
+        [36m<button[39m
+          [33maria-describedby[39m=[32m"_r_14_"[39m
+          [33maria-disabled[39m=[32m"true"[39m
+          [33mclass[39m=[32m"iq-button iq-button--quiet iq-button--md"[39m
+          [33mtype[39m=[32m"button"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-button-label"[39m
+          [36m>[39m
+            [0mRefresh provider status[0m
+          [36m</span>[39m
+        [36m</button>[39m
+        [36m<span[39m
+          [33mclass[39m=[32m"iq-note"[39m
+          [33mid[39m=[32m"_r_14_"[39m
+        [36m>[39m
+          [0mAnother provider action is in progress.[0m
+        [36m</span>[39m
+      [36m</span>[39m
+      [36m<dl[39m
+        [33mclass[39m=[32m"specimen-account-states"[39m
+      [36m>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"specimen-account-state"[39m
+        [36m>[39m
+          [36m<dt>[39m
+            [0mClaude API key[0m
+          [36m</dt>[39m
+          [36m<dd>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-status-chip iq-status-chip--other"[39m
+              [33mdata-status[39m=[32m"provider-claude-stored-unverified"[39m
+            [36m>[39m
+              [0mKey stored, not checked[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"specimen-account-note"[39m
+            [36m>[39m
+              [0mSynthetic stored key[0m
+            [36m</span>[39m
+          [36m</dd>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"specimen-account-state"[39m
+        [36m>[39m
+          [36m<dt>[39m
+            [0mKey storage[0m
+          [36m</dt>[39m
+          [36m<dd[39m
+            [33mclass[39m=[32m"specimen-account-note"[39m
+          [36m>[39m
+            [0mThe key is kept encrypted with this computer's credential store.[0m
+          [36m</dd>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"specimen-account-state"[39m
+        [36m>[39m
+          [36m<dt>[39m
+            [0mOpenAI connection[0m
+          [36m</dt>[39m
+          [36m<dd>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-status-chip iq-status-chip--other"[39m
+              [33mdata-status[39m=[32m"provider-codex-connected"[39m
+            [36m>[39m
+              [0mConnected[0m
+            [36m</span>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"specimen-account-note"[39m
+            [36m>[39m
+              [0mSigned in with an API key, held in the OS keyring.[0m
+            [36m</span>[39m
+          [36m</dd>[39m
+        [36m</div>[39m
+      [36m</dl>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"specimen-provider-form"[39m
+        [33mdata-provider-claude[39m=[32m""[39m
+      [36m>[39m
+        [36m<h4>[39m
+          [0mAnthropic API[0m
+        [36m</h4>[39m
+        [36m<p[39m
+          [33mclass[39m=[32m"specimen-account-note"[39m
+        [36m>[39m
+          [0mUse your Anthropic API credits. Store your key, then optionally check account access. Check key does not send a prompt or test the selected model.[0m
+        [36m</p>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"iq-field"[39m
+        [36m>[39m
+          [36m<label[39m
+            [33mclass[39m=[32m"iq-field-label"[39m
+            [33mfor[39m=[32m"provider-claude-key"[39m
+          [36m>[39m
+            [0mClaude API key[0m
+          [36m</label>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-field-instruction"[39m
+            [33mid[39m=[32m"provider-claude-key-instruction"[39m
+          [36m>[39m
+            [0mStored by Inquello's main process; never shown again.[0m
+          [36m</span>[39m
+          [36m<input[39m
+            [33maria-describedby[39m=[32m"provider-claude-key-instruction"[39m
+            [33mautocomplete[39m=[32m"off"[39m
+            [33mclass[39m=[32m"iq-field-control"[39m
+            [33mid[39m=[32m"provider-claude-key"[39m
+            [33mtype[39m=[32m"password"[39m
+            [33mvalue[39m=[32m""[39m
+          [36m/>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"specimen-account-actions"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-describedby[39m=[32m"_r_16_"[39m
+              [33maria-disabled[39m=[32m"true"[39m
+              [33mclass[39m=[32m"iq-button iq-button--primary iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"claude-store"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mStore key[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_16_"[39m
+            [36m>[39m
+              [0mAnother provider action is in progress.[0m
+            [36m</span>[39m
+          [36m</span>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-describedby[39m=[32m"_r_17_"[39m
+              [33maria-disabled[39m=[32m"true"[39m
+              [33mclass[39m=[32m"iq-button iq-button--secondary iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"claude-verify"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mCheck key[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_17_"[39m
+            [36m>[39m
+              [0mAnother provider action is in progress.[0m
+            [36m</span>[39m
+          [36m</span>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-describedby[39m=[32m"_r_18_"[39m
+              [33maria-disabled[39m=[32m"true"[39m
+              [33mclass[39m=[32m"iq-button iq-button--quiet iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"claude-remove"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mRemove key[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_18_"[39m
+            [36m>[39m
+              [0mAnother provider action is in progress.[0m
+            [36m</span>[39m
+          [36m</span>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"specimen-provider-form"[39m
+        [33mdata-provider-codex[39m=[32m""[39m
+      [36m>[39m
+        [36m<h4>[39m
+          [0mOpenAI[0m
+        [36m</h4>[39m
+        [36m<p[39m
+          [33mclass[39m=[32m"specimen-account-note"[39m
+        [36m>[39m
+          [0mChoose your workspace in chat to manage its OpenAI permission. You can still connect your personal account.[0m
+        [36m</p>[39m
+        [36m<p[39m
+          [33mclass[39m=[32m"specimen-account-note"[39m
+        [36m>[39m
+          [0mUse your OpenAI API credits with an API key. A ChatGPT subscription is separate.[0m
+        [36m</p>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"iq-field"[39m
+        [36m>[39m
+          [36m<label[39m
+            [33mclass[39m=[32m"iq-field-label"[39m
+            [33mfor[39m=[32m"provider-codex-key"[39m
+          [36m>[39m
+            [0mOpenAI API key[0m
+          [36m</label>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-field-instruction"[39m
+            [33mid[39m=[32m"provider-codex-key-instruction"[39m
+          [36m>[39m
+            [0mStored securely in this computer’s credential store.[0m
+          [36m</span>[39m
+          [36m<input[39m
+            [33maria-describedby[39m=[32m"provider-codex-key-instruction"[39m
+            [33mautocomplete[39m=[32m"off"[39m
+            [33mclass[39m=[32m"iq-field-control"[39m
+            [33mid[39m=[32m"provider-codex-key"[39m
+            [33mtype[39m=[32m"password"[39m
+            [33mvalue[39m=[32m""[39m
+          [36m/>[39m
+        [36m</div>[39m
+        [36m<div[39m
+          [33mclass[39m=[32m"specimen-account-actions"[39m
+        [36m>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-describedby[39m=[32m"_r_1a_"[39m
+              [33maria-disabled[39m=[32m"true"[39m
+              [33mclass[39m=[32m"iq-button iq-button--primary iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"codex-api-key"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mConnect with API key[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_1a_"[39m
+            [36m>[39m
+              [0mAnother provider action is in progress.[0m
+            [36m</span>[39m
+          [36m</span>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-describedby[39m=[32m"_r_1b_"[39m
+              [33maria-disabled[39m=[32m"true"[39m
+              [33mclass[39m=[32m"iq-button iq-button--secondary iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"codex-chatgpt"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mSign in with ChatGPT[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_1b_"[39m
+            [36m>[39m
+              [0mChatGPT sign-in is not available for a supported model in this build. Use an OpenAI API key.[0m
+            [36m</span>[39m
+          [36m</span>[39m
+          [36m<span[39m
+            [33mclass[39m=[32m"iq-action"[39m
+          [36m>[39m
+            [36m<button[39m
+              [33maria-busy[39m=[32m"true"[39m
+              [33maria-describedby[39m=[32m"_r_1c_"[39m
+              [33mclass[39m=[32m"iq-button iq-button--quiet iq-button--md"[39m
+              [33mdata-provider-action[39m=[32m"codex-logout"[39m
+              [33mtype[39m=[32m"button"[39m
+            [36m>[39m
+              [36m<span[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mclass[39m=[32m"iq-spinner"[39m
+              [36m/>[39m
+              [36m<span[39m
+                [33mclass[39m=[32m"iq-button-label"[39m
+              [36m>[39m
+                [0mDisconnect[0m
+              [36m</span>[39m
+            [36m</button>[39m
+            [36m<span[39m
+              [33mclass[39m=[32m"iq-note"[39m
+              [33mid[39m=[32m"_r_1c_"[39m
+            [36m>[39m
+              [0mIn progress[0m
+            [36m</span>[39m
+          [36m</span>[39m
+        [36m</div>[39m
+      [36m</div>[39m
+    [36m</div>[39m
+  [36m</div>[39m
+[36m</body>[39m
+[90m [2m❯[22m waitForWrapper node_modules/.pnpm/@testing-library+dom@10.4.2/node_modules/@testing-library/dom/dist/wait-for.js:[2m163:27[22m[39m
+[90m [2m❯[22m node_modules/.pnpm/@testing-library+dom@10.4.2/node_modules/@testing-library/dom/dist/query-helpers.js:[2m86:33[22m[39m
+[36m [2m❯[22m test/providers-action-recovery.test.tsx:[2m37:23[22m[39m
+    [90m 35|[39m   const button=screen.getByRole('button',{name:testCase.button});
+    [90m 36|[39m   fireEvent.click(button);
+    [90m 37|[39m   expect(await screen.findByText('The request did not complete.')).toB…
+    [90m   |[39m                       [31m^[39m
+    [90m 38|[39m   await waitFor(()=>expect(button.getAttribute('aria-busy')).toBeNull(…
+    [90m 39|[39m   expect(screen.getByRole('button',{name:'Refresh provider status'}).g…
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/5]⎯[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯[39m[1m[41m Unhandled Errors [49m[22m[31m⎯⎯⎯⎯⎯⎯[39m
+[31m[1m
+Vitest caught 5 unhandled errors during the test run.
+This might cause false positive tests. Resolve unhandled errors to make sure your tests are not affected.[22m[39m
+
+[31m⎯⎯⎯⎯[39m[1m[41m Unhandled Rejection [49m[22m[31m⎯⎯⎯⎯⎯[39m
+[31m[1mError[22m: private bridge diagnostic never display[39m
+[36m [2m❯[22m Object.<anonymous> test/providers-action-recovery.test.tsx:[2m31:77[22m[39m
+    [90m 29|[39m   const provider=fixture();
+    [90m 30|[39m   const action=provider[testCase.method];
+    [90m 31|[39m   action.mockImplementationOnce(()=>{if(failure==='synchronous throw')…
+    [90m   |[39m                                                                             [31m^[39m
+    [90m 32|[39m   render(<Providers/>);await screen.findByText('Connected');
+    [90m 33|[39m   const field='field' in testCase?screen.getByLabelText<HTMLInputEleme…
+[90m [2m❯[22m Object.Mock [as setClaudeKey] node_modules/.pnpm/vitest@5.0.5_@types+node@24_84898e5f3bd356d86cffbe44dd5f6b99/node_modules/vitest/dist/chunks/spy.DDMXghXv.js:[2m353:40[22m[39m
+[90m [2m❯[22m act src/renderer/Providers.tsx:[2m106:23[22m[39m
+[90m [2m❯[22m onPress src/renderer/Providers.tsx:[2m204:194[22m[39m
+[90m [2m❯[22m handleClick src/renderer/primitives/Button.tsx:[2m65:5[22m[39m
+[90m [2m❯[22m executeDispatch node_modules/.pnpm/react-dom@19.3.1_react@19.3.1/node_modules/react-dom/cjs/react-dom-client.development.js:[2m20804:9[22m[39m
+[90m [2m❯[22m runWithFiberInDEV node_modules/.pnpm/react-dom@19.3.1_react@19.3.1/node_modules/react-dom/cjs/react-dom-client.development.js:[2m1048:13[22m[39m
+[90m [2m❯[22m processDispatchQueue node_modules/.pnpm/react-dom@19.3.1_react@19.3.1/node_modules/react-dom/cjs/react-dom-client.development.js:[2m20854:19[22m[39m
+[90m [2m❯[22m node_modules/.pnpm/react-dom@19.3.1_react@19.3.1/node_modules/react-dom/cjs/react-dom-client.development.js:[2m21423:9[22m[39m
+[90m [2m❯[22m batchedUpdates$1 node_modules/.pnpm/react-dom@19.3.1_react@19.3.1/node_modules/react-dom/cjs/react-dom-client.development.js:[2m3437:40[22m[39m
+
+[31mThis error originated in "[1mtest/providers-action-recovery.test.tsx[22m" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.[39m
+[31mThe last test to run before this error was "[1mClaude store releases pending controls, protects input and allows a deliberate retry[22m". This means either:
+- the error was thrown while Vitest was running this test, or
+- the error was thrown after the test completed, and this was the most recent test at that point.[39m
+
+[31m⎯⎯⎯⎯[39m[1m[41m Unhandled Rejection [49m[22m[31m⎯⎯⎯⎯⎯[39m
+[31m[1mError[22m: private bridge diagnostic never display[39m
+[36m [2m❯[22m Object.<anonymous> test/providers-action-recovery.test.tsx:[2m31:77[22m[39m
+    [90m 29|[39m   const provider=fixture();
+    [90m 30|[39m   const action=provider[testCase.method];
+    [90m 31|[39m   action.mockImplementationOnce(()=>{if(failure==='synchronous throw')…
+    [90m   |[39m                                                                             [31m^[39m
+    [90m 32|[39m   render(<Providers/>);await screen.findByText('Connected');
+    [90m 33|[39m   const field='field' in testCase?screen.getByLabelText<HTMLInputEleme…
+[90m [2m❯[22m Object.Mock [as verifyClaudeKey] node_modules/.pnpm/vitest@5.0.5_@types+node@24_84898e5f3bd356d86cffbe44dd5f6b99/node_modules/vitest/dist/chunks/spy.DDMXghXv.js:[2m353:40[22m[39m
+[90m [2m❯[22m act src/renderer/Providers.tsx:[2m110:23[22m[39m
+[90m [2m❯[22m onPress src/renderer/Providers.tsx:[2m207:223[22m[39m
+[90m [2m❯[22m handleClick src/renderer/primitives/Button.tsx:[2m65:5[22m[39m
+[90m [2m❯[22m executeDispatch node_modules/.pnpm/react-dom@19.3.1_react@19.3.1/node_modules/react-dom/cjs/react-dom-client.development.js:[2m20804:9[22m[39m
+[90m [2m❯[22m runWithFiberInDEV node_modules/.pnpm/react-dom@19.3.1_react@19.3.1/node_modules/react-dom/cjs/react-dom-client.development.js:[2m1048:13[22m[39m
+[90m [2m❯[22m processDispatchQueue node_modules/.pnpm/react-dom@19.3.1_react@19.3.1/node_modules/react-dom/cjs/react-dom-client.development.js:[2m20854:19[22m[39m
+[90m [2m❯[22m node_modules/.pnpm/react-dom@19.3.1_react@19.3.1/node_modules/react-dom/cjs/react-dom-client.development.js:[2m21423:9[22m[39m
+[90m [2m❯[22m batchedUpdates$1 node_modules/.pnpm/react-dom@19.3.1_react@19.3.1/node_modules/react-dom/cjs/react-dom-client.development.js:[2m3437:40[22m[39m
+
+[31mThis error originated in "[1mtest/providers-action-recovery.test.tsx[22m" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.[39m
+[31mThe last test to run before this error was "[1mClaude check releases pending controls, protects input and allows a deliberate retry[22m". This means either:
+- the error was thrown while Vitest was running this test, or
+- the error was thrown after the test completed, and this was the most recent test at that point.[39m
+
+[31m⎯⎯⎯⎯[39m[1m[41m Unhandled Rejection [49m[22m[31m⎯⎯⎯⎯⎯[39m
+[31m[1mError[22m: private bridge diagnostic never display[39m
+[36m [2m❯[22m Object.<anonymous> test/providers-action-recovery.test.tsx:[2m31:77[22m[39m
+    [90m 29|[39m   const provider=fixture();
+    [90m 30|[39m   const action=provider[testCase.method];
+    [90m 31|[39m   action.mockImplementationOnce(()=>{if(failure==='synchronous throw')…
+    [90m   |[39m                                                                             [31m^[39m
+    [90m 32|[39m   render(<Providers/>);await screen.findByText('Connected');
+    [90m 33|[39m   const field='field' in testCase?screen.getByLabelText<HTMLInputEleme…
+[90m [2m❯[22m Object.Mock [as removeClaudeKey] node_modules/.pnpm/vitest@5.0.5_@types+node@24_84898e5f3bd356d86cffbe44dd5f6b99/node_modules/vitest/dist/chunks/spy.DDMXghXv.js:[2m353:40[22m[39m
+[90m [2m❯[22m act src/renderer/Providers.tsx:[2m113:23[22m[39m
+[90m [2m❯[22m onPress src/renderer/Providers.tsx:[2m210:196[22m[39m
+[90m [2m❯[22m handleClick src/renderer/primitives/Button.tsx:[2m65:5[22m[39m
+[90m [2m❯[22m executeDispatch node_modules/.pnpm/react-dom@19.3.1_react@19.3.1/node_modules/react-dom/cjs/react-dom-client.development.js:[2m20804:9[22m[39m
+[90m [2m❯[22m runWithFiberInDEV node_modules/.pnpm/react-dom@19.3.1_react@19.3.1/node_modules/react-dom/cjs/react-dom-client.development.js:[2m1048:13[22m[39m
+[90m [2m❯[22m processDispatchQueue node_modules/.pnpm/react-dom@19.3.1_react@19.3.1/node_modules/react-dom/cjs/react-dom-client.development.js:[2m20854:19[22m[39m
+[90m [2m❯[22m node_modules/.pnpm/react-dom@19.3.1_react@19.3.1/node_modules/react-dom/cjs/react-dom-client.development.js:[2m21423:9[22m[39m
+[90m [2m❯[22m batchedUpdates$1 node_modules/.pnpm/react-dom@19.3.1_react@19.3.1/node_modules/react-dom/cjs/react-dom-client.development.js:[2m3437:40[22m[39m
+
+[31mThis error originated in "[1mtest/providers-action-recovery.test.tsx[22m" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.[39m
+[31mThe last test to run before this error was "[1mClaude remove releases pending controls, protects input and allows a deliberate retry[22m". This means either:
+- the error was thrown while Vitest was running this test, or
+- the error was thrown after the test completed, and this was the most recent test at that point.[39m
+
+[31m⎯⎯⎯⎯[39m[1m[41m Unhandled Rejection [49m[22m[31m⎯⎯⎯⎯⎯[39m
+[31m[1mError[22m: private bridge diagnostic never display[39m
+[36m [2m❯[22m Object.<anonymous> test/providers-action-recovery.test.tsx:[2m31:77[22m[39m
+    [90m 29|[39m   const provider=fixture();
+    [90m 30|[39m   const action=provider[testCase.method];
+    [90m 31|[39m   action.mockImplementationOnce(()=>{if(failure==='synchronous throw')…
+    [90m   |[39m                                                                             [31m^[39m
+    [90m 32|[39m   render(<Providers/>);await screen.findByText('Connected');
+    [90m 33|[39m   const field='field' in testCase?screen.getByLabelText<HTMLInputEleme…
+[90m [2m❯[22m Object.Mock [as codexLogin] node_modules/.pnpm/vitest@5.0.5_@types+node@24_84898e5f3bd356d86cffbe44dd5f6b99/node_modules/vitest/dist/chunks/spy.DDMXghXv.js:[2m353:40[22m[39m
+[90m [2m❯[22m act src/renderer/Providers.tsx:[2m118:23[22m[39m
+[90m [2m❯[22m onPress src/renderer/Providers.tsx:[2m244:265[22m[39m
+[90m [2m❯[22m handleClick src/renderer/primitives/Button.tsx:[2m65:5[22m[39m
+[90m [2m❯[22m executeDispatch node_modules/.pnpm/react-dom@19.3.1_react@19.3.1/node_modules/react-dom/cjs/react-dom-client.development.js:[2m20804:9[22m[39m
+[90m [2m❯[22m runWithFiberInDEV node_modules/.pnpm/react-dom@19.3.1_react@19.3.1/node_modules/react-dom/cjs/react-dom-client.development.js:[2m1048:13[22m[39m
+[90m [2m❯[22m processDispatchQueue node_modules/.pnpm/react-dom@19.3.1_react@19.3.1/node_modules/react-dom/cjs/react-dom-client.development.js:[2m20854:19[22m[39m
+[90m [2m❯[22m node_modules/.pnpm/react-dom@19.3.1_react@19.3.1/node_modules/react-dom/cjs/react-dom-client.development.js:[2m21423:9[22m[39m
+[90m [2m❯[22m batchedUpdates$1 node_modules/.pnpm/react-dom@19.3.1_react@19.3.1/node_modules/react-dom/cjs/react-dom-client.development.js:[2m3437:40[22m[39m
+
+[31mThis error originated in "[1mtest/providers-action-recovery.test.tsx[22m" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.[39m
+[31mThe last test to run before this error was "[1mOpenAI connect releases pending controls, protects input and allows a deliberate retry[22m". This means either:
+- the error was thrown while Vitest was running this test, or
+- the error was thrown after the test completed, and this was the most recent test at that point.[39m
+
+[31m⎯⎯⎯⎯[39m[1m[41m Unhandled Rejection [49m[22m[31m⎯⎯⎯⎯⎯[39m
+[31m[1mError[22m: private bridge diagnostic never display[39m
+[36m [2m❯[22m Object.<anonymous> test/providers-action-recovery.test.tsx:[2m31:77[22m[39m
+    [90m 29|[39m   const provider=fixture();
+    [90m 30|[39m   const action=provider[testCase.method];
+    [90m 31|[39m   action.mockImplementationOnce(()=>{if(failure==='synchronous throw')…
+    [90m   |[39m                                                                             [31m^[39m
+    [90m 32|[39m   render(<Providers/>);await screen.findByText('Connected');
+    [90m 33|[39m   const field='field' in testCase?screen.getByLabelText<HTMLInputEleme…
+[90m [2m❯[22m Object.Mock [as codexLogout] node_modules/.pnpm/vitest@5.0.5_@types+node@24_84898e5f3bd356d86cffbe44dd5f6b99/node_modules/vitest/dist/chunks/spy.DDMXghXv.js:[2m353:40[22m[39m
+[90m [2m❯[22m act src/renderer/Providers.tsx:[2m126:23[22m[39m
+[90m [2m❯[22m onPress src/renderer/Providers.tsx:[2m250:193[22m[39m
+[90m [2m❯[22m handleClick src/renderer/primitives/Button.tsx:[2m65:5[22m[39m
+[90m [2m❯[22m executeDispatch node_modules/.pnpm/react-dom@19.3.1_react@19.3.1/node_modules/react-dom/cjs/react-dom-client.development.js:[2m20804:9[22m[39m
+[90m [2m❯[22m runWithFiberInDEV node_modules/.pnpm/react-dom@19.3.1_react@19.3.1/node_modules/react-dom/cjs/react-dom-client.development.js:[2m1048:13[22m[39m
+[90m [2m❯[22m processDispatchQueue node_modules/.pnpm/react-dom@19.3.1_react@19.3.1/node_modules/react-dom/cjs/react-dom-client.development.js:[2m20854:19[22m[39m
+[90m [2m❯[22m node_modules/.pnpm/react-dom@19.3.1_react@19.3.1/node_modules/react-dom/cjs/react-dom-client.development.js:[2m21423:9[22m[39m
+[90m [2m❯[22m batchedUpdates$1 node_modules/.pnpm/react-dom@19.3.1_react@19.3.1/node_modules/react-dom/cjs/react-dom-client.development.js:[2m3437:40[22m[39m
+
+[31mThis error originated in "[1mtest/providers-action-recovery.test.tsx[22m" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.[39m
+[31mThe last test to run before this error was "[1mOpenAI disconnect releases pending controls, protects input and allows a deliberate retry[22m". This means either:
+- the error was thrown while Vitest was running this test, or
+- the error was thrown after the test completed, and this was the most recent test at that point.[39m
+[31m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m4 passed[39m[22m[90m (5)[39m
+[2m      Tests [22m [1m[31m5 failed[39m[22m[2m | [22m[1m[32m45 passed[39m[22m[90m (50)[39m
+[2m     Errors [22m [1m[31m5 errors[39m[22m
+[2m   Start at [22m 20:14:43
+[2m   Duration [22m 31.49s[2m (tests 45%, environment 41%, import 9%, transform 4%)[22m
+
+[2m    Isolate [22m [33m5 workers spawned[39m[2m · ~2.74s startup each (spawn + environment, per file)[22m
+[2m            [22m [2mat least ~10.95s faster with [22m[33misolate: false[39m[2m — reuses workers across files instead of one per file[22m
+

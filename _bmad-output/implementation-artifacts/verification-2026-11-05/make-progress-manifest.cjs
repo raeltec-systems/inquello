@@ -1,0 +1,21 @@
+const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto'),{execFileSync}=require('node:child_process');
+const root='D:/Projects/inquello',dir=__dirname;
+const jsonLines=s=>s.split(/\r?\n/).flatMap(l=>{try{return [JSON.parse(l)]}catch{return []}});
+const sha=file=>crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+const files=['desktop/src/main/identity/session.ts','desktop/src/main/policy/service.ts','desktop/src/main/tasks/service.ts','desktop/src/renderer/Shell/task-observation.ts','desktop/test/identity-session.test.ts','desktop/test/policy-units.test.ts','desktop/test/tasks-progress.test.ts','desktop/test/live-conversation.test.tsx'];
+const runs=[];
+for(const tag of ['progress-final-1','progress-final-2']){
+ const log=path.join(dir,'visual-smoke-docker-'+tag+'.log'),text=fs.readFileSync(log,'utf8'),events=jsonLines(text),result=events.at(-1);
+ if(result?.ok!==true||result.isolatedPhase!=='visual'||result.cleanupErrors?.length)throw Error('Final visual not confirmed: '+tag);
+ const phase=text.match(/Smoke logs: (.+)/)[1].trim()+'\\visual',stdout=path.join(phase,'smoke.stdout.log'),out=jsonLines(fs.readFileSync(stdout,'utf8')),visual=out.find(x=>x.event==='visual-conversation'),handshake=out.find(x=>x.event==='handshake');
+ if(!visual?.ok)throw Error('Visual assertions missing '+tag);
+ const state=JSON.parse(fs.readFileSync(path.join(phase,'synthetic-journey-state.json'),'utf8'));
+ if(state.calls!==4||state.bCalls!==1||state.totalCalls!==5||state.invalidCalls!==0||!state.heldCancelled||state.heldTimedOut||!state.contextMatches.every(Boolean))throw Error('Fixture state invalid '+tag);
+ const stat=fs.statSync(log);runs.push({tag,status:'passed',log,logStartedUtc:stat.birthtime.toISOString(),logFinishedUtc:stat.mtime.toISOString(),logElapsedMs:Math.round(stat.mtimeMs-stat.birthtimeMs),phase,stdout,fixtureState:state,forkTreeHash:handshake?.schema?.forkTreeHash,captures:visual.captures});
+}
+const focused=path.join(dir,'progress-repair-focused-final.log'),test=fs.readFileSync(focused,'utf8').replace(/\x1b\[[0-9;]*m/g,'');
+if(!/Test Files\s+5 passed/.test(test)||!/Tests\s+214 passed/.test(test))throw Error('Final focused result does not match expected214');
+const diagnosticFiles=['engine/codex-rs/app-server/src/request_processors/inquello_tasks.rs','engine/codex-rs/app-server/src/request_processors/thread_processor.rs','engine/codex-rs/app-server/src/request_processors/thread_lifecycle.rs','engine/codex-rs/inquello-adapters/src/tasks.rs','desktop/scripts/run-seeded-smoke.cjs','desktop/src/main/smoke-probe.ts'];
+execFileSync('git',['diff','--exit-code','--',...diagnosticFiles],{cwd:root,stdio:'pipe'});execFileSync('git',['diff','--check','--',...files],{cwd:root,stdio:'pipe'});
+const manifest={createdUtc:new Date().toISOString(),head:execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim(),status:'repair verified by focused tests and repeated Windows synthetic visual gates; full acceptance remains open',files:files.map(file=>({file,sha256:sha(path.join(root,file))})),diff:path.join(dir,'progress-repair-final.diff'),diffSha256:sha(path.join(dir,'progress-repair-final.diff')),diagnosticsRemoved:true,diagnosticOnlyFilesUnchanged:diagnosticFiles,focused:{log:focused,files:5,passed:214,failed:0,skipped:0},fixtureBuild:path.join(dir,'fixture-build-progress-final.log'),desktopBuild:path.join(dir,'desktop-build-progress-final.log'),visualRuns:runs,openGates:['Full desktop suite and full seeded smoke to be coordinated after independent known Windows issues','Default engine/topology final-source build fingerprint if required by integrated final verification','Real-provider and other conditional eligibility gates not run or promoted'],noCommits:true,noPaidInference:true};
+fs.writeFileSync(path.join(dir,'progress-repair-manifest.json'),JSON.stringify(manifest,null,2));console.log(JSON.stringify({manifest:path.join(dir,'progress-repair-manifest.json'),runs:runs.map(r=>({tag:r.tag,phase:r.phase,forkTreeHash:r.forkTreeHash,captures:r.captures.filter(c=>/^(03-followup|04-interrupted|06-resumed)/.test(c.name))}))},null,2));

@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "sourceSha256": "6689a8d8b1f537ad193a8a40d6e878d0399cdd3a14e53c2adef59a23f6087c87",
+  "archive": "D:\\Projects\\inquello\\.tmp\\wsl-source-6689a8d8b1f537ad193a8a40d6e878d0399cdd3a14e53c2adef59a23f6087c87.tar",
+  "head": "c79147358cfc10dc5724ff115c64ceda141d5f4d",
+  "changedFile": "engine/codex-rs/rmcp-client/src/oauth_callback_transport.rs",
+  "changedFileSha256": "be1b1a680dba2a905b7301ffbeb56dac055b6cb840f6b3db7e548d448da6dde8",
+  "patchSha256": "e353ecb8af428d4e5eaa5866c090eb0de6b4b5c40502ffb3a9483854a2cb1064"
+}

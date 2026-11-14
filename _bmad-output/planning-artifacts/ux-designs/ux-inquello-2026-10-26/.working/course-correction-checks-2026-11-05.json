@@ -1,0 +1,10 @@
+{
+  "status": "pass",
+  "expected_PRD_journeys": 10,
+  "actual_named_complete_flows": 10,
+  "PRD_FR_count": 45,
+  "tokens_unchanged": true,
+  "changed_imports": [],
+  "issues": [],
+  "limits": "Source-derived document checks only; no product test, UI rendering or runtime acceptance. Legacy checker remains unchanged at 22/24 solely due old fixed counts."
+}

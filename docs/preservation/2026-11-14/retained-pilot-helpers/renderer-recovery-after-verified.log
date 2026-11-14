@@ -1,0 +1,12 @@
+
+ RUN  v5.0.5 D:/Projects/inquello/desktop
+
+
+ Test Files  7 passed (7)
+      Tests  90 passed (90)
+   Start at  21:15:44
+   Duration  21.90s (tests 48%, environment 30%, import 19%, transform 2%)
+
+    Isolate  7 workers spawned · ~1.05s startup each (spawn + environment, per file)
+             at least ~6.27s faster with isolate: false — reuses workers across files instead of one per file
+

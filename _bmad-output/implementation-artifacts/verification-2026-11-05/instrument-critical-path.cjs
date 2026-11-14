@@ -1,0 +1,19 @@
+const fs=require('node:fs'),root='D:/Projects/inquello/';
+function edit(file,fn){let s=fs.readFileSync(root+file,'utf8').replace(/\r\n/g,'\n');function sub(a,b,n=1){if(s.split(a).length!==n+1)throw Error(file+' nonunique '+a);s=s.split(a).join(b)}fn(sub);fs.writeFileSync(root+file,s)}
+for(const file of ['engine/codex-rs/app-server/src/request_processors/inquello_tasks.rs','engine/codex-rs/app-server/src/request_processors/thread_processor.rs'])edit(file,sub=>{const prefix=file.endsWith('inquello_tasks.rs')?'lifecycle':'reopen';sub(`eprintln!("[inquello] ${prefix}-timing {} elapsed_ms={}", stage, timing_start.elapsed().as_millis());`,`eprintln!("[inquello] ${prefix}-timing {} elapsed_ms={} epoch_ms={}", stage, timing_start.elapsed().as_millis(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis());`,2)});
+edit('engine/codex-rs/app-server/src/request_processors/thread_lifecycle.rs',sub=>sub('eprintln!("[inquello] listener-timing {:?} elapsed_ms={}", event_kind, event_timing_start.elapsed().as_millis());','eprintln!("[inquello] listener-timing {:?} elapsed_ms={} epoch_ms={}", event_kind, event_timing_start.elapsed().as_millis(), std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis());'));
+edit('desktop/src/main/tasks/service.ts',sub=>{
+sub('  const execute=async():Promise<TasksResult<LifecycleReceipt>>=>{try{','  const traceLifecycle=(stage:string)=>{if(this.options.authorityDiagnostic)console.error(`[inquello] admission-timing ${stage} epoch_ms=${Date.now()} monotonic_ms=${Math.round(performance.now())}`);};traceLifecycle("input");\n  const execute=async():Promise<TasksResult<LifecycleReceipt>>=>{try{');
+sub('   const before=snapshot.value;entry.binding=before;','   traceLifecycle("snapshot");const before=snapshot.value;entry.binding=before;');
+sub('   const raw=await this.options.runtime.request(`inquello/tasks/${kind}`','   traceLifecycle("native-request");const raw=await this.options.runtime.request(`inquello/tasks/${kind}`');
+sub('   return{ok:true,value:await this.lifecycleReceipt(entry,raw,policy)};','   traceLifecycle("native-response");return{ok:true,value:await this.lifecycleReceipt(entry,raw,policy)};');
+});
+edit('desktop/scripts/run-seeded-smoke.cjs',sub=>{
+sub("      if(!b)contextMatches.push(valid);body='';record();","      if(!b)contextMatches.push(valid);body='';record();console.log(JSON.stringify({event:'fixture-timing',stage:'received',conversation:b?'B':'A',index,epoch_ms:Date.now()}));");
+sub('      if(b||index!==3){response.end(stream(index,true,b));return;}','      if(b||index!==3){response.end(stream(index,true,b));console.log(JSON.stringify({event:"fixture-timing",stage:"responded",conversation:b?"B":"A",index,epoch_ms:Date.now()}));return;}');
+});
+edit('desktop/src/main/smoke-probe.ts',sub=>{
+sub("    stage='visual-ui-completed-followup';","    stage='visual-ui-completed-followup';console.log(JSON.stringify({event:'critical-path',stage:'before-second-send',epoch_ms:Date.now()}));");
+sub("    if(!(await sendFollowup(fixture.requests[1]!))||!(await waitAnswer(taskId,fixture.answers[1]!)))throw new SmokeProbeFailure('Completed conversation follow-up did not render');","    const timingSent=await sendFollowup(fixture.requests[1]!);console.log(JSON.stringify({event:'critical-path',stage:'after-second-send',epoch_ms:Date.now()}));const timingVisible=timingSent&&await waitAnswer(taskId,fixture.answers[1]!);console.log(JSON.stringify({event:'critical-path',stage:'second-answer-wait-ended',visible:timingVisible,epoch_ms:Date.now()}));if(!timingVisible)throw new SmokeProbeFailure('Completed conversation follow-up did not render');");
+});
+console.log('Added one critical-path clock alignment. Assertions and timeouts unchanged.');

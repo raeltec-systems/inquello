@@ -1,0 +1,33 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.5 [39m[90mD:/Projects/inquello/desktop[39m
+
+2026-11-05T19:57:08.906468Z  INFO inquello_service::test_provider: synthetic OIDC provider listening issuer="https://127.0.0.1:54708"
+2026-11-05T19:57:09.257951Z  INFO inquello_service::server: inquello service listening local_addr=127.0.0.1:54711 https=true
+2026-11-05T19:57:09.367028Z  INFO sqlx::postgres::notice: relation "_sqlx_migrations" already exists, skipping
+2026-11-05T19:57:09.416872Z  INFO inquello_service::admin: workspace created by operator workspace_id=85184cf4-0027-473a-86ad-a0949f52b718 receipt_id=1e15c1f9-5f52-45ca-9319-259a93707798
+2026-11-05T19:57:11.432115Z  INFO inquello_service::login: login transaction created login_transaction_id=e9d23be0-7a6f-492f-b565-a293a6c1b3cf
+2026-11-05T19:57:11.440949Z  INFO inquello_service::test_provider: authorization code issued for the synthetic subject
+2026-11-05T19:57:11.455358Z  INFO inquello_service::test_provider: ID token issued for the synthetic subject
+2026-11-05T19:57:11.509412Z  INFO inquello_service::login: session created principal_id=38468625-90cc-4df3-8ac2-fcd738cd752a session_id=8f408dc9-d2a6-4480-af22-e5bc20eab843
+2026-11-05T19:57:12.356343Z  INFO inquello_service::workspaces: invite accepted principal_id=38468625-90cc-4df3-8ac2-fcd738cd752a workspace_id=85184cf4-0027-473a-86ad-a0949f52b718
+2026-11-05T19:57:12.424648Z  INFO inquello_service::error: request refused kind=Denied reason="not_a_member"
+2026-11-05T19:57:12.489883Z  INFO inquello_dev_topology: dev topology stopping
+ [32m✓[39m test/tool-bounds-integration.test.ts [2m([22m[2m7 tests[22m[2m | [22m[33m6 skipped[39m[2m)[22m[33m 4077[2mms[22m[39m
+2026-11-05T19:57:13.432668Z  INFO inquello_service::test_provider: synthetic OIDC provider listening issuer="https://127.0.0.1:54729"
+2026-11-05T19:57:13.800338Z  INFO inquello_service::server: inquello service listening local_addr=127.0.0.1:54732 https=true
+2026-11-05T19:57:13.910055Z  INFO sqlx::postgres::notice: relation "_sqlx_migrations" already exists, skipping
+2026-11-05T19:57:13.965928Z  INFO inquello_service::admin: workspace created by operator workspace_id=97452817-c3ea-4dfc-be6c-a889b6076e2b receipt_id=452a8e74-8f30-495c-ba37-eea446498b31
+2026-11-05T19:57:16.519919Z  INFO inquello_service::login: login transaction created login_transaction_id=0cf305d4-0ef1-49d5-a9e1-c83c5d590e96
+2026-11-05T19:57:16.529031Z  INFO inquello_service::test_provider: authorization code issued for the synthetic subject
+2026-11-05T19:57:16.542918Z  INFO inquello_service::test_provider: ID token issued for the synthetic subject
+2026-11-05T19:57:16.608939Z  INFO inquello_service::login: session created principal_id=119ba775-ef6c-4eef-820d-8e466ab03ec9 session_id=f56eaae6-5f8d-4fbb-9d59-bfc448eb2eea
+2026-11-05T19:57:17.418268Z  INFO inquello_service::workspaces: invite accepted principal_id=119ba775-ef6c-4eef-820d-8e466ab03ec9 workspace_id=97452817-c3ea-4dfc-be6c-a889b6076e2b
+2026-11-05T19:57:17.487503Z  INFO inquello_service::error: request refused kind=Denied reason="not_a_member"
+2026-11-05T19:57:17.552483Z  INFO inquello_dev_topology: dev topology stopping
+ [32m✓[39m test/permissions-integration.test.ts [2m([22m[2m7 tests[22m[2m | [22m[33m6 skipped[39m[2m)[22m[33m 4626[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m2 passed[39m[22m[90m (2)[39m
+[2m      Tests [22m [1m[32m2 passed[39m[22m[2m | [22m[33m12 skipped[39m[90m (14)[39m
+[2m   Start at [22m 19:57:07
+[2m   Duration [22m 9.84s[2m (tests 93%, import 3%, transform 3%)[22m
+

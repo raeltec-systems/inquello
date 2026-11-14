@@ -1,0 +1,171 @@
+[
+  {
+    "ts": 1793909818,
+    "ns": 919884000,
+    "level": "TRACE",
+    "target": "codex_app_server::message_processor",
+    "request": "inquello/task/create",
+    "requestId": "Integer(35)"
+  },
+  {
+    "ts": 1793909818,
+    "ns": 950583300,
+    "level": "INFO",
+    "target": "codex_app_server::outgoing_message",
+    "response": "InquelloTaskAuthority"
+  },
+  {
+    "ts": 1793909819,
+    "ns": 7988800,
+    "level": "INFO",
+    "target": "codex_app_server::outgoing_message",
+    "response": "InquelloTaskAuthority"
+  },
+  {
+    "ts": 1793909819,
+    "ns": 62993400,
+    "level": "TRACE",
+    "target": "codex_app_server::message_processor",
+    "request": "inquello/broadMode/read",
+    "requestId": "Integer(36)"
+  },
+  {
+    "ts": 1793909819,
+    "ns": 102354300,
+    "level": "INFO",
+    "target": "codex_app_server::outgoing_message",
+    "response": "InquelloTaskAuthority"
+  },
+  {
+    "ts": 1793909819,
+    "ns": 148064800,
+    "level": "INFO",
+    "target": "codex_app_server::outgoing_message",
+    "response": "InquelloTaskAuthority"
+  },
+  {
+    "ts": 1793909820,
+    "ns": 304672800,
+    "level": "TRACE",
+    "target": "codex_app_server::message_processor",
+    "request": "inquello/policy/effective",
+    "requestId": "Integer(37)"
+  },
+  {
+    "ts": 1793909820,
+    "ns": 360341200,
+    "level": "INFO",
+    "target": "codex_app_server::outgoing_message",
+    "response": "InquelloTaskAuthority"
+  },
+  {
+    "ts": 1793909820,
+    "ns": 451391600,
+    "level": "INFO",
+    "target": "codex_app_server::outgoing_message",
+    "response": "InquelloTaskAuthority"
+  },
+  {
+    "ts": 1793909831,
+    "ns": 832649500,
+    "level": "TRACE",
+    "target": "codex_app_server::message_processor",
+    "request": "inquello/broadMode/read",
+    "requestId": "Integer(38)"
+  },
+  {
+    "ts": 1793909831,
+    "ns": 876498600,
+    "level": "INFO",
+    "target": "codex_app_server::outgoing_message",
+    "response": "InquelloTaskAuthority"
+  },
+  {
+    "ts": 1793909831,
+    "ns": 943907700,
+    "level": "INFO",
+    "target": "codex_app_server::outgoing_message",
+    "response": "InquelloTaskAuthority"
+  },
+  {
+    "ts": 1793909833,
+    "ns": 94695000,
+    "level": "TRACE",
+    "target": "codex_app_server::message_processor",
+    "request": "inquello/policy/effective",
+    "requestId": "Integer(39)"
+  },
+  {
+    "ts": 1793909833,
+    "ns": 130521800,
+    "level": "INFO",
+    "target": "codex_app_server::outgoing_message",
+    "response": "InquelloTaskAuthority"
+  },
+  {
+    "ts": 1793909833,
+    "ns": 203454900,
+    "level": "INFO",
+    "target": "codex_app_server::outgoing_message",
+    "response": "InquelloTaskAuthority"
+  },
+  {
+    "ts": 1793909833,
+    "ns": 352132900,
+    "level": "TRACE",
+    "target": "codex_app_server::message_processor",
+    "request": "inquello/tools/exec",
+    "requestId": "Integer(40)"
+  },
+  {
+    "ts": 1793909833,
+    "ns": 389485700,
+    "level": "INFO",
+    "target": "codex_app_server::outgoing_message",
+    "response": "InquelloTaskAuthority"
+  },
+  {
+    "ts": 1793909837,
+    "ns": 199935600,
+    "level": "INFO",
+    "target": "codex_app_server::outgoing_message",
+    "response": "InquelloTaskAuthority"
+  },
+  {
+    "ts": 1793909840,
+    "ns": 608604700,
+    "level": "TRACE",
+    "target": "codex_app_server::message_processor",
+    "request": "inquello/tools/exec",
+    "requestId": "Integer(41)"
+  },
+  {
+    "ts": 1793909840,
+    "ns": 640552100,
+    "level": "INFO",
+    "target": "codex_app_server::outgoing_message",
+    "response": "InquelloTaskAuthority"
+  },
+  {
+    "ts": 1793909844,
+    "ns": 522682500,
+    "level": "TRACE",
+    "target": "codex_app_server::message_processor",
+    "request": "inquello/permissions/request",
+    "requestId": "Integer(42)"
+  },
+  {
+    "ts": 1793909844,
+    "ns": 557063900,
+    "level": "INFO",
+    "target": "codex_app_server::outgoing_message",
+    "response": "InquelloTaskAuthority"
+  },
+  {
+    "ts": 1793909844,
+    "ns": 636302500,
+    "level": "INFO",
+    "target": "codex_app_server::outgoing_message",
+    "response": "InquelloTaskAuthority"
+  }
+]

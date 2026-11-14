@@ -1,0 +1,25 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.5 [39m[90mD:/Projects/inquello/desktop[39m
+
+2026-11-06T17:09:47.468240Z  INFO inquello_service::test_provider: synthetic OIDC provider listening issuer="https://127.0.0.1:60242"
+2026-11-06T17:09:47.765493Z  INFO inquello_service::server: inquello service listening local_addr=127.0.0.1:60245 https=true
+2026-11-06T17:09:47.869645Z  INFO sqlx::postgres::notice: relation "_sqlx_migrations" already exists, skipping
+2026-11-06T17:09:47.896032Z  INFO inquello_service::admin: workspace created by operator workspace_id=d7767813-7dc3-430c-8d27-cdcbbd2752dc receipt_id=b333dd47-50c1-4632-9108-ea0a56731430
+2026-11-06T17:09:49.511095Z  INFO inquello_service::login: login transaction created login_transaction_id=fa70c6ad-f84d-4c62-8aec-dc519604d151
+2026-11-06T17:09:49.518104Z  INFO inquello_service::test_provider: authorization code issued for the synthetic subject
+2026-11-06T17:09:49.529125Z  INFO inquello_service::test_provider: ID token issued for the synthetic subject
+2026-11-06T17:09:49.568822Z  INFO inquello_service::login: session created principal_id=144b4281-891e-4ef7-a106-cde834971a73 session_id=4ab30d2b-11fe-43e4-85b3-eea60d6bf271
+2026-11-06T17:09:50.179708Z  INFO inquello_service::workspaces: invite accepted principal_id=144b4281-891e-4ef7-a106-cde834971a73 workspace_id=d7767813-7dc3-430c-8d27-cdcbbd2752dc
+2026-11-06T17:09:57.751852Z  INFO inquello_dev_topology: dev topology stopping
+ [32m✓[39m test/capabilities-integration.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 12126[2mms[22m[39m
+   [32m✓[39m capabilities against the real runtime and seeded Workspace [2m(4)[22m
+     [33m[2m✓[22m[39m lists the actual runtime inventory and refuses plugin install by policy[33m 829[2mms[22m[39m
+     [33m[2m✓[22m[39m adds a fixture HTTP MCP, disables/enables it and removes it through runtime config[33m 1821[2mms[22m[39m
+     [33m[2m✓[22m[39m preserves managed MCP state across restart while enforcing owned credential settings[33m 2919[2mms[22m[39m
+     [33m[2m✓[22m[39m provider sign-in/out changes no Workspace, membership, Engagement, review or policy[33m 1961[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m1 passed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[32m4 passed[39m[22m[90m (4)[39m
+[2m   Start at [22m 17:09:44
+[2m   Duration [22m 13.03s[2m (tests 96%, transform 3%, import 1%)[22m
+

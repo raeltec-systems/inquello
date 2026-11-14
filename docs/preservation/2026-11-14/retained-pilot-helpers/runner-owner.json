@@ -1,0 +1,10 @@
+{
+  "reconciledAfterWrapperModuleError": true,
+  "startedUtc": "2026-11-09T20:44:45.6957180Z",
+  "head": "daf2dbae7ff1bc229c0bbc012cb9bc89cb09a7e3",
+  "pid": 12816,
+  "runId": "9f9d996b-255c-47f8-9fa2-4fc004cfab03",
+  "manifestSha256": "71bd4edb2063a7390d75f6acd1ac5b9893916c773af3f7b08ecc6911f61da66f",
+  "reconciledUtc": "2026-11-09T20:45:48.3809827Z",
+  "wrapperPid": 25240
+}

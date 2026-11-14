@@ -1,0 +1,25 @@
+Smoke logs: D:\Inquello\tmp\inquello-seeded-smoke-S0eYPD
+2026-11-05T16:59:53.634387Z  INFO inquello_service::test_provider: synthetic OIDC provider listening issuer="https://127.0.0.1:63797"
+2026-11-05T16:59:54.020447Z  INFO inquello_service::server: inquello service listening local_addr=127.0.0.1:63800 https=true
+2026-11-05T16:59:54.161259Z  INFO sqlx::postgres::notice: relation "_sqlx_migrations" already exists, skipping
+2026-11-05T16:59:54.216169Z  INFO inquello_service::admin: workspace created by operator workspace_id=0d6f435b-4894-438e-a53d-9dd27605bd22 receipt_id=9101ea1b-4a77-4c93-8d8c-ac37a8f06e32
+2026-11-05T17:00:04.701982Z  INFO inquello_service::login: login transaction created login_transaction_id=95f86bf4-bbdb-4575-b2ce-5e756a00b6eb
+2026-11-05T17:00:04.712641Z  INFO inquello_service::test_provider: authorization code issued for the synthetic subject
+2026-11-05T17:00:04.726757Z  INFO inquello_service::test_provider: ID token issued for the synthetic subject
+2026-11-05T17:00:04.781835Z  INFO inquello_service::login: session created principal_id=bad63e02-3bf0-4249-98ed-24999e81815e session_id=3aafafa8-9d62-47b2-81e6-79d348b0502b
+2026-11-05T17:00:05.851817Z  INFO inquello_service::workspaces: invite accepted principal_id=bad63e02-3bf0-4249-98ed-24999e81815e workspace_id=0d6f435b-4894-438e-a53d-9dd27605bd22
+{"event":"fixture-timing","stage":"received","conversation":"A","index":1,"epoch_ms":1793898034096}
+{"event":"fixture-timing","stage":"responded","conversation":"A","index":1,"epoch_ms":1793898034099}
+{"event":"fixture-timing","stage":"received","conversation":"B","index":0,"epoch_ms":1793898054104}
+{"event":"fixture-timing","stage":"responded","conversation":"B","index":0,"epoch_ms":1793898054105}
+{"event":"fixture-timing","stage":"received","conversation":"A","index":2,"epoch_ms":1793898084941}
+{"event":"fixture-timing","stage":"responded","conversation":"A","index":2,"epoch_ms":1793898084941}
+{"event":"fixture-timing","stage":"received","conversation":"A","index":3,"epoch_ms":1793898105629}
+{"event":"fixture-timing","stage":"received","conversation":"A","index":4,"epoch_ms":1793898133966}
+{"event":"fixture-timing","stage":"responded","conversation":"A","index":4,"epoch_ms":1793898133966}
+2026-11-05T17:02:24.088164Z  INFO inquello_service::sessions: refresh family revoked principal_id=bad63e02-3bf0-4249-98ed-24999e81815e family_id=843206a2-5601-4679-9cfd-9ad3d0095087 reason="logout"
+2026-11-05T17:02:24.115289Z  INFO inquello_service::commands: command applied principal_id=bad63e02-3bf0-4249-98ed-24999e81815e operation_id=logout-82a2e9ae-9236-412d-866c-6a3460f06a5c receipt_id=a84457c8-cf7b-4dd3-a202-09d1e294c07a
+{"phase":"visual","exitCode":0,"required":1,"missingOrFailed":[],"zeroFixtureCalls":true,"localSyntheticCalls":5,"invalidFixtureCalls":0}
+2026-11-05T17:02:24.423436Z  INFO inquello_dev_topology: dev topology stopping
+{"phase":"visual","phaseResult":{"ok":true,"missing":[],"events":["visual-reader-jump","visual-conversation"],"cleanupErrors":[]}}
+{"ok":true,"isolatedPhase":"visual","required":1,"missingOrFailed":[],"cleanupErrors":[]}

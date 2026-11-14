@@ -1,0 +1,22 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.5 [39m[90mD:/Projects/inquello/desktop[39m
+
+2026-11-05T19:58:05.092947Z  INFO inquello_service::test_provider: synthetic OIDC provider listening issuer="https://127.0.0.1:62954"
+2026-11-05T19:58:05.436635Z  INFO inquello_service::server: inquello service listening local_addr=127.0.0.1:62957 https=true
+2026-11-05T19:58:05.539758Z  INFO sqlx::postgres::notice: relation "_sqlx_migrations" already exists, skipping
+2026-11-05T19:58:05.591556Z  INFO inquello_service::admin: workspace created by operator workspace_id=11c3aeed-3619-48d2-9e59-239ff2c88e7f receipt_id=90e2b845-656f-4e69-8583-d2e600124ca0
+2026-11-05T19:58:07.549712Z  INFO inquello_service::login: login transaction created login_transaction_id=5515c1ad-e1bc-4fab-95e2-388f5ff66532
+2026-11-05T19:58:07.558976Z  INFO inquello_service::test_provider: authorization code issued for the synthetic subject
+2026-11-05T19:58:07.574910Z  INFO inquello_service::test_provider: ID token issued for the synthetic subject
+2026-11-05T19:58:07.643341Z  INFO inquello_service::login: session created principal_id=712aeece-73df-45e0-8847-16dba87d0df8 session_id=a8d0fd41-974f-40a5-b440-9a38fc5b85c4
+2026-11-05T19:58:08.476505Z  INFO inquello_service::workspaces: invite accepted principal_id=712aeece-73df-45e0-8847-16dba87d0df8 workspace_id=11c3aeed-3619-48d2-9e59-239ff2c88e7f
+2026-11-05T19:58:17.843837Z  INFO inquello_dev_topology: dev topology stopping
+ [32m✓[39m test/tool-bounds-integration.test.ts [2m([22m[2m7 tests[22m[2m | [22m[33m6 skipped[39m[2m)[22m[33m 23098[2mms[22m[39m
+   [32m✓[39m bounded tool reads, writes and network against the real runtime and local sandbox [2m(7)[22m
+     [33m[2m✓[22m[39m states the true reach of a permitted Full access mode and runs it without the sandbox[33m 9300[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m1 passed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[32m1 passed[39m[22m[2m | [22m[33m6 skipped[39m[90m (7)[39m
+[2m   Start at [22m 19:58:04
+[2m   Duration [22m 23.80s[2m (tests 98%, transform 1%, import 1%)[22m
+

@@ -4,7 +4,7 @@ description: User-selected Inquello desktop visual system, with explicit source 
   applications.
 status: final
 created: '2026-10-26'
-updated: '2026-10-27'
+updated: '2026-11-05'
 sources:
 - ../../prds/prd-inquello-2026-10-26/prd.md
 - ../../prds/prd-inquello-2026-10-26/addendum.md
@@ -403,6 +403,8 @@ components:
 
 Inquello uses the supplied **precise studio** visual system: white work surfaces, a pale cool sidebar, dark ink typography and sparse colour with a stated purpose. Evidence and editable artifacts carry the emphasis. The interface reads as an audit workbench: compact, quiet and inspectable, with technical detail available without making the ordinary workflow depend on code literacy.
 
+**Language direction confirmed 2026-11-05:** The agent and interface use accessible business and audit language across financial, operational and IT work. Apply [EXPERIENCE Voice and Tone](EXPERIENCE.md#voice-and-tone) and [PRD §3.1](../../prds/prd-inquello-2026-10-26/prd.md#31-user-facing-language-and-terminology), preserving Standards-defined meaning while allowing familiar organisation-specific terms. Technical diagnostics remain available on demand; they are not the default review surface.
+
 The user selected the [supplied package](imports/inquello-design-system/readme.md), superseding earlier exploratory branding for this UX run. Its desktop vocabulary is inherited; React source in the package is an implementation reference, **not a selected production framework**. The [PRD](../../prds/prd-inquello-2026-10-26/prd.md) continues to govern full V1 scope, record authority and pending gates. The package's four prototype screens do not reduce the multi-surface product to four screens. This document owns appearance and EXPERIENCE owns behaviour; the [EXPERIENCE Foundation](EXPERIENCE.md#foundation) defines their shared precedence over imported references.
 
 Selected foundations and proposed applications are distinct. The palette, fonts, identity assets, geometry and named components come from the supplied source. **[ASSUMPTION AS-UX4] [PROPOSED AX]** The component foreground/boundary applications specified below improve contrast using existing source colours; they are reviewable adaptations, not claims that the user selected every detail or that the imported code already implements them. **[ASSUMPTION AS-UX1]** Surfaces beyond the imported four screens reuse these compositions and primitives; their precise arrangements require downstream UX work.
@@ -541,6 +543,10 @@ The following **18 primitives and 10 source compositions** are the exact shared 
 [Component source files](imports/IMPORT-MANIFEST.md#component-jsx-and-icon-path-source--implementation-references-19), [API declarations](imports/IMPORT-MANIFEST.md#component-typescript-declarations--api-and-state-references-18) and [prompt examples](imports/IMPORT-MANIFEST.md#component-prompt-examples--untrusted-descriptive-source-data-18) preserve the complete source contracts and local literal values. [Five component cards plus preview loader](imports/IMPORT-MANIFEST.md#component-html-cards-and-loader--executable-preview-references-6) and the [workspace kit](imports/IMPORT-MANIFEST.md#workspace-kit--scenario-and-layout-implementation-references-8) are executable preview references, not production components or proof of interaction behavior. They were inspected without executing the loader, JSX or remote CDN scripts.
 
 All [40 icon assets](imports/IMPORT-MANIFEST.md#icon-svg-assets--directly-reusable-visual-assets-40) and their inline path source are retained transitively. No decorative illustration or alternate icon family is introduced. Complete imported source roles and integrity are in the manifest; [.working/token-contract.json](.working/token-contract.json) mirrors the machine-readable token paths for the peer spine.
+
+### Lifecycle application of existing components
+
+Use existing Tabs, StatusChip, JudgmentTag, FileChip, DiffLine and review/automation compositions for sourced organisational context, proposed/changed/externally approved coverage plans, programme revisions and action follow-up. Always show actual meaning, source/version and human authority with text; do not invent colours, token values, component APIs or a new dashboard. Management-reported completion, reviewed implementation evidence and authorized risk acceptance must not share an ambiguous success label. Preserve approved collapsed activity with neutral end-of-turn presentation; a completed turn is not an accepted audit result. These additional arrangements are spine-only until practitioner walkthrough and rendered accessibility checks; imported references remain unchanged.
 
 ## Do's and Don'ts
 

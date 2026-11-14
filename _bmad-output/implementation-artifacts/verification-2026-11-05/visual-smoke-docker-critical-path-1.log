@@ -1,0 +1,22 @@
+Smoke logs: D:\Inquello\tmp\inquello-seeded-smoke-yEag7U
+2026-11-05T16:38:28.672761Z  INFO inquello_service::test_provider: synthetic OIDC provider listening issuer="https://127.0.0.1:57791"
+2026-11-05T16:38:28.989410Z  INFO inquello_service::server: inquello service listening local_addr=127.0.0.1:57794 https=true
+2026-11-05T16:38:29.098519Z  INFO sqlx::postgres::notice: relation "_sqlx_migrations" already exists, skipping
+2026-11-05T16:38:29.134896Z  INFO inquello_service::admin: workspace created by operator workspace_id=51ab5df9-01e9-40e3-9bf6-f5d835cc5452 receipt_id=7791f17e-5d29-4a1a-b2a5-a3231d8d98aa
+2026-11-05T16:38:45.884648Z  INFO inquello_service::login: login transaction created login_transaction_id=c549abdf-37b8-4120-ba41-d6a576a6c342
+2026-11-05T16:38:45.896181Z  INFO inquello_service::test_provider: authorization code issued for the synthetic subject
+2026-11-05T16:38:45.916354Z  INFO inquello_service::test_provider: ID token issued for the synthetic subject
+2026-11-05T16:38:45.984214Z  INFO inquello_service::login: session created principal_id=8b567a53-468d-479d-a834-3565938bba78 session_id=a9fea42d-8423-430c-8f81-8f2321bc5ee5
+2026-11-05T16:38:47.064978Z  INFO inquello_service::workspaces: invite accepted principal_id=8b567a53-468d-479d-a834-3565938bba78 workspace_id=51ab5df9-01e9-40e3-9bf6-f5d835cc5452
+{"event":"fixture-timing","stage":"received","conversation":"A","index":1,"epoch_ms":1793896752785}
+{"event":"fixture-timing","stage":"responded","conversation":"A","index":1,"epoch_ms":1793896752788}
+{"event":"fixture-timing","stage":"received","conversation":"B","index":0,"epoch_ms":1793896777693}
+{"event":"fixture-timing","stage":"responded","conversation":"B","index":0,"epoch_ms":1793896777694}
+{"event":"fixture-timing","stage":"received","conversation":"A","index":2,"epoch_ms":1793896813606}
+{"event":"fixture-timing","stage":"responded","conversation":"A","index":2,"epoch_ms":1793896813606}
+2026-11-05T16:40:16.970676Z  INFO inquello_service::sessions: refresh family revoked principal_id=8b567a53-468d-479d-a834-3565938bba78 family_id=e273d104-36c7-4116-969a-0fda2b361914 reason="logout"
+2026-11-05T16:40:16.985719Z  INFO inquello_service::commands: command applied principal_id=8b567a53-468d-479d-a834-3565938bba78 operation_id=logout-25b9905b-35e6-41be-8f47-ba7ef7fed7ff receipt_id=eb91b96a-ff68-4bae-9243-bccd81e24e42
+{"phase":"visual","exitCode":1,"required":1,"missingOrFailed":["visual-conversation"],"zeroFixtureCalls":true,"localSyntheticCalls":3,"invalidFixtureCalls":0}
+2026-11-05T16:40:17.252497Z  INFO inquello_dev_topology: dev topology stopping
+{"phase":"visual","phaseResult":{"ok":false,"missing":["visual-conversation"],"events":[],"cleanupErrors":[]}}
+{"ok":false,"isolatedPhase":"visual","required":1,"missingOrFailed":["visual-conversation"],"cleanupErrors":[]}

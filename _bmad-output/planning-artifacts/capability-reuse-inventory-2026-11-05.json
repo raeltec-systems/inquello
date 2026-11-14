@@ -1,0 +1,1540 @@
+{
+  "date": "2026-11-05",
+  "source_head": "c407483170e93ad9bea0f2d1c36e9d32693b0c44",
+  "status": "planning inventory; bounded source inspection, not feature acceptance",
+  "source_catalog": "engine/codex-rs/inquello-domain/register/inventory-map.json",
+  "catalog_rows": 99,
+  "extra_routes": 1,
+  "rows": [
+    {
+      "id": "C01",
+      "title": "Codex in the ChatGPT desktop app",
+      "inherited": "Inquello Electron shell plus inherited runtime",
+      "integration": "Task UI/native path traced",
+      "next_work": "Qualify current clients and audit inspection, retain existing shell",
+      "external_dependency": "Separate OpenAI desktop distribution is not automatically included",
+      "evidence": "D; P",
+      "story_ids": [
+        "1.16",
+        "1.17",
+        "1.25",
+        "2.8",
+        "2.9",
+        "3.4"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C02",
+      "title": "Projects, chats, and navigation",
+      "inherited": "Not separately source-audited in this pass; catalog commitment retained",
+      "integration": "Inquello invocation and acceptance not independently established",
+      "next_work": "Inspect inherited path, then expose/adapt and qualify; do not assume a rebuild",
+      "external_dependency": "Determine exact dependency before enablement",
+      "evidence": "Catalog only",
+      "story_ids": [
+        "1.14",
+        "1.25",
+        "1.30",
+        "2.8"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C03",
+      "title": "Codex CLI",
+      "inherited": "CLI dispatch and native exec present",
+      "integration": "Standalone CLI present; Inquello secondary-client authority unqualified",
+      "next_work": "Expose/adapt CLI to bound Inquello context",
+      "external_dependency": "Auth/model route must be eligible",
+      "evidence": "I",
+      "story_ids": [
+        "11.1",
+        "12.1"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C04",
+      "title": "CLI command and session controls",
+      "inherited": "CLI resume/fork/command controls present",
+      "integration": "Generic private-thread mutations guarded",
+      "next_work": "Adapt commands to owned Task operations",
+      "external_dependency": "None selected beyond actual route",
+      "evidence": "I; D",
+      "story_ids": [
+        "11.1"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C05",
+      "title": "Agent Command Center (`codex agents`)",
+      "inherited": "Not separately source-audited in this pass; catalog commitment retained",
+      "integration": "Inquello invocation and acceptance not independently established",
+      "next_work": "Inspect inherited path, then expose/adapt and qualify; do not assume a rebuild",
+      "external_dependency": "Determine exact dependency before enablement",
+      "evidence": "Catalog only",
+      "story_ids": [
+        "1.14",
+        "1.30"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C06",
+      "title": "IDE extension",
+      "inherited": "Not separately source-audited in this pass; catalog commitment retained",
+      "integration": "Inquello invocation and acceptance not independently established",
+      "next_work": "Inspect inherited path, then expose/adapt and qualify; do not assume a rebuild",
+      "external_dependency": "Determine exact dependency before enablement",
+      "evidence": "Catalog only",
+      "story_ids": [
+        "11.2"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C07",
+      "title": "Codex Cloud",
+      "inherited": "Cloud-task HTTP client present",
+      "integration": "No hosted execution supplier established by client source",
+      "next_work": "Supply eligible execution route and qualify",
+      "external_dependency": "Hosted backend/auth/entitlement",
+      "evidence": "P",
+      "story_ids": [
+        "1.23",
+        "8.1"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C08",
+      "title": "Mobile and remote control",
+      "inherited": "Not separately source-audited in this pass; catalog commitment retained",
+      "integration": "Inquello invocation and acceptance not independently established",
+      "next_work": "Inspect inherited path, then expose/adapt and qualify; do not assume a rebuild",
+      "external_dependency": "Determine exact dependency before enablement",
+      "evidence": "Catalog only",
+      "story_ids": [
+        "11.3"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C09",
+      "title": "Codex Micro hardware controls",
+      "inherited": "Not separately source-audited in this pass; catalog commitment retained",
+      "integration": "Inquello invocation and acceptance not independently established",
+      "next_work": "Inspect inherited path, then expose/adapt and qualify; do not assume a rebuild",
+      "external_dependency": "Determine exact dependency before enablement",
+      "evidence": "Catalog only",
+      "story_ids": [
+        "11.4"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C10",
+      "title": "Local, worktree, and cloud environments",
+      "inherited": "Native execution and worktree/cloud interfaces retained",
+      "integration": "Private start currently local-only",
+      "next_work": "Reuse local path; qualify each additional environment separately",
+      "external_dependency": "Cloud/remote supply if used",
+      "evidence": "I; D; P",
+      "story_ids": [
+        "1.23",
+        "3.5",
+        "8.1",
+        "8.2"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C11",
+      "title": "Agent harness / tool loop",
+      "inherited": "Core thread/tool loop present",
+      "integration": "Start/steer/stop/resume wired into private Tasks",
+      "next_work": "Qualify supported audit tasks, not rebuild loop",
+      "external_dependency": "Selected model/host",
+      "evidence": "I; D",
+      "story_ids": [
+        "1.25",
+        "1.26",
+        "2.8",
+        "2.14",
+        "3.7"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C12",
+      "title": "Parallel independent read-only lookups",
+      "inherited": "Not separately source-audited in this pass; catalog commitment retained",
+      "integration": "Inquello invocation and acceptance not independently established",
+      "next_work": "Inspect inherited path, then expose/adapt and qualify; do not assume a rebuild",
+      "external_dependency": "Determine exact dependency before enablement",
+      "evidence": "Catalog only",
+      "story_ids": [
+        "1.26",
+        "2.14",
+        "3.7"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C13",
+      "title": "Threads and turns",
+      "inherited": "Thread manager/resume/fork present",
+      "integration": "Bound same-Task resume; raw mutations guarded",
+      "next_work": "Adapt alternative history operations preserving ownership",
+      "external_dependency": "Selected model/host",
+      "evidence": "I; D",
+      "story_ids": [
+        "1.14",
+        "1.15",
+        "1.29",
+        "10.2"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C14",
+      "title": "Progress, steering, and interruption",
+      "inherited": "Native turn steering and interrupt present",
+      "integration": "UI-to-native steer/stop chain traced",
+      "next_work": "Qualify race/recovery/effect evidence",
+      "external_dependency": "Selected model/host",
+      "evidence": "D",
+      "story_ids": [
+        "1.26",
+        "1.29",
+        "2.14",
+        "3.7"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C15",
+      "title": "Plan mode and task lists",
+      "inherited": "Generic PlanHandler plus private progress handler",
+      "integration": "Private path substitutes inquello_progress",
+      "next_work": "Expose useful plan/progress without false completion",
+      "external_dependency": "Selected model/host",
+      "evidence": "D",
+      "story_ids": [
+        "1.26",
+        "2.14",
+        "3.7"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C16",
+      "title": "Goals and long-running tasks",
+      "inherited": "Runtime task lifecycle/queue/sleep primitives",
+      "integration": "Bound resume/start and restrictions traced; sustained scale not proved",
+      "next_work": "Qualify long work and reconciled coverage/recovery",
+      "external_dependency": "Host/app/data availability",
+      "evidence": "I; D; P",
+      "story_ids": [
+        "1.29"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C17",
+      "title": "Background tasks and parallel work",
+      "inherited": "Runtime task/queue primitives",
+      "integration": "Current private tools restricted; broader parallelism unqualified",
+      "next_work": "Adapt protected concurrent work and effect ownership",
+      "external_dependency": "Host/model availability",
+      "evidence": "I; D; P",
+      "story_ids": [
+        "1.29"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C18",
+      "title": "Repository and file understanding",
+      "inherited": "Not separately source-audited in this pass; catalog commitment retained",
+      "integration": "Inquello invocation and acceptance not independently established",
+      "next_work": "Inspect inherited path, then expose/adapt and qualify; do not assume a rebuild",
+      "external_dependency": "Determine exact dependency before enablement",
+      "evidence": "Catalog only",
+      "story_ids": [
+        "2.1"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C19",
+      "title": "Code and shell execution",
+      "inherited": "Core shell execution implementation",
+      "integration": "Private exec_command remains allowed, unified_exec disabled",
+      "next_work": "Reuse executor; qualify sandbox and analysis procedures",
+      "external_dependency": "OS/WSL executable path",
+      "evidence": "D",
+      "story_ids": [
+        "2.5",
+        "9.13"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C20",
+      "title": "Code Mode",
+      "inherited": "Not separately source-audited in this pass; catalog commitment retained",
+      "integration": "Inquello invocation and acceptance not independently established",
+      "next_work": "Inspect inherited path, then expose/adapt and qualify; do not assume a rebuild",
+      "external_dependency": "Determine exact dependency before enablement",
+      "evidence": "Catalog only",
+      "story_ids": [
+        "2.5",
+        "9.13"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C21",
+      "title": "File creation and editing",
+      "inherited": "Not separately source-audited in this pass; catalog commitment retained",
+      "integration": "Inquello invocation and acceptance not independently established",
+      "next_work": "Inspect inherited path, then expose/adapt and qualify; do not assume a rebuild",
+      "external_dependency": "Determine exact dependency before enablement",
+      "evidence": "Catalog only",
+      "story_ids": [
+        "3.1",
+        "3.4"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C22",
+      "title": "Images and visual inputs",
+      "inherited": "Not separately source-audited in this pass; catalog commitment retained",
+      "integration": "Inquello invocation and acceptance not independently established",
+      "next_work": "Inspect inherited path, then expose/adapt and qualify; do not assume a rebuild",
+      "external_dependency": "Determine exact dependency before enablement",
+      "evidence": "Catalog only",
+      "story_ids": [
+        "2.2"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C23",
+      "title": "Image generation and editing",
+      "inherited": "Not separately source-audited in this pass; catalog commitment retained",
+      "integration": "Inquello invocation and acceptance not independently established",
+      "next_work": "Inspect inherited path, then expose/adapt and qualify; do not assume a rebuild",
+      "external_dependency": "Determine exact dependency before enablement",
+      "evidence": "Catalog only",
+      "story_ids": [
+        "3.6"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C24",
+      "title": "Composer Predictions",
+      "inherited": "Not separately source-audited in this pass; catalog commitment retained",
+      "integration": "Inquello invocation and acceptance not independently established",
+      "next_work": "Inspect inherited path, then expose/adapt and qualify; do not assume a rebuild",
+      "external_dependency": "Determine exact dependency before enablement",
+      "evidence": "Catalog only",
+      "story_ids": [
+        "2.3",
+        "7.5",
+        "9.12"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C25",
+      "title": "Web search, built-in browser, browser extension, and Computer Use",
+      "inherited": "Not separately source-audited in this pass; catalog commitment retained",
+      "integration": "Inquello invocation and acceptance not independently established",
+      "next_work": "Inspect inherited path, then expose/adapt and qualify; do not assume a rebuild",
+      "external_dependency": "Determine exact dependency before enablement",
+      "evidence": "Catalog only",
+      "story_ids": [
+        "2.17",
+        "7.1",
+        "7.3"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C26",
+      "title": "Browser annotations and site integration API",
+      "inherited": "Not separately source-audited in this pass; catalog commitment retained",
+      "integration": "Inquello invocation and acceptance not independently established",
+      "next_work": "Inspect inherited path, then expose/adapt and qualify; do not assume a rebuild",
+      "external_dependency": "Determine exact dependency before enablement",
+      "evidence": "Catalog only",
+      "story_ids": [
+        "2.3",
+        "7.2",
+        "7.5",
+        "9.12"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C27",
+      "title": "Appshots",
+      "inherited": "Not separately source-audited in this pass; catalog commitment retained",
+      "integration": "Inquello invocation and acceptance not independently established",
+      "next_work": "Inspect inherited path, then expose/adapt and qualify; do not assume a rebuild",
+      "external_dependency": "Determine exact dependency before enablement",
+      "evidence": "Catalog only",
+      "story_ids": [
+        "2.3",
+        "7.5",
+        "9.12"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C28",
+      "title": "Analysis and code review",
+      "inherited": "Not separately source-audited in this pass; catalog commitment retained",
+      "integration": "Inquello invocation and acceptance not independently established",
+      "next_work": "Inspect inherited path, then expose/adapt and qualify; do not assume a rebuild",
+      "external_dependency": "Determine exact dependency before enablement",
+      "evidence": "Catalog only",
+      "story_ids": [
+        "5.3",
+        "5.10",
+        "9.14"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C29",
+      "title": "Codex Security scans and workbench",
+      "inherited": "Not separately source-audited in this pass; catalog commitment retained",
+      "integration": "Inquello invocation and acceptance not independently established",
+      "next_work": "Inspect inherited path, then expose/adapt and qualify; do not assume a rebuild",
+      "external_dependency": "Determine exact dependency before enablement",
+      "evidence": "Catalog only",
+      "story_ids": [
+        "5.10",
+        "9.14"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C30",
+      "title": "Desktop editor and PR Chat",
+      "inherited": "Not separately source-audited in this pass; catalog commitment retained",
+      "integration": "Inquello invocation and acceptance not independently established",
+      "next_work": "Inspect inherited path, then expose/adapt and qualify; do not assume a rebuild",
+      "external_dependency": "Determine exact dependency before enablement",
+      "evidence": "Catalog only",
+      "story_ids": [
+        "5.5"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C31",
+      "title": "Generated outputs and previews",
+      "inherited": "Not separately source-audited in this pass; catalog commitment retained",
+      "integration": "Inquello invocation and acceptance not independently established",
+      "next_work": "Inspect inherited path, then expose/adapt and qualify; do not assume a rebuild",
+      "external_dependency": "Determine exact dependency before enablement",
+      "evidence": "Catalog only",
+      "story_ids": [
+        "3.1",
+        "3.4"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C32",
+      "title": "Sites and hosted app outputs",
+      "inherited": "Not separately source-audited in this pass; catalog commitment retained",
+      "integration": "Inquello invocation and acceptance not independently established",
+      "next_work": "Inspect inherited path, then expose/adapt and qualify; do not assume a rebuild",
+      "external_dependency": "Determine exact dependency before enablement",
+      "evidence": "Catalog only",
+      "story_ids": [
+        "8.3"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C33",
+      "title": "Built-in tools",
+      "inherited": "Tool registry and handlers present",
+      "integration": "Private allowlist exactly exec_command, inquello_progress, request_user_input",
+      "next_work": "Expose supported tools only through protected authority",
+      "external_dependency": "Tool-specific dependencies",
+      "evidence": "D",
+      "story_ids": [
+        "1.21",
+        "1.25",
+        "2.1",
+        "2.5",
+        "2.8",
+        "9.13"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C34",
+      "title": "Connected apps and app catalog",
+      "inherited": "Apps mechanisms and inventory APIs present",
+      "integration": "Management wired; private invocation feature disabled",
+      "next_work": "Adapt authorised Task invocation separately from configuration",
+      "external_dependency": "App identity/endpoint/auth/entitlement",
+      "evidence": "I; D",
+      "story_ids": [
+        "1.21",
+        "2.4"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C35",
+      "title": "MCP servers and connected tools",
+      "inherited": "MCP connection/tool mechanisms present",
+      "integration": "Management wired; private endpoints disabled and checked",
+      "next_work": "Adapt bound connection/permissions and verify use",
+      "external_dependency": "MCP server/auth",
+      "evidence": "I; D",
+      "story_ids": [
+        "1.21",
+        "2.4"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C36",
+      "title": "Plugins and marketplaces",
+      "inherited": "Plugin/marketplace mechanisms present",
+      "integration": "Management wired; private plugins disabled",
+      "next_work": "Retain compatible mechanisms; no new broad marketplace supply obligation",
+      "external_dependency": "Package/source compatibility; supplier if used",
+      "evidence": "I; D",
+      "story_ids": [
+        "1.21",
+        "2.7",
+        "2.10"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C37",
+      "title": "Skills",
+      "inherited": "Skills module and loading mechanism present",
+      "integration": "Not exhaustively traced for private skill use",
+      "next_work": "Qualify actual loading/authority; no assumption all disabled",
+      "external_dependency": "Skill dependencies and policy",
+      "evidence": "I; D",
+      "story_ids": [
+        "2.7",
+        "2.10"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C38",
+      "title": "Record & Replay",
+      "inherited": "Not separately source-audited in this pass; catalog commitment retained",
+      "integration": "Inquello invocation and acceptance not independently established",
+      "next_work": "Inspect inherited path, then expose/adapt and qualify; do not assume a rebuild",
+      "external_dependency": "Determine exact dependency before enablement",
+      "evidence": "Catalog only",
+      "story_ids": [
+        "7.4"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C39",
+      "title": "Repository instructions and configuration",
+      "inherited": "Not separately source-audited in this pass; catalog commitment retained",
+      "integration": "Inquello invocation and acceptance not independently established",
+      "next_work": "Inspect inherited path, then expose/adapt and qualify; do not assume a rebuild",
+      "external_dependency": "Determine exact dependency before enablement",
+      "evidence": "Catalog only",
+      "story_ids": [
+        "2.6"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C40",
+      "title": "Hooks",
+      "inherited": "Hook runtime events present",
+      "integration": "Private hooks disabled",
+      "next_work": "Adapt bounded hook invocation and enforcement",
+      "external_dependency": "Hook command dependencies",
+      "evidence": "I; D",
+      "story_ids": [
+        "2.15"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C41",
+      "title": "App-server protocol",
+      "inherited": "App-server protocol and native handlers present",
+      "integration": "Main-owned stdio transport wired; generic private operations guarded",
+      "next_work": "Reuse protocol, qualify protected named operations",
+      "external_dependency": "No automatic WebSocket/Unix/secondary-client enablement",
+      "evidence": "I; D",
+      "story_ids": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4",
+        "1.15",
+        "1.26",
+        "2.14",
+        "3.7",
+        "9.1"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C42",
+      "title": "Client-supplied dynamic tools (app-server)",
+      "inherited": "Not separately source-audited in this pass; catalog commitment retained",
+      "integration": "Inquello invocation and acceptance not independently established",
+      "next_work": "Inspect inherited path, then expose/adapt and qualify; do not assume a rebuild",
+      "external_dependency": "Determine exact dependency before enablement",
+      "evidence": "Catalog only",
+      "story_ids": [
+        "9.1"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C43",
+      "title": "Codex SDK, non-interactive execution, and GitHub Action",
+      "inherited": "TypeScript CLI/JSONL and Python app-server SDKs present",
+      "integration": "Inquello identity/context integration not qualified",
+      "next_work": "Adapt supported SDK/noninteractive entry; separately verify GitHub Action portion",
+      "external_dependency": "CI/provider/service identity where selected",
+      "evidence": "I; D",
+      "story_ids": [
+        "12.1"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C44",
+      "title": "Task entry points from connected services",
+      "inherited": "Not separately source-audited in this pass; catalog commitment retained",
+      "integration": "Inquello invocation and acceptance not independently established",
+      "next_work": "Inspect inherited path, then expose/adapt and qualify; do not assume a rebuild",
+      "external_dependency": "Determine exact dependency before enablement",
+      "evidence": "Catalog only",
+      "story_ids": [
+        "12.5",
+        "12.7"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C45",
+      "title": "Subagents",
+      "inherited": "Subagent spawn/input handlers present",
+      "integration": "Current private tool allowlist excludes spawn/input tools",
+      "next_work": "Adapt child mandate/grants/lineage/costs/evidence; retain engine",
+      "external_dependency": "Model/host",
+      "evidence": "I; D",
+      "story_ids": [
+        "10.1"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C46",
+      "title": "Side chats, fork, and task references",
+      "inherited": "Fork/resume handlers and thread manager present",
+      "integration": "Generic cold fork/resume/new turns rejected in private store mode",
+      "next_work": "Expose owned private fork/reference paths; preserve lineage",
+      "external_dependency": "Model/host",
+      "evidence": "I; D",
+      "story_ids": [
+        "10.2"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C47",
+      "title": "Worktrees and concurrent tasks",
+      "inherited": "Not separately source-audited in this pass; catalog commitment retained",
+      "integration": "Inquello invocation and acceptance not independently established",
+      "next_work": "Inspect inherited path, then expose/adapt and qualify; do not assume a rebuild",
+      "external_dependency": "Determine exact dependency before enablement",
+      "evidence": "Catalog only",
+      "story_ids": [
+        "3.5",
+        "8.2"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C48",
+      "title": "Active context and compaction",
+      "inherited": "Compaction and memory implementation present",
+      "integration": "Private background compaction restricted",
+      "next_work": "Adapt scoped authority and preserve evidence across compaction",
+      "external_dependency": "Model/host",
+      "evidence": "I; D",
+      "story_ids": [
+        "10.3"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C49",
+      "title": "Conversation persistence and history",
+      "inherited": "Native history/resume implementation present",
+      "integration": "Bound same-Task retained history path traced",
+      "next_work": "Qualify ownership/current-grant persistence and recovery",
+      "external_dependency": "Retained-data policy",
+      "evidence": "I; D",
+      "story_ids": [
+        "1.30",
+        "10.3"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C50",
+      "title": "Memory",
+      "inherited": "Runtime memories mechanisms present",
+      "integration": "Private memory generation/use disabled",
+      "next_work": "Adapt admitted team context and current-grant retrieval",
+      "external_dependency": "Shared authority/retained data",
+      "evidence": "I; D",
+      "story_ids": [
+        "4.5"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C51",
+      "title": "Computer History",
+      "inherited": "Runtime memory does not prove app/site capture",
+      "integration": "Ambient activity capture not separately source-audited",
+      "next_work": "Investigate reusable capture then adapt consent/scope/retention",
+      "external_dependency": "OS/app capture capability",
+      "evidence": "I; P",
+      "story_ids": [
+        "10.4"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C52",
+      "title": "Durable instructions vs memory vs skills",
+      "inherited": "Not separately source-audited in this pass; catalog commitment retained",
+      "integration": "Inquello invocation and acceptance not independently established",
+      "next_work": "Inspect inherited path, then expose/adapt and qualify; do not assume a rebuild",
+      "external_dependency": "Determine exact dependency before enablement",
+      "evidence": "Catalog only",
+      "story_ids": [
+        "2.6"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C53",
+      "title": "Usage, models, speed, and reasoning controls",
+      "inherited": "Responses configuration/catalog/auth and Messages adapter present",
+      "integration": "Model picker/catalog/resolve/select wired",
+      "next_work": "Qualify each documented API/model/provider and usage behavior",
+      "external_dependency": "Model/provider account and per-route eligibility",
+      "evidence": "I; D; P",
+      "story_ids": [
+        "1.13",
+        "1.22",
+        "1.24",
+        "3.10",
+        "9.2",
+        "9.3",
+        "9.4",
+        "9.5",
+        "9.6",
+        "9.7",
+        "9.8",
+        "9.9",
+        "9.10"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C54",
+      "title": "Amazon Bedrock provider",
+      "inherited": "Bedrock provider constructor/auth present",
+      "integration": "Constructor uses Responses; arbitrary native API compatibility not proved",
+      "next_work": "Qualify exact supported model/API/gateway route",
+      "external_dependency": "AWS service/auth/policy",
+      "evidence": "P",
+      "story_ids": [
+        "1.13",
+        "1.22"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C54A",
+      "title": "Microsoft Azure Foundry / Azure OpenAI provider",
+      "inherited": "Generic provider base URL/auth route machinery present",
+      "integration": "Exact Azure native/model path not independently qualified",
+      "next_work": "Qualify exact supported route rather than infer from config",
+      "external_dependency": "Azure service/auth/policy",
+      "evidence": "P",
+      "story_ids": [
+        "1.13",
+        "1.22"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C55",
+      "title": "Organization model gateway",
+      "inherited": "Base URL/catalog/gateway auth/headers/retry config present",
+      "integration": "Actual organisational route not supplied by fork",
+      "next_work": "Configure/adapt then qualify",
+      "external_dependency": "Organisation gateway/auth/policy",
+      "evidence": "P",
+      "story_ids": [
+        "1.13",
+        "1.22"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C56",
+      "title": "Local open-source model provider (`--oss`)",
+      "inherited": "Local provider/config capability retained",
+      "integration": "Current priority remains later integration; no automatic fallback",
+      "next_work": "Qualify permitted model/protocol; retain V1 target",
+      "external_dependency": "Installed model/runtime hardware and policy",
+      "evidence": "P",
+      "story_ids": [
+        "1.13",
+        "1.22"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C57",
+      "title": "Programmatic access and service identities",
+      "inherited": "SDK/auth/service route primitives present",
+      "integration": "Secondary client/service Task authority not established",
+      "next_work": "Adapt bound service identity/mandate; qualify each route",
+      "external_dependency": "Service identities/auth/entitlements",
+      "evidence": "I; D; P",
+      "story_ids": [
+        "1.13",
+        "1.22",
+        "9.2",
+        "9.3",
+        "9.4",
+        "9.5",
+        "9.6",
+        "9.7",
+        "9.8",
+        "9.9",
+        "9.10",
+        "12.2"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C58",
+      "title": "Git and change review",
+      "inherited": "Not separately source-audited in this pass; catalog commitment retained",
+      "integration": "Inquello invocation and acceptance not independently established",
+      "next_work": "Inspect inherited path, then expose/adapt and qualify; do not assume a rebuild",
+      "external_dependency": "Determine exact dependency before enablement",
+      "evidence": "Catalog only",
+      "story_ids": [
+        "3.1",
+        "5.5",
+        "5.6"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C59",
+      "title": "Scheduled tasks",
+      "inherited": "Durable queue/mailbox/sleep state and clock.sleep implementation",
+      "integration": "Private allowlist excludes clock tool; full recurrence lifecycle unqualified",
+      "next_work": "Reuse primitives, adapt recurrence/mandate and missed-run/restart handling",
+      "external_dependency": "Host/app availability; no implicit cloud continuation",
+      "evidence": "P; D",
+      "story_ids": [
+        "12.5"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C60",
+      "title": "Voice and dictation",
+      "inherited": "Realtime protocol/transport/session/audio handlers present",
+      "integration": "Private Task audio UI/authority and full flow unqualified",
+      "next_work": "Expose/adapt permitted audio, retention and route",
+      "external_dependency": "Eligible backend and client/OS audio",
+      "evidence": "I; D; P",
+      "story_ids": [
+        "11.5"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C61",
+      "title": "Notifications and task visibility",
+      "inherited": "Not separately source-audited in this pass; catalog commitment retained",
+      "integration": "Inquello invocation and acceptance not independently established",
+      "next_work": "Inspect inherited path, then expose/adapt and qualify; do not assume a rebuild",
+      "external_dependency": "Determine exact dependency before enablement",
+      "evidence": "Catalog only",
+      "story_ids": [
+        "1.15",
+        "1.30",
+        "11.6"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C62",
+      "title": "Pets and floating task companion",
+      "inherited": "Not separately source-audited in this pass; catalog commitment retained",
+      "integration": "Inquello invocation and acceptance not independently established",
+      "next_work": "Inspect inherited path, then expose/adapt and qualify; do not assume a rebuild",
+      "external_dependency": "Determine exact dependency before enablement",
+      "evidence": "Catalog only",
+      "story_ids": [
+        "11.6"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C63",
+      "title": "Import and setup migration",
+      "inherited": "Not separately source-audited in this pass; catalog commitment retained",
+      "integration": "Inquello invocation and acceptance not independently established",
+      "next_work": "Inspect inherited path, then expose/adapt and qualify; do not assume a rebuild",
+      "external_dependency": "Determine exact dependency before enablement",
+      "evidence": "Catalog only",
+      "story_ids": [
+        "11.7"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C64",
+      "title": "Shared thread snapshots",
+      "inherited": "Not separately source-audited in this pass; catalog commitment retained",
+      "integration": "Inquello invocation and acceptance not independently established",
+      "next_work": "Inspect inherited path, then expose/adapt and qualify; do not assume a rebuild",
+      "external_dependency": "Determine exact dependency before enablement",
+      "evidence": "Catalog only",
+      "story_ids": [
+        "11.8"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C65",
+      "title": "Sandbox and permission profiles",
+      "inherited": "Native sandbox/policy mechanisms retained",
+      "integration": "Private task requires managed sandbox; current path local-only",
+      "next_work": "Qualify actual OS/WSL execution and privacy controls",
+      "external_dependency": "OS enforcement and tool availability",
+      "evidence": "D",
+      "story_ids": [
+        "1.19",
+        "1.28",
+        "2.18",
+        "4.6",
+        "12.8"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C66",
+      "title": "Approvals and automatic review",
+      "inherited": "Permission response path present",
+      "integration": "Desktop permission UI/IPC/native binding traced",
+      "next_work": "Qualify actual request/result and denial flows",
+      "external_dependency": "Policy/account eligibility",
+      "evidence": "D",
+      "story_ids": [
+        "1.20"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C67",
+      "title": "Approved cyber model access (Daybreak / Trusted Access)",
+      "inherited": "Not separately source-audited in this pass; catalog commitment retained",
+      "integration": "Inquello invocation and acceptance not independently established",
+      "next_work": "Inspect inherited path, then expose/adapt and qualify; do not assume a rebuild",
+      "external_dependency": "Determine exact dependency before enablement",
+      "evidence": "Catalog only",
+      "story_ids": [
+        "1.18",
+        "5.10",
+        "9.11",
+        "9.14"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C68",
+      "title": "Prisma AIRS prompt inspection",
+      "inherited": "Not separately source-audited in this pass; catalog commitment retained",
+      "integration": "Inquello invocation and acceptance not independently established",
+      "next_work": "Inspect inherited path, then expose/adapt and qualify; do not assume a rebuild",
+      "external_dependency": "Determine exact dependency before enablement",
+      "evidence": "Catalog only",
+      "story_ids": [
+        "1.18",
+        "9.11"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C69",
+      "title": "Command rules",
+      "inherited": "Not separately source-audited in this pass; catalog commitment retained",
+      "integration": "Inquello invocation and acceptance not independently established",
+      "next_work": "Inspect inherited path, then expose/adapt and qualify; do not assume a rebuild",
+      "external_dependency": "Determine exact dependency before enablement",
+      "evidence": "Catalog only",
+      "story_ids": [
+        "1.20"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C70",
+      "title": "Agent Security and managed policy",
+      "inherited": "Managed policy/config mechanisms present",
+      "integration": "Private invocation restrictions explicitly enforced",
+      "next_work": "Preserve current protections while qualifying each exposure",
+      "external_dependency": "Organisation policy; service if needed",
+      "evidence": "D; P",
+      "story_ids": [
+        "1.18",
+        "1.28",
+        "4.6",
+        "9.11",
+        "12.8"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C71",
+      "title": "Workspace roles, access, and user lifecycle",
+      "inherited": "Not separately source-audited in this pass; catalog commitment retained",
+      "integration": "Inquello invocation and acceptance not independently established",
+      "next_work": "Inspect inherited path, then expose/adapt and qualify; do not assume a rebuild",
+      "external_dependency": "Determine exact dependency before enablement",
+      "evidence": "Catalog only",
+      "story_ids": [
+        "1.10",
+        "1.11",
+        "4.3",
+        "4.7",
+        "10.5",
+        "12.3",
+        "12.4"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C72",
+      "title": "Source/connector identity",
+      "inherited": "Not separately source-audited in this pass; catalog commitment retained",
+      "integration": "Inquello invocation and acceptance not independently established",
+      "next_work": "Inspect inherited path, then expose/adapt and qualify; do not assume a rebuild",
+      "external_dependency": "Determine exact dependency before enablement",
+      "evidence": "Catalog only",
+      "story_ids": [
+        "1.28",
+        "2.4",
+        "4.6",
+        "12.8"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C73",
+      "title": "Untrusted inputs and hooks",
+      "inherited": "Not separately source-audited in this pass; catalog commitment retained",
+      "integration": "Inquello invocation and acceptance not independently established",
+      "next_work": "Inspect inherited path, then expose/adapt and qualify; do not assume a rebuild",
+      "external_dependency": "Determine exact dependency before enablement",
+      "evidence": "Catalog only",
+      "story_ids": [
+        "1.27",
+        "2.16"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C74",
+      "title": "Enterprise usage analytics and compliance records",
+      "inherited": "Not separately source-audited in this pass; catalog commitment retained",
+      "integration": "Inquello invocation and acceptance not independently established",
+      "next_work": "Inspect inherited path, then expose/adapt and qualify; do not assume a rebuild",
+      "external_dependency": "Determine exact dependency before enablement",
+      "evidence": "Catalog only",
+      "story_ids": [
+        "13.2"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C75",
+      "title": "Retention, logs, and telemetry",
+      "inherited": "Not separately source-audited in this pass; catalog commitment retained",
+      "integration": "Inquello invocation and acceptance not independently established",
+      "next_work": "Inspect inherited path, then expose/adapt and qualify; do not assume a rebuild",
+      "external_dependency": "Determine exact dependency before enablement",
+      "evidence": "Catalog only",
+      "story_ids": [
+        "1.12",
+        "4.4",
+        "13.1"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C76",
+      "title": "Task workflow",
+      "inherited": "Task lifecycle core and Inquello binding",
+      "integration": "Start/steer/stop/resume direct chain verified in source",
+      "next_work": "Reuse and extend audit-specific continuity; verify runtime",
+      "external_dependency": "Model/host/shared authority as applicable",
+      "evidence": "D",
+      "story_ids": [
+        "1.26",
+        "2.14",
+        "3.7"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C77",
+      "title": "Agent capability/runtime",
+      "inherited": "Pinned public Codex subtree implementation",
+      "integration": "Deliberately patched engine integrated with owned Electron shell",
+      "next_work": "Preserve fork; track source/patch/effective config per feature",
+      "external_dependency": "Separately supplied services remain distinct",
+      "evidence": "I; D; P",
+      "story_ids": [
+        "1.1",
+        "1.2",
+        "1.3",
+        "1.4"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "C78",
+      "title": "Auditor-tailored workflow",
+      "inherited": "Audit domain/workflow planned over runtime",
+      "integration": "No full audit-lifecycle runtime acceptance established",
+      "next_work": "Add only required audit semantics using existing mechanisms",
+      "external_dependency": "Selected pilot inputs/method and authority",
+      "evidence": "D; current PRFAQ",
+      "story_ids": [
+        "6.1"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "E01",
+      "title": "Requested review of submitted work",
+      "inherited": "Not separately source-audited in this pass; catalog commitment retained",
+      "integration": "Inquello invocation and acceptance not independently established",
+      "next_work": "Inspect inherited path, then expose/adapt and qualify; do not assume a rebuild",
+      "external_dependency": "Determine exact dependency before enablement",
+      "evidence": "Catalog only",
+      "story_ids": [
+        "5.3"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "E02",
+      "title": "Automatic review after an eligible change event",
+      "inherited": "Not separately source-audited in this pass; catalog commitment retained",
+      "integration": "Inquello invocation and acceptance not independently established",
+      "next_work": "Inspect inherited path, then expose/adapt and qualify; do not assume a rebuild",
+      "external_dependency": "Determine exact dependency before enablement",
+      "evidence": "Catalog only",
+      "story_ids": [
+        "12.5"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "E03",
+      "title": "Persistent and one-off review criteria",
+      "inherited": "Not separately source-audited in this pass; catalog commitment retained",
+      "integration": "Inquello invocation and acceptance not independently established",
+      "next_work": "Inspect inherited path, then expose/adapt and qualify; do not assume a rebuild",
+      "external_dependency": "Determine exact dependency before enablement",
+      "evidence": "Catalog only",
+      "story_ids": [
+        "5.3"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "E04",
+      "title": "Follow-up correction and recheck",
+      "inherited": "Not separately source-audited in this pass; catalog commitment retained",
+      "integration": "Inquello invocation and acceptance not independently established",
+      "next_work": "Inspect inherited path, then expose/adapt and qualify; do not assume a rebuild",
+      "external_dependency": "Determine exact dependency before enablement",
+      "evidence": "Catalog only",
+      "story_ids": [
+        "5.7"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "E05",
+      "title": "Non-interactive event-driven procedure",
+      "inherited": "Not separately source-audited in this pass; catalog commitment retained",
+      "integration": "Inquello invocation and acceptance not independently established",
+      "next_work": "Inspect inherited path, then expose/adapt and qualify; do not assume a rebuild",
+      "external_dependency": "Determine exact dependency before enablement",
+      "evidence": "Catalog only",
+      "story_ids": [
+        "12.5"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "E06",
+      "title": "Review from alternative source platforms",
+      "inherited": "Not separately source-audited in this pass; catalog commitment retained",
+      "integration": "Inquello invocation and acceptance not independently established",
+      "next_work": "Inspect inherited path, then expose/adapt and qualify; do not assume a rebuild",
+      "external_dependency": "Determine exact dependency before enablement",
+      "evidence": "Catalog only",
+      "story_ids": [
+        "12.7"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "E07",
+      "title": "Delegation from collaboration threads",
+      "inherited": "Not separately source-audited in this pass; catalog commitment retained",
+      "integration": "Inquello invocation and acceptance not independently established",
+      "next_work": "Inspect inherited path, then expose/adapt and qualify; do not assume a rebuild",
+      "external_dependency": "Determine exact dependency before enablement",
+      "evidence": "Catalog only",
+      "story_ids": [
+        "12.7"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "E08",
+      "title": "Assignment from an external task system",
+      "inherited": "Not separately source-audited in this pass; catalog commitment retained",
+      "integration": "Inquello invocation and acceptance not independently established",
+      "next_work": "Inspect inherited path, then expose/adapt and qualify; do not assume a rebuild",
+      "external_dependency": "Determine exact dependency before enablement",
+      "evidence": "Catalog only",
+      "story_ids": [
+        "12.7"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "E09",
+      "title": "Automatic task triage and routing",
+      "inherited": "Not separately source-audited in this pass; catalog commitment retained",
+      "integration": "Inquello invocation and acceptance not independently established",
+      "next_work": "Inspect inherited path, then expose/adapt and qualify; do not assume a rebuild",
+      "external_dependency": "Determine exact dependency before enablement",
+      "evidence": "Catalog only",
+      "story_ids": [
+        "12.6",
+        "12.7"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "E10",
+      "title": "Specialist review pass",
+      "inherited": "Not separately source-audited in this pass; catalog commitment retained",
+      "integration": "Inquello invocation and acceptance not independently established",
+      "next_work": "Inspect inherited path, then expose/adapt and qualify; do not assume a rebuild",
+      "external_dependency": "Determine exact dependency before enablement",
+      "evidence": "Catalog only",
+      "story_ids": [
+        "5.10",
+        "9.14"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "E11",
+      "title": "Saved scans, findings and history",
+      "inherited": "Not separately source-audited in this pass; catalog commitment retained",
+      "integration": "Inquello invocation and acceptance not independently established",
+      "next_work": "Inspect inherited path, then expose/adapt and qualify; do not assume a rebuild",
+      "external_dependency": "Determine exact dependency before enablement",
+      "evidence": "Catalog only",
+      "story_ids": [
+        "5.10"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "E12",
+      "title": "Additional focused analysis passes",
+      "inherited": "Not separately source-audited in this pass; catalog commitment retained",
+      "integration": "Inquello invocation and acceptance not independently established",
+      "next_work": "Inspect inherited path, then expose/adapt and qualify; do not assume a rebuild",
+      "external_dependency": "Determine exact dependency before enablement",
+      "evidence": "Catalog only",
+      "story_ids": [
+        "5.10"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "E13",
+      "title": "Inherited findings/backlog triage",
+      "inherited": "Not separately source-audited in this pass; catalog commitment retained",
+      "integration": "Inquello invocation and acceptance not independently established",
+      "next_work": "Inspect inherited path, then expose/adapt and qualify; do not assume a rebuild",
+      "external_dependency": "Determine exact dependency before enablement",
+      "evidence": "Catalog only",
+      "story_ids": [
+        "5.10",
+        "9.14"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "E14",
+      "title": "Propose, inspect, apply and verify changes",
+      "inherited": "Not separately source-audited in this pass; catalog commitment retained",
+      "integration": "Inquello invocation and acceptance not independently established",
+      "next_work": "Inspect inherited path, then expose/adapt and qualify; do not assume a rebuild",
+      "external_dependency": "Determine exact dependency before enablement",
+      "evidence": "Catalog only",
+      "story_ids": [
+        "5.7",
+        "6.4"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "E15",
+      "title": "Advisory options grounded in findings",
+      "inherited": "Not separately source-audited in this pass; catalog commitment retained",
+      "integration": "Inquello invocation and acceptance not independently established",
+      "next_work": "Inspect inherited path, then expose/adapt and qualify; do not assume a rebuild",
+      "external_dependency": "Determine exact dependency before enablement",
+      "evidence": "Catalog only",
+      "story_ids": [
+        "6.1"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "E16",
+      "title": "Self-contained observation/report",
+      "inherited": "Not separately source-audited in this pass; catalog commitment retained",
+      "integration": "Inquello invocation and acceptance not independently established",
+      "next_work": "Inspect inherited path, then expose/adapt and qualify; do not assume a rebuild",
+      "external_dependency": "Determine exact dependency before enablement",
+      "evidence": "Catalog only",
+      "story_ids": [
+        "8.3"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "E17",
+      "title": "Export and reviewed finding writeback",
+      "inherited": "Not separately source-audited in this pass; catalog commitment retained",
+      "integration": "Inquello invocation and acceptance not independently established",
+      "next_work": "Inspect inherited path, then expose/adapt and qualify; do not assume a rebuild",
+      "external_dependency": "Determine exact dependency before enablement",
+      "evidence": "Catalog only",
+      "story_ids": [
+        "5.11",
+        "14.1"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "E18",
+      "title": "Bulk review across entities and resume",
+      "inherited": "Not separately source-audited in this pass; catalog commitment retained",
+      "integration": "Inquello invocation and acceptance not independently established",
+      "next_work": "Inspect inherited path, then expose/adapt and qualify; do not assume a rebuild",
+      "external_dependency": "Determine exact dependency before enablement",
+      "evidence": "Catalog only",
+      "story_ids": [
+        "12.1"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "E19",
+      "title": "Programmatic structured review results",
+      "inherited": "Not separately source-audited in this pass; catalog commitment retained",
+      "integration": "Inquello invocation and acceptance not independently established",
+      "next_work": "Inspect inherited path, then expose/adapt and qualify; do not assume a rebuild",
+      "external_dependency": "Determine exact dependency before enablement",
+      "evidence": "Catalog only",
+      "story_ids": [
+        "12.1"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "E20",
+      "title": "Website-exposed actions and page context",
+      "inherited": "Not separately source-audited in this pass; catalog commitment retained",
+      "integration": "Inquello invocation and acceptance not independently established",
+      "next_work": "Inspect inherited path, then expose/adapt and qualify; do not assume a rebuild",
+      "external_dependency": "Determine exact dependency before enablement",
+      "evidence": "Catalog only",
+      "story_ids": [
+        "7.2"
+      ],
+      "disposition": "Retained compatible V1 goal, subject to existing phase and current audit-applicability rules",
+      "acceptance": "No new runtime verification performed; consult exact current story evidence"
+    },
+    {
+      "id": "DELTA-GCP",
+      "title": "Named GCP / Vertex provider delta",
+      "inherited": "GCP provider constructor and auth route present; Responses wire protocol",
+      "integration": "Exact provider/model API and Inquello route not independently qualified",
+      "next_work": "Qualify exact supported API/model route and policy; do not infer arbitrary native API compatibility",
+      "external_dependency": "GCP service/auth/policy",
+      "evidence": "P",
+      "story_ids": [
+        "9.7"
+      ],
+      "disposition": "Retained named route; current epic Story 9.7 is the GCP/Vertex supplier/verification contract",
+      "acceptance": "No new runtime verification"
+    }
+  ]
+}

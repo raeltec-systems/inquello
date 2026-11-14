@@ -1,0 +1,16 @@
+{
+  "manifestVersion": 2,
+  "createdUtc": "2026-11-09T21:17:28.171Z",
+  "head": "daf2dbae7ff1bc229c0bbc012cb9bc89cb09a7e3",
+  "engineTree": "d2e7f259a8110d7e25cfec6b66f679d075cfd72b",
+  "serviceEngineTree": "d2e7f259a8110d7e25cfec6b66f679d075cfd72b",
+  "runtime": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\codex-app-server.exe",
+  "cli": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\codex.exe",
+  "service": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\inquello-service.exe",
+  "runtimeSha256": "f2ec0ad1ed69be4603630642e2689a497451246fcf2abff163927d4d8858dcb7",
+  "cliSha256": "ca75a2f119eb7c37741d37a293bdddf7c7056463c18fb938003896786f332fbe",
+  "serviceSha256": "a903ee2e273fb986504fd4600d88c868a315f1c11c822a45188b83efd60b0252",
+  "desktopDistSha256": "38c366a51be867a05c6043111afcf0117719981a84f39829132d4a64f2302af8",
+  "sourceState": "Scoped uncommitted Story 1.30 renderer recovery repair",
+  "sourceManifestSha256": "4abef56e4bfa72a0857512d0fa9013dbed4a8abddd9e419060081b32a23a36cc"
+}

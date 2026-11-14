@@ -1,0 +1,182 @@
+   Compiling hyper v1.11.1
+   Compiling similar v2.7.0
+   Compiling windows-sys v0.59.0
+   Compiling rmcp v3.5.1 (https://github.com/modelcontextprotocol/rust-sdk?rev=98a54789b80110ad210495c4ad845c89e1980471#98a54789)
+   Compiling predicates-core v1.0.9
+   Compiling termtree v0.5.1
+   Compiling assert_cmd v2.1.2
+   Compiling difflib v0.4.0
+   Compiling predicates-tree v1.0.12
+   Compiling predicates v3.1.3
+   Compiling wait-timeout v0.2.1
+   Compiling deadpool v0.12.3
+   Compiling hyper-util v0.1.20
+   Compiling assert-json-diff v2.0.2
+   Compiling winreg v0.55.0
+   Compiling runfiles v0.1.0 (https://github.com/dzbarsky/rules_rust?rev=b56cbaa8465e74127f1ea216f813cd377295ad81#b56cbaa8)
+   Compiling test-case-core v3.3.1
+   Compiling mxc-sdk v1.0.0 (https://github.com/microsoft/mxc?rev=b21120168d70befe12356411423266bfef168446#b2112016)
+   Compiling codex-utils-cargo-bin v0.165.0 (D:\Projects\inquello\engine\codex-rs\utils\cargo-bin)
+   Compiling encode_unicode v1.0.0
+   Compiling sdd v3.0.10
+   Compiling test-case-macros v3.3.1
+   Compiling hyper-rustls v0.27.7
+   Compiling hyper-tls v0.6.0
+   Compiling hyper-timeout v0.5.2
+   Compiling reqwest v0.12.28
+   Compiling aws-smithy-http-client v1.1.12
+   Compiling tonic v0.14.3
+   Compiling codex-http-client v0.165.0 (D:\Projects\inquello\engine\codex-rs\http-client)
+   Compiling tonic-prost v0.14.3
+   Compiling opentelemetry-proto v0.31.0
+   Compiling opentelemetry-http v0.31.0
+   Compiling codex-protocol v0.165.0 (D:\Projects\inquello\engine\codex-rs\protocol)
+   Compiling codex-client v0.165.0 (D:\Projects\inquello\engine\codex-rs\codex-client)
+   Compiling codex-websocket-client v0.165.0 (D:\Projects\inquello\engine\codex-rs\websocket-client)
+   Compiling opentelemetry-otlp v0.31.0
+   Compiling aws-smithy-runtime v1.9.5
+   Compiling axum v0.8.8
+   Compiling aws-runtime v1.5.17
+   Compiling codex-workload-identity v0.165.0 (D:\Projects\inquello\engine\codex-rs\workload-identity)
+   Compiling oauth2 v5.0.0
+   Compiling reqwest v0.13.4
+   Compiling aws-sdk-sts v1.95.0
+   Compiling aws-sdk-ssooidc v1.93.0
+   Compiling aws-sdk-signin v1.2.0
+   Compiling codex-api v0.165.0 (D:\Projects\inquello\engine\codex-rs\codex-api)
+   Compiling codex-file-system v0.165.0 (D:\Projects\inquello\engine\codex-rs\file-system)
+   Compiling codex-git-utils v0.165.0 (D:\Projects\inquello\engine\codex-rs\git-utils)
+   Compiling codex-otel v0.165.0 (D:\Projects\inquello\engine\codex-rs\otel)
+   Compiling codex-features v0.165.0 (D:\Projects\inquello\engine\codex-rs\features)
+   Compiling codex-windows-sandbox v0.165.0 (D:\Projects\inquello\engine\codex-rs\windows-sandbox-rs)
+   Compiling codex-model-provider-info v0.165.0 (D:\Projects\inquello\engine\codex-rs\model-provider-info)
+   Compiling codex-shell-command v0.165.0 (D:\Projects\inquello\engine\codex-rs\shell-command)
+   Compiling codex-history v0.165.0 (D:\Projects\inquello\engine\codex-rs\history)
+   Compiling codex-secrets v0.165.0 (D:\Projects\inquello\engine\codex-rs\secrets)
+   Compiling codex-skills v0.165.0 (D:\Projects\inquello\engine\codex-rs\skills)
+   Compiling codex-utils-output-truncation v0.165.0 (D:\Projects\inquello\engine\codex-rs\utils\output-truncation)
+   Compiling codex-state v0.165.0 (D:\Projects\inquello\engine\codex-rs\state)
+   Compiling codex-agent-identity v0.165.0 (D:\Projects\inquello\engine\codex-rs\agent-identity)
+   Compiling codex-config v0.165.0 (D:\Projects\inquello\engine\codex-rs\config)
+   Compiling codex-mxc-sandbox v0.165.0 (D:\Projects\inquello\engine\codex-rs\mxc-sandbox)
+   Compiling codex-exec-server-protocol v0.165.0 (D:\Projects\inquello\engine\codex-rs\exec-server-protocol)
+   Compiling codex-sandboxing v0.165.0 (D:\Projects\inquello\engine\codex-rs\sandboxing)
+   Compiling codex-rollout v0.165.0 (D:\Projects\inquello\engine\codex-rs\rollout)
+   Compiling codex-context-fragments v0.165.0 (D:\Projects\inquello\engine\codex-rs\context-fragments)
+   Compiling codex-guardian-context v0.165.0 (D:\Projects\inquello\engine\codex-rs\guardian-context)
+   Compiling aws-sdk-sso v1.91.0
+   Compiling aws-config v1.8.12
+   Compiling codex-prompts v0.165.0 (D:\Projects\inquello\engine\codex-rs\prompts)
+   Compiling codex-response-debug-context v0.165.0 (D:\Projects\inquello\engine\codex-rs\response-debug-context)
+   Compiling codex-code-mode-protocol v0.165.0 (D:\Projects\inquello\engine\codex-rs\code-mode-protocol)
+   Compiling codex-exec-server v0.165.0 (D:\Projects\inquello\engine\codex-rs\exec-server)
+   Compiling codex-login v0.165.0 (D:\Projects\inquello\engine\codex-rs\login)
+   Compiling codex-models-manager v0.165.0 (D:\Projects\inquello\engine\codex-rs\models-manager)
+   Compiling codex-feedback v0.165.0 (D:\Projects\inquello\engine\codex-rs\feedback)
+   Compiling codex-aws-auth v0.165.0 (D:\Projects\inquello\engine\codex-rs\aws-auth)
+   Compiling codex-model-provider v0.165.0 (D:\Projects\inquello\engine\codex-rs\model-provider)
+   Compiling codex-code-mode v0.165.0 (D:\Projects\inquello\engine\codex-rs\code-mode)
+   Compiling codex-app-server-protocol v0.165.0 (D:\Projects\inquello\engine\codex-rs\app-server-protocol)
+   Compiling codex-utils-plugins v0.165.0 (D:\Projects\inquello\engine\codex-rs\utils\plugins)
+   Compiling codex-plugin v0.165.0 (D:\Projects\inquello\engine\codex-rs\plugin)
+   Compiling codex-connectors v0.165.0 (D:\Projects\inquello\engine\codex-rs\connectors)
+   Compiling codex-tools v0.165.0 (D:\Projects\inquello\engine\codex-rs\tools)
+   Compiling codex-rmcp-client v0.165.0 (D:\Projects\inquello\engine\codex-rs\rmcp-client)
+   Compiling codex-message-board v0.165.0 (D:\Projects\inquello\engine\codex-rs\message-board)
+   Compiling codex-hooks v0.165.0 (D:\Projects\inquello\engine\codex-rs\hooks)
+   Compiling codex-apply-patch v0.165.0 (D:\Projects\inquello\engine\codex-rs\apply-patch)
+   Compiling codex-mcp v0.165.0 (D:\Projects\inquello\engine\codex-rs\codex-mcp)
+   Compiling codex-rollout-trace v0.165.0 (D:\Projects\inquello\engine\codex-rs\rollout-trace)
+   Compiling codex-agent-roles v0.165.0 (D:\Projects\inquello\engine\codex-rs\agent-roles)
+   Compiling codex-agent-graph-store v0.165.0 (D:\Projects\inquello\engine\codex-rs\agent-graph-store)
+   Compiling codex-memories-read v0.165.0 (D:\Projects\inquello\engine\codex-rs\memories\read)
+   Compiling codex-extension-api v0.165.0 (D:\Projects\inquello\engine\codex-rs\ext\extension-api)
+   Compiling codex-utils-git-discovery v0.165.0 (D:\Projects\inquello\engine\codex-rs\utils\git-discovery)
+   Compiling codex-agent-message-board-client v0.165.0 (D:\Projects\inquello\engine\codex-rs\agent-message-board-client)
+   Compiling codex-agent-message-board-extension v0.165.0 (D:\Projects\inquello\engine\codex-rs\ext\agent-message-board)
+   Compiling codex-utils-audio v0.165.0 (D:\Projects\inquello\engine\codex-rs\utils\audio)
+   Compiling inquello-adapters v0.165.0 (D:\Projects\inquello\engine\codex-rs\inquello-adapters)
+   Compiling codex-backend-client v0.165.0 (D:\Projects\inquello\engine\codex-rs\backend-client)
+   Compiling codex-home v0.165.0 (D:\Projects\inquello\engine\codex-rs\codex-home)
+   Compiling codex-arg0 v0.165.0 (D:\Projects\inquello\engine\codex-rs\arg0)
+   Compiling wiremock v0.6.5
+   Compiling codex-utils-cli v0.165.0 (D:\Projects\inquello\engine\codex-rs\utils\cli)
+   Compiling scc v2.4.0
+   Compiling console v0.15.11
+   Compiling serial_test_derive v3.3.1
+   Compiling diff v0.1.13
+   Compiling yansi v1.0.1
+   Compiling serial_test v3.3.1
+   Compiling pretty_assertions v1.4.1
+   Compiling insta v1.46.3
+   Compiling codex-git-attribution v0.165.0 (D:\Projects\inquello\engine\codex-rs\ext\git-attribution)
+   Compiling codex-cloud-config v0.165.0 (D:\Projects\inquello\engine\codex-rs\cloud-config)
+   Compiling codex-multi-env-copy-file v0.165.0 (D:\Projects\inquello\engine\codex-rs\ext\multi-env-copy-file)
+   Compiling test-case v3.3.1
+   Compiling codex-analytics v0.165.0 (D:\Projects\inquello\engine\codex-rs\analytics)
+   Compiling codex-thread-store v0.165.0 (D:\Projects\inquello\engine\codex-rs\thread-store)
+   Compiling codex-core-plugins v0.165.0 (D:\Projects\inquello\engine\codex-rs\core-plugins)
+   Compiling codex-skills-extension v0.165.0 (D:\Projects\inquello\engine\codex-rs\ext\skills)
+   Compiling codex-guardian-reviewer v0.165.0 (D:\Projects\inquello\engine\codex-rs\ext\guardian-reviewer)
+   Compiling codex-connectors-extension v0.165.0 (D:\Projects\inquello\engine\codex-rs\ext\connectors)
+   Compiling codex-core v0.165.0 (D:\Projects\inquello\engine\codex-rs\core)
+   Compiling codex-guardian-v2 v0.165.0 (D:\Projects\inquello\engine\codex-rs\ext\guardian-v2)
+   Compiling codex-app-server-transport v0.165.0 (D:\Projects\inquello\engine\codex-rs\app-server-transport)
+   Compiling codex-memories-write v0.165.0 (D:\Projects\inquello\engine\codex-rs\memories\write)
+   Compiling codex-external-agent-migration v0.165.0 (D:\Projects\inquello\engine\codex-rs\external-agent-migration)
+   Compiling core_test_support v0.165.0 (D:\Projects\inquello\engine\codex-rs\core\tests\common)
+   Compiling codex-app-server-daemon v0.165.0 (D:\Projects\inquello\engine\codex-rs\app-server-daemon)
+   Compiling app_test_support v0.165.0 (D:\Projects\inquello\engine\codex-rs\app-server\tests\common)
+   Compiling codex-history-notes-extension v0.165.0 (D:\Projects\inquello\engine\codex-rs\ext\history-notes)
+   Compiling codex-chatgpt v0.165.0 (D:\Projects\inquello\engine\codex-rs\chatgpt)
+   Compiling codex-agent-extension v0.165.0 (D:\Projects\inquello\engine\codex-rs\ext\agent)
+   Compiling codex-mcp-extension v0.165.0 (D:\Projects\inquello\engine\codex-rs\ext\mcp)
+   Compiling codex-queue-extension v0.165.0 (D:\Projects\inquello\engine\codex-rs\ext\queue)
+   Compiling codex-image-generation-extension v0.165.0 (D:\Projects\inquello\engine\codex-rs\ext\image-generation)
+   Compiling codex-web-search-extension v0.165.0 (D:\Projects\inquello\engine\codex-rs\ext\web-search)
+   Compiling codex-memories-extension v0.165.0 (D:\Projects\inquello\engine\codex-rs\ext\memories)
+   Compiling codex-goal-extension v0.165.0 (D:\Projects\inquello\engine\codex-rs\ext\goal)
+   Compiling codex-app-server v0.165.0 (D:\Projects\inquello\engine\codex-rs\app-server)
+warning: fields `cwd` and `search_path` are never read
+    --> app-server\src\request_processors\inquello_processor.rs:1270:16
+     |
+1269 | pub(crate) struct ExecLookup<'a> {
+     |                   ---------- fields in this struct
+1270 |     pub(crate) cwd: Option<&'a std::path::Path>,
+     |                ^^^
+1271 |     pub(crate) search_path: Option<&'a std::ffi::OsStr>,
+     |                ^^^^^^^^^^^
+     |
+     = note: `ExecLookup` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `codex-app-server` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized] target(s) in 7m 40s
+     Running unittests src\lib.rs (D:\Inquello\cache\fixture-20261105\debug\deps\codex_app_server-b1a408872b69444d.exe)
+
+running 3 tests
+test request_processors::inquello_processor::tests::windows_host_forbid_matches_canonical_case_and_symlink_aliases ... FAILED
+test request_processors::inquello_processor::tests::windows_host_resolution_accepts_only_existing_drive_rooted_executables ... FAILED
+test request_processors::inquello_processor::tests::windows_host_resolution_rejects_broken_links_and_non_executable_targets ... ok
+
+failures:
+
+---- request_processors::inquello_processor::tests::windows_host_forbid_matches_canonical_case_and_symlink_aliases stdout ----
+
+thread 'request_processors::inquello_processor::tests::windows_host_forbid_matches_canonical_case_and_symlink_aliases' (15584) panicked at app-server\src\request_processors\inquello_processor_tests.rs:1581:33:
+the prefix token `D:\Toolchains\tmp\.tmp0oKnYl\Program.exe` holds `\`; tokens are literal command words, never shell or glob patterns
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- request_processors::inquello_processor::tests::windows_host_resolution_accepts_only_existing_drive_rooted_executables stdout ----
+
+thread 'request_processors::inquello_processor::tests::windows_host_resolution_accepts_only_existing_drive_rooted_executables' (16028) panicked at app-server\src\request_processors\inquello_processor_tests.rs:1581:33:
+the prefix token `D:\Toolchains\tmp\.tmpwbfxH7\missing.exe` holds `\`; tokens are literal command words, never shell or glob patterns
+
+
+failures:
+    request_processors::inquello_processor::tests::windows_host_forbid_matches_canonical_case_and_symlink_aliases
+    request_processors::inquello_processor::tests::windows_host_resolution_accepts_only_existing_drive_rooted_executables
+
+test result: FAILED. 1 passed; 2 failed; 0 ignored; 0 measured; 598 filtered out; finished in 0.01s
+
+error: test failed, to rerun pass `-p codex-app-server --lib`

@@ -1,0 +1,12 @@
+const fs=require('node:fs'),path=require('node:path');const dir=__dirname;
+const log=fs.readFileSync(path.join(dir,'visual-smoke-docker-critical-path-1.log'),'utf8');const phase=log.match(/Smoke logs: (.+)/)[1].trim()+'/visual';
+const out=fs.readFileSync(phase+'/smoke.stdout.log','utf8').split(/\r?\n/).flatMap(l=>{try{return [JSON.parse(l)]}catch{return []}});const err=fs.readFileSync(phase+'/smoke.stderr.log','utf8').split(/\r?\n/);
+const points=out.filter(x=>x.event==='critical-path');const start=points.find(x=>x.stage==='before-second-send')?.epoch_ms;if(!start)throw Error('Second-send timing not available yet');
+const align=err.map(l=>l.match(/admission-timing input epoch_ms=(\d+) monotonic_ms=(\d+)/)).find(Boolean);if(!align)throw Error('Admission not observed');const origin=+align[1]-+align[2];
+const timeline=points.map(x=>({ms:x.epoch_ms-start,stage:x.stage,visible:x.visible}));
+for(const l of log.split(/\r?\n/)){try{const x=JSON.parse(l);if(x.event==='fixture-timing'&&x.epoch_ms>=start)timeline.push({ms:x.epoch_ms-start,stage:`fixture ${x.conversation}${x.index} ${x.stage}`})}catch{}}
+for(const l of err){let m=l.match(/admission-timing (\S+) epoch_ms=(\d+)/);if(m&&+m[2]>=start)timeline.push({ms:+m[2]-start,stage:'main '+m[1]});m=l.match(/progress-timing (.+) monotonic_ms=(\d+)/);if(m&&+m[2]+origin>=start)timeline.push({ms:+m[2]+origin-start,stage:'progress '+m[1]});}
+const exit=out.find(x=>x.event==='runtime-exit');for(const l of exit?.exit?.stderrTail??[]){const m=l.match(/(lifecycle|reopen|listener)-timing (.+) epoch_ms=(\d+)/);if(m&&+m[3]>=start)timeline.push({ms:+m[3]-start,stage:`native ${m[1]} ${m[2]}`});}
+const access=err.flatMap(l=>{const m=l.match(/access-timing returned queue_ms=(\d+) service_ms=(\d+) monotonic_ms=(\d+)/);return m&&+m[3]+origin>=start?[{queue:+m[1],service:+m[2],at:+m[3]+origin-start}]:[]});
+function stats(key){const a=access.map(x=>x[key]).sort((a,b)=>a-b);return{count:a.length,total:a.reduce((a,b)=>a+b,0),p50:a[Math.floor(a.length*.5)],p95:a[Math.floor(a.length*.95)],max:a.at(-1)}}
+const result={phase,origin,start,queue:stats('queue'),service:stats('service'),access,timeline:timeline.sort((a,b)=>a.ms-b.ms)};fs.writeFileSync(path.join(dir,'critical-path-1.json'),JSON.stringify(result,null,2));console.log(JSON.stringify({phase,queue:result.queue,service:result.service,timeline:result.timeline},null,2));

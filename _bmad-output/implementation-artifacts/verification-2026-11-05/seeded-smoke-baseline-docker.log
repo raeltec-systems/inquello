@@ -1,0 +1,20 @@
+Smoke logs: D:\Inquello\tmp\inquello-seeded-smoke-QX0mVA
+2026-11-05T15:05:13.975433Z  INFO inquello_service::test_provider: synthetic OIDC provider listening issuer="https://127.0.0.1:57482"
+2026-11-05T15:05:14.414863Z  INFO inquello_service::server: inquello service listening local_addr=127.0.0.1:57485 https=true
+2026-11-05T15:05:14.566259Z  INFO sqlx::postgres::notice: relation "_sqlx_migrations" already exists, skipping
+2026-11-05T15:05:14.636903Z  INFO inquello_service::admin: workspace created by operator workspace_id=334991dd-4505-477c-b3d5-379b5ebad6e8 receipt_id=a7120f2a-a770-4ead-b971-d9f744029594
+2026-11-05T15:05:14.648390Z  INFO inquello_dev_topology: dev topology stopping
+{"phase":"normal","phaseResult":{"ok":false,"missing":[],"events":[],"primaryFailure":"electron-journey","cleanupErrors":[]}}
+2026-11-05T15:05:15.296106Z  INFO inquello_service::test_provider: synthetic OIDC provider listening issuer="https://127.0.0.1:57494"
+2026-11-05T15:05:15.655353Z  INFO inquello_service::server: inquello service listening local_addr=127.0.0.1:57497 https=true
+2026-11-05T15:05:15.770628Z  INFO sqlx::postgres::notice: relation "_sqlx_migrations" already exists, skipping
+2026-11-05T15:05:15.826463Z  INFO inquello_service::admin: workspace created by operator workspace_id=16fc4c12-5217-404e-9fd9-09ad4160ceea receipt_id=9c80236c-7b91-4c3b-ab3c-176224b021be
+2026-11-05T15:05:15.837844Z  INFO inquello_dev_topology: dev topology stopping
+{"phase":"quota","phaseResult":{"ok":false,"missing":[],"events":[],"primaryFailure":"electron-journey","cleanupErrors":[]}}
+2026-11-05T15:05:16.385998Z  INFO inquello_service::test_provider: synthetic OIDC provider listening issuer="https://127.0.0.1:57506"
+2026-11-05T15:05:16.775869Z  INFO inquello_service::server: inquello service listening local_addr=127.0.0.1:57509 https=true
+2026-11-05T15:05:16.897845Z  INFO sqlx::postgres::notice: relation "_sqlx_migrations" already exists, skipping
+2026-11-05T15:05:16.949839Z  INFO inquello_service::admin: workspace created by operator workspace_id=b0157b41-e2b1-4802-a9c7-db1aa4d0d431 receipt_id=286587a1-ab04-4b92-8d7e-dd664864b8d9
+2026-11-05T15:05:16.957714Z  INFO inquello_dev_topology: dev topology stopping
+{"phase":"visual","phaseResult":{"ok":false,"missing":[],"events":[],"primaryFailure":"electron-journey","cleanupErrors":[]}}
+{"ok":false,"required":18,"missingOrFailed":["renderer-privileges","design","identity","data","providers","organise","states","shell-layout","composer","start-surface","policy","tool-bounds","permissions","capabilities","routes","environments","quota","visual-conversation"],"phases":{"normal":{"ok":false,"missing":[],"events":[],"primaryFailure":"electron-journey","cleanupErrors":[]},"quota":{"ok":false,"missing":[],"events":[],"primaryFailure":"electron-journey","cleanupErrors":[]},"visual":{"ok":false,"missing":[],"events":[],"primaryFailure":"electron-journey","cleanupErrors":[]}}}

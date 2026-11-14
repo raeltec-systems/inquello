@@ -1,0 +1,5 @@
+
+> inquello-desktop@0.0.0 generate:protocol D:\Projects\inquello\desktop
+> node scripts/generate-protocol.mjs
+
+generate:protocol: 816 files for codex-app-server 0.165.0 (fork tree d2e7f259a8110d7e25cfec6b66f679d075cfd72b)

@@ -6,7 +6,9 @@ finalValidationStatus: attempted-failed-unresolved-implementation-gates
 workflowVariation: owner-approved batch review on 2026-10-27 at 17:04 UTC; no individual-story approvals claimed
 previousRunStepsCompleted: [1, 2]
 reconciliationStatus: structure-approved-story-review-pending
-updated: 2026-10-27
+updated: 2026-11-05
+courseCorrectionStatus: approved-direction-applied-specification-and-runtime-gates-open
+courseCorrectionWorkflow: bmad-correct-course amendment; original workflow completion flags preserved
 inputDocuments:
   - _bmad-output/specs/spec-inquello/SPEC.md
   - _bmad-output/specs/spec-inquello/scope-and-gates.md
@@ -33,9 +35,23 @@ vocabulary: Workspace / Engagement / Task per glossary.md (Engagement is the dec
 
 This document provides the complete epic and story breakdown for Inquello, decomposing the requirements from the PRD, UX Design if it exists, and Architecture requirements into implementable stories.
 
-Inquello is a public-Codex-fork agentic workbench for internal audit, external audit, advisory and IT/IS audit teams (AD-1 to AD-4: public Codex fork, audit semantics separate from the runtime, Electron desktop with React/TypeScript, shared Rust audit modules with a separate working SQLite). The canonical contract is `SPEC.md` with its companions; every stable ID below (CAP-1 to CAP-25, FR-1 to FR-44, NFR-1 to NFR-10, UJ-1 to UJ-8, A01 to A18, AD-1 to AD-17, S01 to S13, SP1 to SP7, OQ-1 to OQ-16, AS-1/AS-2/AS-UX1 to AS-UX4) is preserved as written there.
+Inquello is a public-Codex-fork agentic workbench for one organisation and one internal-audit team in the approved V1, including relevant advisory and technical work; external-audit-specific practice remains future activation scope (AD-1 to AD-4: public Codex fork, audit semantics separate from the runtime, Electron desktop with React/TypeScript, shared Rust audit modules with a separate working SQLite). The canonical contract is `SPEC.md` with its companions; every stable ID below (CAP-1 to CAP-25, FR-1 to FR-44, NFR-1 to NFR-10, UJ-1 to UJ-8, A01 to A18, AD-1 to AD-17, S01 to S13, SP1 to SP7, OQ-1 to OQ-16, AS-1/AS-2/AS-UX1 to AS-UX4) is preserved as written there.
 
-**Phase rule.** The full V1 target is CAP-1 to CAP-22 (41 FRs) plus the OQ-14 identity and authorisation obligation added on 2026-10-27. CAP-23 to CAP-25 (FR-38, FR-40, FR-42) are V2, as is a hosted agent browser or sandbox (V2 revisit, OQ-13). Grouping into epics is not a scope cut. Under OQ-10 (decided 2026-10-27) the first increment, sequencing and explicit deferrals are decided in this document; every deferral is recorded as unmet acceptance, never silently dropped.
+**Phase rule.** The current V1 retains every compatible CAP-1 to CAP-22 capability/model route plus CAP-26/FR-45 organisational coverage planning and the OQ-14 identity/authorisation obligation. External-audit-specific acceptance remains retained future activation scope rather than a current internal-audit release blocker. CAP-23 to CAP-25 (FR-38, FR-40, FR-42) are V2, as is a hosted agent browser or sandbox (V2 revisit, OQ-13). Grouping into epics is not a scope cut. Under OQ-10 (decided 2026-10-27) the first increment, sequencing and explicit deferrals are decided in this document; every deferral is recorded as unmet acceptance, never silently dropped.
+
+## Approved current planning baseline (2026-11-05)
+
+This correct-course amendment applies the approved PRFAQ and reuse-first direction. It does not restart the historical create-epics workflow or declare its pending final-validation gates passed. Historical dated scope/readiness/traceability reports remain unchanged. Current mapping: [epic-scope-and-dependencies-2026-11-05.md](epic-scope-and-dependencies-2026-11-05.md), [epic-traceability-2026-11-05.json](epic-traceability-2026-11-05.json), [implementation-readiness-2026-11-05.md](implementation-readiness-2026-11-05.md).
+
+- Preserve every compatible Codex capability/model route in V1: reuse → expose/adapt → qualify. Increment labels below retain historical sequencing, not permission to cut generic scope. See [capability-reuse-inventory-2026-11-05.md](capability-reuse-inventory-2026-11-05.md) and its three source audits; source presence, configuration, UI wiring, entitlement and runtime qualification are separate facts.
+- Current V1 serves one organisation and one internal-audit team through setup/context, organisational risk/coverage planning, engagement design/work, manager review/report and management-action follow-up, including a supported recurring check. Internal-audit advisory and technical work remain supported.
+- External-audit-specific workflows/standards and audit-firm multi-client switching are future activation scope: retain their original IDs and unmet acceptance, notably AC 6.1.1 and OQ-15. Complex large-team resource management, a broad integration marketplace, automatic migration of every historical system and autonomous report issuance remain outside this V1. This does not delete reusable connector/plugin mechanisms or any compatible technical/model capability, and never removes cross-organisation isolation tests.
+- External formal record authority stays V1; native records/lifecycle/migration (CAP-23–25, Epics 16–17 as applicable) stay V2. OQ-6 remains desktop-first Excel/Word/PowerPoint/CSV and import/export for first validation, with no named external record system. W3 stays a fixture; a real destination or changed baseline needs explicit reconciliation.
+- Epic 1's existing section, acceptance and implementation status are preserved byte-for-byte. Story 1.31 is an already approved tracker/spec extension outside the historical 139-story/84-story baseline. Its original scope/status remains intact; the new 6.6 does not retroactively claim it delivered audit-context readiness.
+- FR-45 / CAP-26 / UJ-10 map to new 6.7; UJ-9 maps to new 6.6. Existing FR/CAP/UX IDs stay stable. Additive lifecycle ACs below supplement, rather than replace, older acceptance. No tracker state is implementation evidence.
+- The selected recurring-check path is brought into current end-to-end validation through 6.5.6–6.5.8 and 12.1–12.6/12.8. Actual security, identity, source/Method, held-data, recovery, mandate, revocation and duplicate-effect prerequisites remain mandatory; unrelated complete Epics 7–11 are not prerequisites. Service-event breadth 12.7 remains V1 but is conditional on that route's activation, not a blocker for a local scheduled check.
+- Inherited durable queue, mailbox wakes, durable-sleep and clock.sleep are real reuse foundations, not a production scheduler guarantee. The supported recurrence trigger, host/app availability, restart/missed-run handling and exact runtime proof remain specification/qualification gates. No replacement runtime, always-on cloud service or scheduler vendor is selected here.
+
 
 ## Reconciliation requirements (2026-10-27)
 
@@ -157,7 +173,7 @@ Source: final PRD section 4 (IDs global and stable). Each FR names its capabilit
 
 **CAP-20 Support external-record practice (P20)**
 
-- **FR-39 Coordinate practice workflows using external records:** Practitioners plan/scope, manage procedures and evidence requests/receipt, analyse, prepare workpapers, review, report, handle responses and follow up using artifacts and external systems, and prepare stakeholder communications through approved tools (OQ-6: no named external record system for first validation; import/export only). Consequences: external-audit, advisory and technical examples work without mandatory control objects or deficiency states; the Method determines transitions; a Finding is never professionally closed merely because a Task completed.
+- **FR-39 Coordinate practice workflows using external records:** Practitioners plan/scope, manage procedures and evidence requests/receipt, analyse, prepare workpapers, review, report, handle responses and follow up using artifacts and external systems, and prepare stakeholder communications through approved tools (OQ-6: no named external record system for first validation; import/export only). Consequences: internal-audit, contextual advisory and technical examples work without mandatory control objects or deficiency states; external-audit-specific acceptance remains retained for future activation; the Method determines transitions; a Finding is never professionally closed merely because a Task completed.
 
 **CAP-24 Use native practice records (P20) - V2**
 
@@ -175,6 +191,10 @@ Source: final PRD section 4 (IDs global and stable). Each FR names its capabilit
 
 - **FR-43 Preserve meaning across boundaries:** Users can delegate, switch editors or environments, review and resume without manually reconstructing Task context or losing artifact identity. Consequences: sources, Method, artifacts, decisions and actual status remain accessible under current grants across the boundary; unsupported transfers disclose missing context. Handoffs identify artifact/evidence versions, per-note resolution and precise change impact; uncertain impact requires broader recheck. External edits and changed evidence or Method identify affected outputs and approvals.
 - **FR-44 Make scope and completion claims inspectable:** The product exposes actual completion states and maintains Capability Contracts for the mapped behaviours, including smaller and technical capabilities. Consequences: planned/running/blocked/interrupted, produced, checks incomplete/complete, review/revision, Professional Approval and attempted/confirmed/uncertain Delivery remain distinct; no universal state machine; capability-specific acceptance exists for enabled routes and the full inventory; any deferral is named unmet scope.
+
+**CAP-26 Risk-based organisational coverage planning (current V1)**
+
+- **FR-45:** Prepare, review and revise risk-based organisational audit coverage using source-backed objectives, risks, prior findings/actions and relevant assurance information; expose priorities, gaps, constraints, rationale and applicable governance approval. Follow-up and material changes feed reassessment. Stories 6.6–6.7, AC 6.5.6 and UJ-9/UJ-10 provide the lifecycle path. No complex resource-management suite or universal planning template is implied.
 
 ### NonFunctional Requirements
 
@@ -258,8 +278,12 @@ Source: final PRD section 5. All apply to enabled capabilities in their phase; p
 | CAP-23 | V2 | FR-38 | 3, 4, 7, 9 | UJ-2, UJ-8 via SP7 | A12 |
 | CAP-24 | V2 | FR-40 | 3, 7, 9 | UJ-2, UJ-4, UJ-6, UJ-8 via SP7 | A12 |
 | CAP-25 | V2 | FR-42 | 3, 4, 7, 9 | UJ-4, UJ-5, UJ-8 via SP7 | A11 (V2 part), A12 |
+| CAP-26 | V1 | FR-45 | 2, 3, 7 | UJ-9, UJ-10 | Current lifecycle AC 6.5.6–8, 6.6.1–4, 6.7.1–5 |
 
 #### Journeys (all V1; SP7 extends them into V2)
+
+- **UJ-9** Organisational setup/context readiness: guided settings and agent assistance with permitted strategy/objectives, risks, methodology and useful history; required/missing/deferrable context and source authority remain visible (6.6).
+- **UJ-10** Risk-based coverage planning and feedback: source-backed priorities/gaps and governance approval link to engagement work, reports/actions and subsequent dynamic reassessment (6.7, 6.4, 6.5.6).
 
 - **UJ-1** Amina (Internal Auditor) answers an ad hoc question from existing files without Engagement setup; sources, uncertainty and coverage inspectable; continuation without reconstruction.
 - **UJ-2** Amina and Noah (Internal Audit Manager) carry an Engagement through review to a reviewable reporting package with decision/Delivery state under the external authority.
@@ -409,8 +433,10 @@ Stable IDs are unchanged; this map follows the approved 17 groups. Detailed old-
 | FR-39, FR-41 | 5 reviewable package; 6 practice/fixture delivery; 14 actual destination |
 | FR-40, FR-42 (V2) | 16 native practice/migration |
 | FR-43, FR-44 | 1 state/register foundations; per-route tests with each capability; 5/6 first-increment integration; 15 full-V1 integration |
+| FR-45; UJ-9, UJ-10 | 6.6 source-backed setup/context; 6.7 organisational coverage planning; 6.4 feedback; 6.5.6–8 full lifecycle/recurrence/readiness; existing 12.1–6/8 recurring safety |
 | OQ-14, OQ-15, OQ-16 | 1 own identity boundary; 4 actual shared transfer/current grants; OQ-16A direction adopted with SC-1–6 contracts, OQ-16B actual-route and OQ-15 external-client gates retained |
 | UX-DR1–55 plus reconciled sharing/reviewer rules | 1 tokens/primitives/shell/initial states; 2 context/Methods; 3 artifact/editor/technical preview; 4 team/sharing/memory; 5 review/export; 6 practice/delivery; 7–15 corresponding later surfaces; 16 native surface |
+| Current UX lifecycle chapters (no new UX-DR IDs) | UJ-9 setup/context → 6.6 via S01/02/06/07/08/09; UJ-10 coverage planning → 6.7 via S01/02/03/05/06/08/09/10; extended UJ-2 engagement/report/actions → 6.1/6.4/5.13; UJ-8 bounded recurrence → 12.1–6/8 and 6.5.7; State Patterns / Authority and Delivery → 2.12, 5.11/5.13 and full lifecycle validation. Existing 13 surfaces and 28 components retained. |
 | NFR-1–10 | Acceptance in each owning capability; enabled-route matrix 6/15; no document check establishes runtime acceptance |
 
 ## Epic List
@@ -433,7 +459,7 @@ Increment 1; 7 stories; complete group details below.
 Increment 1; 14 stories; complete group details below.
 
 ### Epic 6: Full first-increment practice and delivery-contract validation
-Increment 1; 5 stories; complete group details below.
+Current V1 lifecycle baseline; 7 stories, including new 6.6 setup/context and 6.7 risk-based coverage planning; supported recurrence composes existing Epic 12 contracts.
 
 ### Epic 7: Local browser and demonstration capabilities
 Increment 2 / V1; 5 stories; complete group details below.
@@ -1461,11 +1487,13 @@ Increment 1. Origin: old Story 8.2. Requirements/inventory: A10, AD-8, C34, C35,
 **When** a mutation is proposed
 **Then** the acting account and destination are shown in the ApprovalCard and the write is reviewed separately from reads.
 
+**Owner-confirmed experience direction, 2026-11-05:** Keep the conversation clean and focused. Show concise source/account/scope cues needed before reliance, rather than the whole audit trail in the conversation workspace. The auditor can open the referenced source, file or result on demand to inspect the underlying evidence and relevant provenance/details. These details remain inspectable; they are not removed or treated as unnecessary. The discussed screenshot is illustrative of this direction, not approval of the entire visual design.
+
 ### Story 2.5: Run calculations, queries and scripts with retained derivations
 
-As an IT Auditor,
-I want executable analysis to keep its code, input identifiers, parameters, reconciliation checks and outputs with the result,
-So that another auditor can inspect and reperform the calculation (FR-11, C19, C33).
+As an Internal Auditor,
+I want to review what was checked, the sources, findings, differences, assumptions and limitations in audit and business language, with the underlying execution and derivations retained,
+So that I can understand and challenge the analysis without reading code, while the work remains inspectable and reproducible when needed (FR-11, C19, C33).
 
 Increment 1. Origin: old Story 3.4. Requirements/inventory: AD-9, C19, C20, C33, FR-11, NFR-2, UX-DR44.
 
@@ -1493,6 +1521,15 @@ Increment 1. Origin: old Story 3.4. Requirements/inventory: AD-9, C19, C20, C33,
 **When** the category is enabled and its current policy exercised
 **Then** access, retention, deletion, export and recovery rules are implemented and tested for the actual held category before real-data use
 **And** unknown policy blocks enablement; no duration is invented. Revocation suppresses retained/derived disclosure, recovery cannot resurrect grants, exports disclose losses and surviving external copies; neither shared controls in Epic 4 nor broader controls in Epic 13 substitute for this local floor.
+
+**Cross-product language requirement:** Apply [PRD §3.1](prds/prd-inquello-2026-10-26/prd.md#31-user-facing-language-and-terminology) and the UX Voice and Tone guidance to this story. Standards-defined meanings and organisation-configured terminology remain distinct; clear audit language is required across the product, not only in technical analysis.
+
+**AC 2.5.5 (owner-confirmed experience, 2026-11-05)**
+**Given** a general auditor reviewing an analysis, such as interest-income recognition at a microfinance institution
+**When** the auditor opens the result or asks about a difference
+**Then** the primary review explains in audit and business language what was checked, which sources were used, the findings and differences, assumptions and limitations, rather than opening a technical query or execution-log panel.
+**And** the auditor can drill into a particular loan or calculation, ask how it was calculated, challenge an assumption and request recalculation, with the explanation and any revised result connected to the actual sources and retained analysis.
+**And** scripts, query details, input versions, parameters, checks and execution records remain retained for reproducibility and available on demand, including for specialist inspection; reading SQL, scripts or technical logs is not a prerequisite for a general auditor to understand and review the work. Existing failure, staleness, access and held-data protections remain unchanged, and the explanation must not turn an unsupported result into a verified conclusion.
 
 ### Story 2.6: Apply standing instructions and Workspace guidance with provenance
 
@@ -1603,6 +1640,11 @@ Increment 1. Origin: old Story 7.2. Requirements/inventory: C36, C37, FR-19, OQ-
 **When** invoked with this month's files
 **Then** the Task records the skill identity, version and parameters, runs its helpers, and produces the declared outputs with verification evidence.
 
+**AC 2.10.2**
+**Given** a selected supported procedure and its verification contract
+**When** execution is inspected
+**Then** the evidence distinguishes faithful execution from human judgment of procedure suitability and interpretation; failed, incomplete and uncertain work stays visible without requiring the auditor to repeat every record.
+
 ### Story 2.11: Record Task-specific departures separately from Method changes
 
 As an Internal Auditor,
@@ -1656,6 +1698,16 @@ Increment 1. Origin: old Story 3.6. Requirements/inventory: AD-9, FR-12, NFR-2, 
 **Given** Workbook content wider than the panel
 **When** it renders
 **Then** horizontal overflow is reachable by keyboard with a labelled boundary and values are not shrunk to fit.
+
+**AC 2.12.4**
+**Given** a defined population and supported procedure
+**When** processing completes or is interrupted and resumed
+**Then** input population reconciles to completed, excluded, failed and unfinished work under declared counting and duplicate semantics; source versions, parameters and record/batch identity make the evidence inspectable. A successful turn or spot check alone does not prove full processing.
+
+**AC 2.12.5**
+**Given** interruption at a consequential boundary or a lost response
+**When** work resumes
+**Then** no record is silently omitted and no effect is blindly repeated; uncertain outcomes remain unresolved until reconciled, with recovery effort and limits retained. Representative scale and expected results must be selected before reliance, not inferred from W1.
 
 ### Story 2.13: Inspect technical investigation detail without forcing it on ordinary review
 
@@ -2287,6 +2339,11 @@ Increment 1. Origin: old Story 9.4. Requirements/inventory: AD-10, C50, FR-27, O
 **Then** separate contribution/use controls expose effective policy and unavailable/denied states; recalled context is labelled recalled, distinct from evidence
 **And** neither switch bypasses admission/current grants; a historical result is not current evidence.
 
+**AC 4.5.6**
+**Given** eligible organisational strategy, objectives, policies, risk assessments, plans, findings and action history
+**When** knowledge supports a plan or engagement
+**Then** origin, period, version, uncertainty, contradictions, current grants and known changes are inspectable; missing knowledge is visible, stale recall is not current evidence, and private exploration never becomes team knowledge automatically.
+
 ### Story 4.6: Prove private/shared memory and revocation boundaries
 
 As an Internal Audit Manager,
@@ -2322,6 +2379,11 @@ Increment 1. Origin: old Story 2.7. Requirements/inventory: A14, C3, C65, C70, C
 **When** the delayed result returns after revocation
 **Then** the suite verifies no subsequent display, action, recall or derived answer uses the revoked result/context and affected work stops or safely rebases
 **And** the evidence records the race and already-transmitted disclosure limit; no invented instantaneous recall or latency guarantee is tested.
+
+**AC 4.6.5**
+**Given** organisational knowledge and derived planning context
+**When** a source changes or access is revoked
+**Then** dependent plans and conclusions are qualified or marked for reassessment; revoked content cannot leak through summaries, retrieval or diagnostics. Existing two-user/two-company negative isolation tests remain mandatory despite the single-organisation V1 audience.
 
 ### Story 4.7: Assign Task and Human Review responsibility with attribution
 
@@ -2434,6 +2496,11 @@ Increment 1. Origin: old Story 5.1. Requirements/inventory: C28, E01, E03, FR-17
 **Given** findings
 **When** they are shown
 **Then** significance follows the Engagement's scheme, not developer severity labels, and no finding is closed or approved by the review itself.
+
+**AC 5.3.4**
+**Given** a potential exception or difference
+**When** a finding or conclusion is prepared
+**Then** condition, criteria, evidence sufficiency, significance and limitations are evaluated under the Method; cause is pursued when possible without a universal five-Cs template. Conclusions address engagement objectives and aggregate significance; disputed or insufficient evidence is visible.
 
 ### Story 5.4: Let the reviewer issue only human-selected anchored notes
 
@@ -2659,6 +2726,11 @@ Increment 1. Origin: old Story 13.3. Requirements/inventory: A11, AD-13, E17, FR
 **Then** the actual authorized version and included supporting context are usable, with missing/omitted material and transfer losses explicit
 **And** no sender-local path is presented as transferred evidence, and export alone is not confirmed receipt or formal acceptance.
 
+**AC 5.11.5**
+**Given** plans, work programmes, evidence, workpapers, findings, approvals and actions in a supported export
+**When** the package is opened on the recipient computer
+**Then** declared content, stable relationships, reviewed versions and attribution are usable with permitted supporting evidence; the manifest states losses and external formal authority. A local path is not transfer, export is not issuance, and reimport meets every previously promised contract.
+
 ### Story 5.12: Preserve Task context across editor, environment, delegation, review and resume boundaries
 
 As an Internal Auditor,
@@ -2680,6 +2752,11 @@ Increment 1. Origin: old Story 14.1. Requirements/inventory: A09, AD-6, FR-43, U
 **Given** a transfer the route does not support (for example live state to a remote host)
 **When** attempted
 **Then** the missing context is named and the user is offered a supported continuation; no success is simulated.
+
+**AC 5.12.3**
+**Given** work crosses organisational planning, engagement delivery and follow-up
+**When** context is continued
+**Then** source-backed objectives, risks, criteria, procedures, evidence, findings, reports and action/retest links retain period/version, current access and change impact; unavailable context is disclosed and private reviewer work remains private.
 
 ### Story 5.13: Expose the complete state model including Delivery and Professional Approval links
 
@@ -2708,6 +2785,11 @@ Increment 1. Origin: old Story 14.2. Requirements/inventory: AD-13, AD-6, FR-44,
 **Given** the prototype anti-patterns list
 **When** the UI is audited
 **Then** none occurs: Stop never marks steps done, Keep never claims a saved version, toasts never claim delivery, "accepted" never represents an automated check, and no item routes to a fixed demo record.
+
+**AC 5.13.4**
+**Given** a report and linked lifecycle deliverables
+**When** human review, approval or issuance is recorded
+**Then** each state names the relevant version, actual authority and supporting evidence; generated, exported, delivered, professionally approved and issued remain distinct. Final communication content and recipients follow applicable requirements, not automatic board distribution or agent issuance.
 
 ### Story 5.14: Demonstrate the workbook-to-review-to-export engineering checkpoint
 
@@ -2739,12 +2821,12 @@ Increment 1. Origin: old Story 14.4. Requirements/inventory: A01, A16, A18, C1, 
 
 ## Epic 6: Full first-increment practice and delivery-contract validation
 
-Increment 1. 5 stories. Owner-approved group structure; detailed stories are the consolidated review proposal, not individually approved or ready-for-development statuses. Each acceptance criterion is a requirement, not executed test evidence.
+Current V1 lifecycle baseline. 7 stories (6.6 and 6.7 added by the approved course correction). Owner-approved group structure; detailed stories are the consolidated review proposal, not individually approved or ready-for-development statuses. Each acceptance criterion is a requirement, not executed test evidence.
 
 ### Story 6.1: Plan, scope and run procedures with the practice's own terminology
 
 As an Internal Auditor,
-I want to plan and scope an Engagement, define procedures and record results using my Method's terms (assertions and materiality for external audit, options for advisory, technical assets for IT audit) without a mandatory control or deficiency object,
+I want to plan and scope an internal-audit Engagement, define an authorised work programme and record results using applicable Method terms (contextual advisory options and relevant technical assets) without a mandatory control or deficiency object,
 So that each practice works its own way on one workbench (FR-39, A02, E15, C78).
 
 Increment 1. Origin: old Story 13.1. Requirements/inventory: A02, C78, E15, FR-39, UJ-2, UJ-6.
@@ -2767,6 +2849,13 @@ Increment 1. Origin: old Story 13.1. Requirements/inventory: A02, C78, E15, FR-3
 **Given** a plan generated by the agent
 **When** shown
 **Then** it is labelled a proposed plan, not an authorised work programme.
+
+**Applicability:** AC 6.1.1 remains verbatim unmet future external-audit activation acceptance; AC 6.1.2–6.1.4 apply to the current internal-audit V1 as relevant. It is not waived, rewritten or counted as tested by an internal-audit example.
+
+**AC 6.1.4**
+**Given** an internal-audit engagement with applicable methodology
+**When** work is designed or revised
+**Then** the reviewable work programme links objectives, scope, risks including fraud, criteria, procedures/methods/tools, expected evidence and assigned auditors; missing information and scope/access limits are explicit. Required programme approval precedes implementation and changes receive prompt approval under actual delegation (GIAS 13.6 where applicable); agent preparation is not authorised work. Advisory variation follows applicable standards and agreed context, without mandatory RCM or universal sample size.
 
 ### Story 6.2: Track evidence requests and receipt and prepare stakeholder communications
 
@@ -2835,7 +2924,7 @@ So that remediation is traced and an agent run never closes a Finding (FR-39, E1
 
 Increment 1. Origin: old Story 13.5. Requirements/inventory: AD-13, E14, FR-39, UJ-8, UX-DR51.
 
-**Prerequisites:** 6.3.
+**Prerequisites:** 6.1–6.2, relevant Epic 5 finding/review/report authority and evidence contracts. 6.3 is required only for an enabled external-writeback path; file/import-export follow-up does not require a named production adapter.
 
 **Acceptance Criteria:**
 
@@ -2849,6 +2938,16 @@ Increment 1. Origin: old Story 13.5. Requirements/inventory: AD-13, E14, FR-39, 
 **When** displayed
 **Then** it is distinguished from an operating control proven effective.
 
+**AC 6.4.3**
+**Given** management responses and agreed actions
+**When** follow-up is planned or updated
+**Then** owner, due date, progress, evidence, relevant finding/objective and change history are retained; risk-based implementation confirmation follows the organisation's methodology. Missed dates retain explanation, discussion and next action, without an invented reminder cadence.
+
+**AC 6.4.4**
+**Given** reported completion, retest results or accepted risk
+**When** a follow-up decision is reviewed
+**Then** management-reported completion, supported implementation confirmation, effectiveness where required, risk acceptance and authorised closure remain distinct. Risk beyond appetite/tolerance follows actual escalation authority; unresolved matters and results feed subsequent coverage planning (6.7), never automatic agent closure.
+
 ### Story 6.5: Complete first-increment fixture validation and deferral accounting
 
 As an Internal Audit Manager,
@@ -2857,7 +2956,7 @@ So that validation evidence is repeatable and deferrals are never silently dropp
 
 Increment 1. Origin: old Story 14.4. Requirements/inventory: A01, A16, A18, C1, C4, FR-44, NFR-2, NFR-4, OQ-10, OQ-7, UX-DR54.
 
-**Prerequisites:** 6.4.
+**Prerequisites:** 6.1–6.4 applicable fixture and lifecycle contracts plus 6.6–6.7 and bounded recurring-check contracts 12.1–12.6/12.8, with 10.3 recovery and 13.1 held-data controls for categories actually used. Broader generic V1 capabilities remain required by their own acceptance, not prerequisites to this bounded journey checkpoint.
 
 **Acceptance Criteria:**
 
@@ -2886,6 +2985,93 @@ Increment 1. Origin: old Story 14.4. Requirements/inventory: A01, A16, A18, C1, 
 **When** the team chooses validation tasks
 **Then** all originally retained first-increment Word/PowerPoint/CSV/research/practice workflows remain eligible and their applicable fixtures are run
 **And** the engineering checkpoint neither selects the owner’s validation workload nor proves full V1/V2 or production adapter readiness.
+
+**AC 6.5.6**
+**Given** the approved V1 journey and selected supported recurring-check route
+**When** end-to-end acceptance is exercised
+**Then** setup/context (6.6), risk-based coverage planning (6.7), authorised engagement work (6.1), evidence/procedures/workpapers (Epics 2–3 and 6.2), manager review/report (Epics 4–5), action follow-up (6.4), recurrence (12.1–12.6/12.8) and feedback into a revised plan are demonstrated together, including failure/recovery and changed-source paths. W1–W3/M1 and all applicable older format, privacy and authority fixtures remain additive obligations.
+
+**AC 6.5.7**
+**Given** the bounded recurrence acceptance case
+**When** it is configured, due, interrupted, resumed or cancelled
+**Then** the declared trigger/timezone/cadence, fresh input contract, Method revision, acting identity, limits, destination and escalation are inspectable; unavailable/offline host, not-received, not-run, incomplete, failed and no-reported-exceptions states remain distinct. Expiry/departure, revocation, duplicate triggers, uncertain effects and restart/cancellation cases must pass before enabling real data. Inherited durable queue/sleep is reused where compatible, not represented as production recurrence proof.
+
+**AC 6.5.8**
+**Given** a first real engagement is proposed
+**When** readiness is assessed
+**Then** dependable supported execution/recovery, access/data handling, visible evidence/failures/human review and organisational data/use authority are established; significant-risk coverage, conclusion quality/relevance and comfortable direction/review are assessed alongside total effort and cost without invented numerical targets. A planning approval, tracker state or synthetic pass is not real-use authorisation.
+
+### Story 6.6: Establish source-backed organisation and first-engagement context
+
+As an Internal Audit Manager,
+I want guided setup/settings and agent assistance to establish team access, methodology, permitted sources and useful organisational context,
+So that the team knows what is ready, missing or deferrable without rebuilding context or exposing private work.
+
+Current V1 lifecycle baseline. New extension, not a rewrite or completion claim for Story 1.31.
+Requirements: FR-9, FR-19, FR-20, FR-27, FR-33, FR-35, FR-37, FR-39; UJ-9; CP-4/CP-8.
+
+**Prerequisites:** existing account/team access contracts (including owner-approved 1.31 where applicable); 2.1, 2.6–2.7 and relevant source-trust contracts; 4.1–4.6 before shared knowledge use. OQ-6 desktop files/import-export baseline remains; 11.7 only when a selected setup/history import uses it.
+
+**Acceptance Criteria:**
+
+**AC 6.6.1**
+**Given** a team preparing its first supported engagement
+**When** guided setup or agent assistance is used
+**Then** available strategy/objectives, organisational structure/processes/policies, risk picture/audit universe and useful prior findings/actions are organised with source, period, version and current access; missing or conflicting inputs are visible, not invented.
+
+**AC 6.6.2**
+**Given** the intended supported work and applicable methodology
+**When** readiness is reviewed
+**Then** required, missing, blocked and deferrable inputs are distinguished; connection/settings needs lead to the relevant configuration, and useful work is not blocked on every historical document. Exact procedure/input/readiness criteria must be specified before reliance.
+
+**AC 6.6.3**
+**Given** private auditor or reviewer work and eligible issued or explicitly team-shared material
+**When** organisational context is admitted or recalled
+**Then** admission, contribution and use remain separate under current grants; no admin role or onboarding step publishes private work, grants source access or bypasses revocation.
+
+**AC 6.6.4**
+**Given** supported local files or an expressly selected history import
+**When** context is brought into the workspace
+**Then** imported, skipped, missing and attention-needed items are reported with provenance and limitations; credentials require appropriate reauthorisation, authority is unchanged and automatic full historical migration is not promised.
+
+### Story 6.7: Prepare and revise risk-based organisational coverage plans
+
+As an Internal Audit Manager,
+I want to assess significant risks and prepare, review and revise organisational audit coverage using available source-backed context and follow-up,
+So that audit work targets defensible priorities and known coverage gaps remain visible.
+
+Current V1 lifecycle baseline. New requirement FR-45 / CAP-26; UJ-10; CP-3/CP-5/CP-8.
+This is organisational coverage planning, not the engagement work programme in 6.1 and not complex resource-management software.
+
+**Prerequisites:** 6.6 context readiness; 2.7/2.11 Method/departure contracts, supported plan artifacts from Epic 3, and 4.1–4.7/5.13 where sharing or human approval coordination is used. Initial planning does not depend on 6.4; follow-up feedback is additive once available, preventing a circular build dependency.
+
+**Acceptance Criteria:**
+
+**AC 6.7.1**
+**Given** available strategy, objectives, risk information, prior findings, outstanding actions and other permitted assurance information
+**When** a risk-based audit plan is proposed
+**Then** assessment basis, significant risks, priorities, proposed coverage, gaps and omitted significant risks are inspectable with source/version, uncertainty and rationale. Relevant resource/access constraints inform judgment without a complex staffing/capacity/budget suite.
+
+**AC 6.7.2**
+**Given** a proposed plan or significant change
+**When** it is reviewed
+**Then** proposal, manager review and applicable plan approval remain distinct; relevant board/management input and actual governance/delegation approval evidence are retained through the existing external-authority contract, without board guest accounts or a mandatory personal-CAE click.
+
+**AC 6.7.3**
+**Given** changed objectives/risks, new findings or follow-up results
+**When** coverage is reassessed
+**Then** affected priorities, omissions, assumptions and rationale are visible and the revised plan preserves the previous basis/version and required approval evidence; unresolved actions and accepted risks are not silently treated as remediated.
+
+**AC 6.7.4**
+**Given** the applicable professional framework and organisational context
+**When** the planning Method is selected
+**Then** where GIAS applies, a documented risk assessment occurs at least annually and the plan responds dynamically to material changes (9.4). Coordination with other assurance providers is considered; when reliance is used, its conditions and basis are documented and internal audit retains responsibility (9.5). Applicable alternative frameworks are identified rather than assuming GIAS universally. No universal audit-universe file, heat map or fixed stage sequence is imposed.
+
+**AC 6.7.5**
+**Given** approved planned coverage or a justified engagement change
+**When** engagement work is designed
+**Then** plan objectives/risks and relevant constraints link to the engagement work programme, evidence, conclusions/report and follow-up through working artifacts and designated external authority; stale or unavailable sources qualify reliance and source changes identify affected work.
+
 
 ## Epic 7: Local browser and demonstration capabilities
 
@@ -3607,7 +3793,7 @@ So that a multi-day analysis continues without silently reusing superseded evide
 
 Increment 2 (V1). Origin: old Story 9.3. Requirements/inventory: A09, AD-8, C48, C49, FR-27, UX-DR41.
 
-**Prerequisites:** 10.2.
+**Prerequisites:** 1.29 same-Task recovery, 2.1/2.10/2.12 source/execution evidence, 4.3–4.4 current access/revocation and 5.12 continuity. 10.2 is required only for fork-origin continuations; ordinary long-work recovery does not depend on unrelated branching/provider/client breadth.
 
 **Acceptance Criteria:**
 
@@ -3835,7 +4021,7 @@ Increment 2 (V1). Origin: old Story 11.8. Requirements/inventory: A14, C64, FR-3
 
 ## Epic 12: Bounded unattended and service-triggered work
 
-Increment 2 / V1. 8 stories. Owner-approved group structure; detailed stories are the consolidated review proposal, not individually approved or ready-for-development statuses. Each acceptance criterion is a requirement, not executed test evidence.
+V1 retained scope. The 12.1–12.6/12.8 bounded scheduled-check path is in the current end-to-end baseline; 12.7 service-triggered breadth remains V1 and independently gated. 8 stories. Owner-approved group structure; detailed stories are the consolidated review proposal, not individually approved or ready-for-development statuses. Each acceptance criterion is a requirement, not executed test evidence.
 
 ### Story 12.1: Run a procedure non-interactively with structured, versioned results
 
@@ -3845,7 +4031,7 @@ So that repeatable jobs feed other tools without bypassing policy (FR-23, C03, C
 
 Increment 2 (V1). Origin: old Story 10.1. Requirements/inventory: A16, AD-4, C03, C43, E18, E19, FR-23, NFR-6.
 
-**Prerequisites:** completed Epic 11 delivery and earlier required contracts; no later epic is required.
+**Prerequisites:** Epic 1 effective identity, permissions, private Task binding and current-route gates; 2.7/2.10/2.12 Method, execution and coverage contracts; supported artifacts/results, 10.3 recovery and 13.1 actually held categories. Reuse inherited noninteractive/SDK primitives through protected Inquello invocation. Full Epic 11 or unrelated Epics 7–10 delivery is not a prerequisite.
 
 **Acceptance Criteria:**
 
@@ -4022,7 +4208,7 @@ So that earlier desktop tests are not mistaken for unattended proof.
 
 Increment 2 (V1). Origin: old Story 2.7. Requirements/inventory: A14, C3, C65, C70, C72, NFR-3, OQ-9.
 
-**Prerequisites:** 12.7.
+**Prerequisites:** 12.1–12.6 for the enabled recurring route, 10.3 recovery and 13.1 held-data controls. 12.7-specific event/return-audience tests additionally apply when that service route is enabled; absence of 12.7 cannot block a supported local schedule or count as service-event acceptance.
 
 **Acceptance Criteria:**
 
@@ -4044,7 +4230,7 @@ So that Inquello-held material is governed without pretending to be the audit re
 
 Increment 2 (V1). Origin: old Story 12.3. Requirements/inventory: AD-13, AD-14, C75, FR-37, NFR-10, NFR-9, OQ-2, UX-DR42.
 
-**Prerequisites:** completed Epic 12 delivery and earlier required contracts; no later epic is required.
+**Prerequisites:** 1.12 local-held-data and 4.3–4.4 shared/derived-data protection contracts; define policy for each newly enabled category before its use. Draft unattended category controls are established before 12.1–12.6 enablement and exercised against that actual route when supplied, without waiting for all Epic 12 breadth.
 
 **Acceptance Criteria:**
 
@@ -4212,6 +4398,11 @@ Increment 2 (V1). Origin: old Story 14.4. Requirements/inventory: A01, A16, A18,
 **Given** validation runs with the internal audit team
 **When** effort data is captured
 **Then** total effort through acceptance, wall time, reviewer correction burden, wrong or missed results, tool and model costs and denominators are recorded per task class without numeric thresholds (OQ-7).
+
+**AC 15.4.5**
+**Given** the current V1 capability inventory and full audit journey
+**When** cross-surface acceptance is reported
+**Then** every compatible capability/model route remains accounted for with its exact exposure, dependency and qualification evidence; the complete audit journey including recurrence is checked without pretending unrelated secondary-surface tests are local-check prerequisites. Unmet generic V1 acceptance remains V1, not an implicit scope cut or completed parity claim.
 
 ## Epic 16: Native records and deliberate migration
 

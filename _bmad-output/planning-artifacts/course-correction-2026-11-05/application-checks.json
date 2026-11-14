@@ -1,0 +1,42 @@
+{
+  "checks": {
+    "baseline_unexpected_changes": true,
+    "all_spec_companions_exist": true,
+    "cap_ids_1_to_26": true,
+    "cap_intent_success": true,
+    "fr_ids_1_to_45": true,
+    "local_links_resolve": true,
+    "catalog_preserved": true,
+    "no_code_diff": true,
+    "git_diff_check": true
+  },
+  "passed": true,
+  "baseline_files": 286,
+  "expected_changed_files": [
+    "_bmad-output/implementation-artifacts/sprint-status.yaml",
+    "_bmad-output/planning-artifacts/architecture/architecture-inquello-2026-10-26/.memlog.md",
+    "_bmad-output/planning-artifacts/architecture/architecture-inquello-2026-10-26/ARCHITECTURE-SPINE.md",
+    "_bmad-output/planning-artifacts/architecture/architecture-inquello-2026-10-26/shared-service-contract-proposal-2026-10-27.md",
+    "_bmad-output/planning-artifacts/epics.md",
+    "_bmad-output/planning-artifacts/prds/prd-inquello-2026-10-26/.memlog.md",
+    "_bmad-output/planning-artifacts/prds/prd-inquello-2026-10-26/addendum.md",
+    "_bmad-output/planning-artifacts/prds/prd-inquello-2026-10-26/prd.md",
+    "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/.memlog.md",
+    "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/.working/experience-coverage.md",
+    "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/DESIGN.md",
+    "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/EXPERIENCE.md",
+    "_bmad-output/specs/spec-inquello/.memlog.md",
+    "_bmad-output/specs/spec-inquello/glossary.md",
+    "_bmad-output/specs/spec-inquello/scope-and-gates.md",
+    "_bmad-output/specs/spec-inquello/SPEC.md"
+  ],
+  "unexpected": [],
+  "spec_companions": 16,
+  "local_link_count": 64,
+  "broken_links": [],
+  "catalog_rows": 99,
+  "extra_routes": 1,
+  "source_audited_overlays": 40,
+  "catalog_only_unverified": 59,
+  "runtime_tests_run": false
+}

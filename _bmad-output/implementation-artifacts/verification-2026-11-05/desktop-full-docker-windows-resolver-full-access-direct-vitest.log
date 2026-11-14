@@ -1,0 +1,43 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.5 [39m[90mD:/Projects/inquello/desktop[39m
+
+2026-11-05T19:50:25.443100Z  INFO inquello_service::test_provider: synthetic OIDC provider listening issuer="https://127.0.0.1:50209"
+2026-11-05T19:50:25.874930Z  INFO inquello_service::server: inquello service listening local_addr=127.0.0.1:50212 https=true
+2026-11-05T19:50:25.986509Z  INFO sqlx::postgres::notice: relation "_sqlx_migrations" already exists, skipping
+2026-11-05T19:50:26.045165Z  INFO inquello_service::admin: workspace created by operator workspace_id=8285b1c7-1f4c-4b05-a400-ad49d6216999 receipt_id=6165bd87-4b6f-4e11-903a-eab0ab1bde45
+2026-11-05T19:50:29.282152Z  INFO inquello_service::login: login transaction created login_transaction_id=92fd8ba8-643f-4ad3-acd3-c8c765f552b4
+2026-11-05T19:50:29.291863Z  INFO inquello_service::test_provider: authorization code issued for the synthetic subject
+2026-11-05T19:50:29.312979Z  INFO inquello_service::test_provider: ID token issued for the synthetic subject
+2026-11-05T19:50:29.427499Z  INFO inquello_service::login: session created principal_id=accbc181-a469-42d8-957f-e8f84e131081 session_id=c6517f19-58bf-4314-9602-5c718362e86e
+2026-11-05T19:50:30.296710Z  INFO inquello_service::workspaces: invite accepted principal_id=accbc181-a469-42d8-957f-e8f84e131081 workspace_id=8285b1c7-1f4c-4b05-a400-ad49d6216999
+2026-11-05T19:50:31.066545Z  INFO inquello_dev_topology: dev topology stopping
+ [31m❯[39m test/tool-bounds-integration.test.ts [2m([22m[2m6 tests[22m[2m | [22m[31m1 failed[39m[2m | [22m[33m5 skipped[39m[2m)[22m[33m 7936[2mms[22m[39m
+   [31m❯[39m bounded tool reads, writes and network against the real runtime and local sandbox [2m(6)[22m
+     [2m[90m↓[39m[22m serializes concurrent Task sandbox inspection with real tool execution
+     [2m[90m↓[39m[22m keeps a standard Task inside its folder, read-only system locations and no destinations
+     [2m[90m↓[39m[22m reaches only the listed destinations through the proxy
+     [2m[90m↓[39m[22m makes the Task folder read only under a read_only ceiling
+[31m     [31m×[31m states the true reach of a permitted Full access mode and runs it without the sandbox[39m[33m 713[2mms[22m[39m
+     [2m[90m↓[39m[22m refuses to run, and says so, when the local sandbox cannot be applied
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m test/tool-bounds-integration.test.ts[2m > [22mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22mstates the true reach of a permitted Full access mode and runs it without the sandbox
+[31m[1mError[22m: expected success, got: Full access is not available: not permitted by the Inquello default.[39m
+[36m [2m❯[22m ok test/tool-bounds-integration.test.ts:[2m98:25[22m[39m
+    [90m 96|[39m
+    [90m 97|[39m const ok = <T,>(result: { ok: true; value: T } | { ok: false; reason: …
+    [90m 98|[39m   if (!result.ok) throw new Error(`expected success, got: ${result.rea…
+    [90m   |[39m                         [31m^[39m
+    [90m 99|[39m   return result.value;
+    [90m100|[39m };
+[90m [2m❯[22m test/tool-bounds-integration.test.ts:[2m276:5[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[33m5 skipped[39m[90m (6)[39m
+[2m   Start at [22m 19:50:22
+[2m   Duration [22m 9.16s[2m (tests 92%, transform 5%, import 3%)[22m
+

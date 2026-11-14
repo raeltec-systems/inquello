@@ -1,0 +1,246 @@
+{
+  "records": [
+    [
+      "direction",
+      "2026-11-05 owner approved applying course correction to existing PRD and related plans using BMAD workflows. Approval retains compatible Codex capability goal with per-feature already-usable, expose/adapt and external-dependency inventory; includes full internal-audit V1 coverage planning and supported recurring check, preserving Epic 1 and existing record architecture. Source: assistant proposed this direction; user replied Yes..use the bmad workflows to do just that. Planning only, no implementation or service authority."
+    ],
+    [
+      "decision",
+      "2026-11-05 scope precedence: approved PRFAQ and current course correction supersede earlier external-audit-specific V1 and audit-universe planning deferral. One organisation/internal audit team, auditor and reviewing manager with admin duties, full setup/context, coverage plan, engagement, review/report and follow-up cycle. Compatible technical and internal advisory work retained. External-audit-specific standards/workflows, audit-firm multiclient switching, large-team capacity suite, broad integration-marketplace supply, custom every-system connectors, automatic all-history migration and autonomous issuance excluded from current V1; preserve future acceptance and cross-org isolation tests."
+    ],
+    [
+      "decision",
+      "2026-11-05 retain all compatible Codex capabilities and documented model routes, P01-P22, original FR/CAP/UJ IDs and detailed source inventory; no implicit generic-capability deferral. Reuse inherited implementations, expose/adapt through protected Inquello authority, then qualify platform/provider/service evidence. Source presence, feature flags, management UI, invocation availability and live acceptance are distinct. Inventory at ../../planning-artifacts/capability-reuse-inventory-2026-11-05.md; source baseline c407483170e93ad9bea0f2d1c36e9d32693b0c44. Integration restrictions are not permission to bypass private Task guards."
+    ],
+    [
+      "capability",
+      "CAP-26 [V1] Prepare risk-based audit coverage; FR-45, UJ-10. intent: Help the manager assess priorities and prepare, review and change an audit plan from available strategy, objectives, audit universe, risk information, past findings and outstanding actions. success: Sourced basis, coverage choices, omissions and changes are inspectable; human review and applicable governance approval evidence remain distinct; follow-up results and unresolved matters inform subsequent planning. No staffing suite, mandatory native record, board portal or universal personal-CAE click."
+    ],
+    [
+      "capability",
+      "CAP-20 [V1] is refined to end-to-end internal-audit practice using working artifacts and designated external authority: engagement objectives/scope/risks/criteria/work programme, evidence/procedures/workpapers, review/findings/conclusions/report, actions/follow-up, with CAP-26 coverage planning. Formal conclusions/sign-off remain human; report issuance, management-reported completion, verified implementation and risk acceptance stay distinct. External-audit-specific examples remain future activation, not V1 gates. Flexible Methods and technical/internal advisory use retained."
+    ],
+    [
+      "capability",
+      "CAP-5 and CAP-10 context readiness: guided setup/settings and agent assistance establish team access, methodology and permitted connections, organise available strategy/objectives, audit universe and useful history, and show what is ready, missing or deferrable for intended work. UJ-9 captures organisation context setup. Required input fields/formats/sequence/readiness remain specification details; do not require every historical source or put every setting in chat. Private information does not automatically become team knowledge."
+    ],
+    [
+      "constraint",
+      "CAP-4/6/12/22 faithful execution: for each selected supported procedure establish method and agreed population/scope; reconcile completed, excluded, failed and unfinished work; demonstrate interruption recovery without silent omissions or duplicate effects. Keep execution verification distinct from professional judgment of procedure suitability; spot checks or completed model turns do not prove coverage. Concise inspectable evidence without exposing execution machinery. No numeric scale target, architecture choice or exactly-once guarantee invented."
+    ],
+    [
+      "constraint",
+      "CAP-12 retains broad SDK/batch/schedule/event scope and includes a supported recurring audit check in the end-to-end V1 journey. Reuse inherited durable queue, mailbox and sleep primitives but qualify protected Task invocation, identity/mandate, current permission, inputs/method, limits, results/exceptions/failures and recovery. Exact trigger, local availability, missed-run and restart policy remain before-enablement gates; sleeping/offline host is not success or implicit cloud continuation."
+    ],
+    [
+      "decision",
+      "Preserve external-authority V1/native-authority V2, OQ6 desktop-first Excel/Word/PowerPoint/CSV with no named external record system first validation and import/export only; preserve OQ9 per-route eligibility, current rights, private Tasks, granular selected-artifact sharing, no automatic all-source copies, team knowledge admission and human professional authority. Lifecycle linkage does not create native authoritative records. Every supported output must identify working location, formal authority, approval evidence and export/handoff before reliance."
+    ],
+    [
+      "decision",
+      "Success priority: cover more significant risks first, quality/relevance of supported conclusions second, then delivery/rework/capacity. Retain all existing SM1-4/counter-metrics and exact W1-W3/M1 fixtures. Add representative lifecycle/scale/recovery proof; record counts alone are not risk coverage. Compare actual authorised pilot work to baseline, no invented numeric targets or quantified benefit."
+    ],
+    [
+      "constraint",
+      "Before real engagement use demonstrate supported dependable execution/recovery, access/data handling and visible evidence/failures/human review; agree authorised data/use with organisation. While building specify pilot procedures/populations/sources/connections, readiness, baseline, costs and export/link preservation before each dependent reliance. Commercial arrangement/costs before purchase; prices/thresholds and launch date undecided. Research requirements do not mandate fixed templates/samples/personal-CAE approval clicks; see verified research glossary and contradictions."
+    ],
+    [
+      "decision",
+      "Documentary reconciliation: delivery cut is already selected in FORK-CUT.md and engine/ exists with authored Epic1 work; no timeless no-executable-product or unselected-cut claim. Auth0/customer-onboarding identity selection supersedes older operator-only/bootstrap-unselected-supplier language, but real tenant, operational/provider/Windows and data eligibility remain unproved. Latest handoff 2169 Linux tests, final full smoke17/18 plus later isolatedvisualpass is historical limited evidence not fresh acceptance. Preserve Epic1 exact work/status/test gates and no unapproved downloads."
+    ],
+    [
+      "decision",
+      "Retain inherited ownership clarification: Israel is current product decision owner; other audit/security/design/validation role appointments remain proposed. CAP-1-25 stable plus CAP-26; FR-1-44 stable plus FR-45; UJ1-8 stable plus UJ9-10. Historical source/review artifacts and original fixture specifics remain unchanged; current updated companions govern later decisions."
+    ],
+    [
+      "constraint",
+      "2026-11-05 source-fidelity refinement from PRD review: where GIAS applies, CAP26/FR45 supports at-least-annual documented risk assessment and dynamic plan updates under9.4, coordination and conditional documented reliance retaining responsibility under9.5; CAP10/20 supports applicable work-programme approval before implementation and prompt approval of changes. These are bounded professional obligations, not universal software cadence, board portal or personal-CAE click. Administrator status alone does not grant private-content access; current-grant and revocation negatives remain required."
+    ],
+    [
+      "constraint",
+      "2026-11-05 evidence correction: CR1 adapter is authored in current source; implementation remaining wording is historical. Exact actual provider and route acceptance still require current engineering evidence. SPEC must not imply no adapter exists or that presence proves actual provider readiness."
+    ],
+    [
+      "constraint",
+      "2026-11-05 review polish: OQ14 shared technology direction is adopted, actual deployment and route qualification remain gated. Link lifecycle outcome mapping directly to current epics/traceability and cite exact engineering handoff for historical verification limits; no new scope or evidence."
+    ]
+  ],
+  "replacements": {
+    "SPEC.md": [
+      {
+        "old": "updated: 2026-10-27",
+        "new": "updated: 2026-11-05"
+      },
+      {
+        "old": "  - collaboration-and-memory.md",
+        "new": "  - collaboration-and-memory.md\n  - lifecycle-and-readiness.md\n  - ../../planning-artifacts/capability-reuse-inventory-2026-11-05.md"
+      },
+      {
+        "old": "Inquello brings the Codex-style working experience to internal audit, external audit, advisory and IT/IS audit: bring existing material, direct agent work, inspect and revise outputs, and continue in existing tools. The aim is lower total human effort through accepted delivery while preserving accuracy, traceability, confidentiality and judgment. One organisation's audit team supplies first validation; it does not narrow the eventual audience or mandate an Engagement for ad hoc Tasks. Vocabulary: [glossary](glossary.md).",
+        "new": "Inquello gives internal audit teams connected, source-backed organisational understanding and an agent that performs supported audit work alongside them. It helps teams cover more significant risks and develop defensible, business-relevant conclusions without repeatedly rebuilding context. Auditors retain direction, judgment and approval. V1 serves one organisation and internal audit team across coverage planning, engagements and follow-up, including a supported recurring check. Reuse the compatible Codex foundation; benefits and actual capability readiness remain to be demonstrated. Ad hoc Tasks remain available. Vocabulary: [glossary](glossary.md)."
+      },
+      {
+        "old": "  - **success:** Relied-on inputs retain origin/version, scope and limits; missing material, snapshot freshness and saved/live state are explicit; incomplete inputs never imply full Coverage.",
+        "new": "  - **success:** Relied-on inputs retain origin/version, scope and limits; missing material, snapshot freshness and saved/live state are explicit; incomplete inputs never imply full Coverage. Guided setup/settings and agent assistance organise available strategy, objectives, audit-universe context and useful history, showing readiness and gaps for intended work without requiring every source or making all setup conversational."
+      },
+      {
+        "old": "  - **success:** Known-result fixtures reconcile; inputs, parameters, derivations, exclusions, duplicates and actual Coverage are inspectable; changed inputs trigger recalculation or stale marking.",
+        "new": "  - **success:** Known-result fixtures reconcile; inputs, parameters, derivations, exclusions, duplicates and actual Coverage are inspectable; changed inputs trigger recalculation or stale marking. For supported substantial work, reconcile completed, excluded, failed and unfinished scope and demonstrate recovery without silent omissions or duplicate effects. Spot checks or a completed model turn do not prove coverage; faithful execution remains distinct from professional judgment of procedure suitability."
+      },
+      {
+        "old": "  - **success:** Versioned structured results/streams are available where supported; actual Coverage and missing/unrun/incomplete/failed/no-exception outcomes differ; duplicates cannot cause uncontrolled repeated effects.",
+        "new": "  - **success:** Versioned structured results/streams are available where supported; actual Coverage and missing/unrun/incomplete/failed/no-exception outcomes differ; duplicates cannot cause uncontrolled repeated effects. The V1 journey includes a supported recurring audit check with visible results, interruptions and retained progress. Reuse inherited queue/sleep mechanisms; qualify protected invocation, host availability, missed-run/restart handling and current authority before enabling the selected check."
+      },
+      {
+        "old": "- **CAP-20** — Support external-record practice (V1)\n  - **intent:** Coordinate planning, procedures, evidence exchange, analysis, workpapers, review, reporting, responses, follow-up and approved stakeholder communication using artifacts and external systems.\n  - **success:** External-audit, advisory and technical examples follow their Methods without mandatory control/deficiency objects; agent completion never professionally closes a Finding.",
+        "new": "- **CAP-20** — Support end-to-end internal-audit practice (V1)\n  - **intent:** Connect engagement objectives, scope, risks, criteria and work programme to procedures, evidence, workpapers, review, findings, conclusions, reports, actions and follow-up using working artifacts and designated external authority.\n  - **success:** The team inspects and revises connected work under its Method; technical and internal advisory work need no mandatory control/deficiency objects. Formal conclusions/sign-off remain human. Report issuance, management-reported completion, implementation confirmation and risk acceptance are distinct; unresolved matters return to coverage planning. External-audit-specific workflows/standards retain future applicability, not V1 acceptance."
+      },
+      {
+        "old": "## Constraints",
+        "new": "- **CAP-26** — Prepare risk-based audit coverage (V1)\n  - **intent:** Help the manager assess priorities and prepare, review and change an audit plan from available strategy, objectives, audit universe, risk information, past findings and outstanding actions.\n  - **success:** Sourced basis, coverage choices, omissions and changes are inspectable; manager review and applicable governance approval evidence remain distinct. Follow-up results and unresolved matters inform subsequent planning. No native authority, staffing suite, board portal or universal personal-CAE click is implied.\n\n## Constraints"
+      },
+      {
+        "old": "- Preserve all P01–P22 groups, 41 V1 FRs, three V2 FRs, ten NFRs, eight journeys and the complete mapped inventory. The pending epic reconciliation must record dependency-correct increments and explicit deferrals with old-to-new traceability (OQ-10); deferrals remain unmet scope and cannot establish full parity. See [scope and gates](scope-and-gates.md).",
+        "new": "- Preserve P01–P22, FR-1–44 and CAP-1–25; add FR-45/CAP-26 and UJ-9/10 without renumbering. V1 has 42 FRs and ten journeys; native FR-38/40/42 remain V2. Retain every compatible Codex capability and documented model route, using the [per-feature inventory](../../planning-artifacts/capability-reuse-inventory-2026-11-05.md) to distinguish inheritance, exposure/adaptation, external dependencies and qualification. Unverified is not absent; partial integration is not parity. See [scope and gates](scope-and-gates.md)."
+      },
+      {
+        "old": "AD-1–AD-17 with stable identifiers and current revisions",
+        "new": "stable AD identifiers and current adopted revisions"
+      },
+      {
+        "old": "- Prioritising audit-universe/portfolio planning, staffing/capacity/budget suites, organisation-wide assurance mapping, quality-programme administration or a general workflow builder; ordinary Engagement planning/follow-up remain V1.",
+        "new": "- External-audit-specific workflows/standards, audit-firm multi-client switching, complex large-team staffing/capacity/budget suites, broad integration-marketplace supply or custom connectors for every system, automatic migration of every historical system, organisation-wide assurance-map administration, quality-programme administration or a general workflow builder. Compatible inherited extension mechanisms and practical file intake remain in scope; risk-based coverage planning and supported recurring work are V1."
+      },
+      {
+        "old": "## Success signal\n\n- Demonstrate",
+        "new": "## Success signal\n\n- Demonstrate the complete internal-audit journey and supported recurring check with inspectable linkage and human decisions. Assess coverage of significant risks first, quality/relevance second, then comfortable direction/review, capacity and reduced rework. Counts of processed records alone do not establish risk coverage. The [lifecycle and readiness contract](lifecycle-and-readiness.md) defines evidence and dependence-point gates without invented targets.\n- Demonstrate"
+      },
+      {
+        "old": "- **AS-2:** Gate owners are proposed role assignments, not confirmed appointments.",
+        "new": "- **AS-2:** Israel is the current product decision owner; other audit/security/design/validation role appointments remain proposed until assigned."
+      },
+      {
+        "old": "- **OQ-16B:** Establish actual identity issuer, operator/hosting/region, retained-data/recovery policy and route eligibility before real shared data; technical proposal approval does not approve procurement or deployment.",
+        "new": "- **OQ-16B:** Auth0/customer-onboarding direction is selected; verify actual tenant/issuer, operator/hosting/region, retained-data/recovery policy and route eligibility before real shared data. Selection is not operational acceptance or permission for new procurement/deployment.\n- **OQ-17–20:** Specify setup/procedure readiness, recurring-check contract, lifecycle authority/export and pilot proof/use/commercial details before their respective reliance points; see [lifecycle and readiness](lifecycle-and-readiness.md)."
+      },
+      {
+        "old": "- Keep execution permission, local edits, agent checks, human review, Professional Approval and Delivery distinct.",
+        "new": "- Where GIAS applies, support at-least-annual documented risk assessment and dynamic plan updates (9.4), coordination and conditional documented reliance retaining responsibility (9.5), and applicable work-programme approval before implementation and prompt approval of changes (13.6). This does not impose a universal software cadence or personal-CAE click.\n- Keep execution permission, local edits, agent checks, human review, Professional Approval and Delivery distinct."
+      },
+      {
+        "old": "- Tasks are private by default; file/folder/review-package sharing need not disclose a conversation and whole Task sharing is explicit.",
+        "new": "- Tasks are private by default; administrator status alone never grants access to private content. File/folder/review-package sharing need not disclose a conversation and whole Task sharing is explicit."
+      },
+      {
+        "old": "- **CR-1 design recorded:** The Claude companion fixes the native Messages adapter ownership and normalized protocol contract; implementation and actual route acceptance remain work to perform. Pinned Responses-only configuration is not drop-in compatibility. Subscription integration remains separately conditional.",
+        "new": "- **CR-1 design recorded:** The Claude companion fixes the native Messages adapter ownership and normalized protocol contract; the adapter is authored in current source, while actual provider/route acceptance remains governed by current engineering evidence. Source presence is not actual route qualification; Responses-only configuration is not drop-in Messages compatibility. Subscription integration remains separately conditional."
+      }
+    ],
+    "scope-and-gates.md": [
+      {
+        "old": "## Source roles and decision order",
+        "new": "## Source roles and decision order\n\nThe 5 November owner-approved course correction and updated PRD govern current V1 applicability. The approved PRFAQ supplies the complete internal-audit journey; verified research supplies bounded professional distinctions, not a compulsory software workflow. Older source cards and dated reviews remain historical evidence where superseded. Keep all compatible Codex capabilities and model routes; use [reuse inventory](../../planning-artifacts/capability-reuse-inventory-2026-11-05.md) for source/integration/evidence status and [lifecycle readiness](lifecycle-and-readiness.md) for the added outcomes and reliance gates."
+      },
+      {
+        "old": "FR/NFR consequences, eight journeys",
+        "new": "FR/NFR consequences, ten journeys"
+      },
+      {
+        "old": "all eight journeys",
+        "new": "ten journeys"
+      },
+      {
+        "old": "AD-1–AD-17 choices/rules",
+        "new": "stable adopted AD choices/rules"
+      },
+      {
+        "old": "Inspect cited technology evidence when choosing the fork/protocol/toolchain/driver.",
+        "new": "Inspect cited technology evidence for the selected delivery fork and protocol/toolchain/driver qualification; FORK-CUT.md records the actual imported cut."
+      },
+      {
+        "old": "no adopted file is rewritten or treated as fully absorbed.",
+        "new": "adopted artifacts are updated by their owning workflow and are not treated as fully absorbed."
+      },
+      {
+        "old": "J1–J8/UJ-1–UJ-8 and A01–A18",
+        "new": "J1–J8/UJ-1–UJ-8, new UJ-9/10 and A01–A18 with explicit current applicability"
+      },
+      {
+        "old": "**V1: CAP-1–CAP-22, 41 FRs. V2: CAP-23–CAP-25, FR-38/40/42 only.** P19/P20/P21 each contributes one V1 requirement and one V2 addition. Scheduled work, approved unattended execution, continuous assurance and ordinary external-record engagement/follow-up remain V1. A first shipping increment or validation slice does not redefine the target.",
+        "new": "**V1: CAP-1–CAP-22 plus CAP-26, 42 FRs. V2: CAP-23–CAP-25, FR-38/40/42 only.** P19/P20/P21 retain their V1/V2 split; FR-45/CAP-26 adds risk-based coverage planning. Setup/context, coverage planning, engagements, review/report and follow-up are one internal-audit journey, including a supported recurring check. All compatible generic capabilities and routes remain retained V1 obligations; a partial increment is not full parity. External-audit-specific workflows/standards and other explicit PRFAQ exclusions are future/out-of-V1 applicability, not removal of compatible mechanisms or negative isolation tests."
+      },
+      {
+        "old": "All eight journeys are V1;",
+        "new": "All ten journeys are V1 under the current internal-audit applicability;"
+      },
+      {
+        "old": "| CAP-25 | V2 | P21; FR-42 | NFR-3, NFR-4, NFR-7, NFR-9 | UJ-4, UJ-5, UJ-8 via SP7 | A11 V2, A12 |",
+        "new": "| CAP-25 | V2 | P21; FR-42 | NFR-3, NFR-4, NFR-7, NFR-9 | UJ-4, UJ-5, UJ-8 via SP7 | A11 V2, A12 |\n| CAP-26 | V1 | FR-45; linked P20 | NFR-2, NFR-3, NFR-5, NFR-7 | UJ-9, UJ-10 | Manager-reviewed sourced coverage plan, change and follow-up loop; lifecycle contract |\n\nUJ-9 also exercises CAP-1/5/10/17/18 readiness; UJ-10 connects CAP-20/26 and CAP-12 follow-up checks. Existing indexes remain non-exclusive. A02 external-audit-specific examples are retained for later activation; applicable internal advisory/technical examples still qualify V1 without external-audit standards."
+      },
+      {
+        "old": "AD-1–AD-17 with stable existing identifiers",
+        "new": "stable adopted AD identifiers"
+      },
+      {
+        "old": "- Evidence limits remain: W1–W3/M1 and product runtime acceptance are unexecuted;",
+        "new": "- Evidence limits: the October reviews recorded W1–W3/M1 and runtime acceptance as unexecuted. Current authored/tested status comes from exact story evidence and the latest engineering handoff, not this historic sentence; this planning update ran no runtime tests."
+      },
+      {
+        "old": "Owners are inherited proposed roles, not appointments (AS-2).",
+        "new": "Israel is the product decision owner; other inherited role owners are proposed, not appointments (AS-2)."
+      },
+      {
+        "old": "| AS-2 | Gate owners are proposed role assignments, not confirmed appointments. | Product lead | Assign named people before affected work begins. |",
+        "new": "| AS-2 | Israel is current product decision owner; other role appointments remain proposed. | Israel | Assign audit/security/design/validation roles before the affected work. |"
+      },
+      {
+        "old": "| OQ-16B | Actual identity issuer/operator, hosting/region, retained-data/recovery policy and route eligibility. OQ-16A direction is adopted; SC-1–6 define the architect-derived implementation seams. | Architecture/security/operations owners; product owner for material commitments | Before actual route/real-data enablement; no supplier, spend or implementation approval inferred. |",
+        "new": "| OQ-16B | Auth0/customer-onboarding is selected; actual tenant/issuer/operator, hosting/region, retained-data/recovery and route eligibility still require evidence. OQ-16A direction remains adopted. | Architecture/security/operations owners; Israel for material commitments | Before actual route/real-data enablement; no operational acceptance, new spend or deployment inferred. |\n| OQ-17 | Concrete setup/readiness inputs, supported procedures, populations and sources. | Israel with audit/engineering owners | Before affected story specification and reliance; exact settings/fields/formats not invented. |\n| OQ-18 | Recurrence trigger, host/session eligibility, limits, missed-run/restart and recovery contract. | Israel with engineering/security owners | Before enabling or promising the supported check; no cloud/always-on assumption. |\n| OQ-19 | Per-output working location, designated external authority, review/approval evidence, usable export/link preservation. | Israel with audit/data-policy/engineering owners | Before reliance on affected output/handoff; native authority remains V2. |\n| OQ-20 | Authorised pilot/use, baseline and representative proof, actual costs and commercial arrangement. | Israel with pilot organisation and relevant policy owners | Data/use agreement before real engagement; measures before benefit claims; costs/arrangement before purchase. |"
+      },
+      {
+        "old": "Prove actual production supply beyond queue/heartbeat primitives; FR-23/24 remain required V1 scope.",
+        "new": "Reuse the inherited durable queue/mailbox/sleep implementations and qualify protected invocation, acting identity, limits, host lifecycle, missed runs and effect recovery. Supported recurring check and broader compatible FR-23/24 remain V1; primitives alone do not establish unattended production readiness."
+      },
+      {
+        "old": "Choose delivery fork cut and concrete facade/extension/protocol seams;",
+        "new": "Delivery fork cut is selected in FORK-CUT.md; qualify current facade/extension/protocol seams and effective private restrictions;"
+      },
+      {
+        "old": "Inspected source revisions and technology versions are evidence snapshots/seeds, not an implicitly selected delivery cut or validated combined stack.",
+        "new": "The delivery cut is explicitly selected in FORK-CUT.md and imported under engine/. Older source/technology inspections remain dated snapshots, not proof that the current combined stack is qualified."
+      },
+      {
+        "old": "This spec-creation work performs no installation, fork creation, runtime validation, deployment, production approval or story breakdown.",
+        "new": "This planning update performs no installation, code implementation, runtime validation, deployment or production approval. Existing authored work is preserved; exact current engineering evidence governs its state."
+      },
+      {
+        "old": "The full 84-story first increment still needs its additional actual inference route under Story 1.22; synthetic fixtures do not replace real agent execution in Story 1.25.",
+        "new": "The historical October baseline was an 84-story first increment. Later Epic 1 work and current scope/tracker reconciliation supersede that count; synthetic fixtures still do not replace actual route and real-agent acceptance."
+      },
+      {
+        "old": "Future adapter implementation, actual inference and route tests are acceptance/enablement work, not evidence of an unresolved owner decision.",
+        "new": "Authored adapter status is recorded in current engineering evidence; actual inference and route tests remain acceptance/enablement work, not evidence of an unresolved provider preference."
+      },
+      {
+        "old": "detailed service technology/deployment choices and Claude route reachability remain gated.",
+        "new": "later adopted shared-service technology and Auth0/onboarding direction remain selected; actual tenant/deployment/operations and exact Claude/provider-route qualification remain gated."
+      }
+    ],
+    "glossary.md": [
+      {
+        "old": "Decided 2026-10-27. Overrides the PRD §3 **Assignment** entry; every other PRD §3 term stands.",
+        "new": "Vocabulary decided 2026-10-27 and refined by the approved 2026-11-05 lifecycle. Engagement replaces the older Assignment term; current PRD §3 and the professional distinctions below govern."
+      },
+      {
+        "old": "In V1 this organisation sits alongside the team's external authoritative audit-record system.",
+        "new": "In V1 these working relationships sit alongside designated external authoritative audit records, including file-based records; first validation selects no named external record system."
+      }
+    ]
+  },
+  "appends": {
+    "glossary.md": "\n\n## Professional distinctions for connected work\n\n| Term | Meaning and boundary |\n|---|---|\n| Audit universe | The organisation's auditable activities/entities/processes used to structure coverage planning; not a universal prescribed database schema. |\n| Audit coverage plan | A sourced, risk-based proposal and its applicable human/governance decisions about what to audit; distinct from an individual engagement work programme. |\n| Objective / scope / criterion | What the engagement seeks to achieve; its boundaries; and the benchmark against which evidence is evaluated. Preserve the distinctions as work changes. |\n| Work programme | The planned procedures and related responsibilities/evidence needs under the chosen Method; changes retain their basis and applicable approval. |\n| Exception / potential finding | A result requiring evaluation, not automatically a supported finding or repeated prior issue. |\n| Finding / conclusion | An evaluated matter and the professional judgment reached from the work; evidence, significance and limitations stay inspectable. Root cause is pursued when possible, not presumed known. |\n| Management action | Agreed response with responsible owner and due date; a reported completion does not prove implementation. |\n| Implementation confirmation / risk acceptance | Evidence-based follow-up confirming action implementation versus an authorised decision to accept risk; neither is inferred from Task closure. |\n\nSee the [verified research glossary](../../planning-artifacts/research/domain-internal-audit-work-lifecycle-and-judgme-2026-11-04/glossary.md) for professional source distinctions. These do not require native V1 records, rigid labels or universal templates.\n"
+  },
+  "newfiles": {
+    "lifecycle-and-readiness.md": "# Internal-audit lifecycle and readiness\n\n## Approved scope and boundaries\nV1 serves one organisation and internal audit team, with auditor, reviewing manager and admin responsibilities. The three connected cycles are risk-based audit coverage planning, individual engagements through evidence/findings/report, and management-action follow-up. A supported recurring audit check belongs to this journey. Compatible technical and internal advisory work remain available; there is no compulsory six-step state machine.\n\nThe [approved PRFAQ](../../planning-artifacts/prfaq-inquello.md), [current PRD](../../planning-artifacts/prds/prd-inquello-2026-10-26/prd.md), [verified research](../../planning-artifacts/research/domain-internal-audit-work-lifecycle-and-judgme-2026-11-04/research.md) and [professional glossary](../../planning-artifacts/research/domain-internal-audit-work-lifecycle-and-judgme-2026-11-04/glossary.md) supply the source. Requirements, considerations and examples retain their distinctions; standards do not prescribe one software architecture, fixed sample size, universal RCM/five-Cs template or personal-CAE click.\n\nWhere GIAS applies, preserve Standard 9.4's at-least-annual documented risk assessment and dynamic plan updates, and 9.5's coordination and conditional documented reliance without transferring responsibility. Support applicable work-programme approval before implementation and prompt approval of changes (13.6). These are professional obligations, not a fixed software cadence or a broad assurance-mapping suite.\n\n## Outcome and acceptance map\n| Outcome | Stable requirements | Demonstrable acceptance |\n|---|---|---|\n| Establish useful context | CAP-1/5/10/17/18; UJ-9 | Guided setup/settings and agent assistance organise available strategy/objectives, audit universe/risk picture, useful history, roles and methodology; show ready/missing/deferrable inputs for intended work. Privacy and actual grants remain visible. Account onboarding alone is not this outcome. |\n| Plan coverage | CAP-26 / FR-45; UJ-10 | Manager inspects sourced priorities, proposed coverage, omissions and changes using risks, previous findings and outstanding actions. Applicable formal plan/change approval is evidenced separately; no board portal implied. |\n| Design an engagement | CAP-20 / FR-39 | Objectives, scope, criteria, risks/controls and work programme connect to organisational context; Method/version and human direction remain inspectable. |\n| Perform and investigate | CAP-4/5/6/22 | Supported procedures analyse actual selected inputs, retain sources/derivations and surface exceptions/gaps/uncertainty. Auditor directs naturally and can inspect, question and revise without operating execution machinery. |\n| Review and report | CAP-7/9/18/20/22 | Reviewer-owned private work uses submitted versions and permitted evidence; human selects feedback, prepares defensible conclusions/report and controls formal decisions/sign-off. Existing private review/approval contracts remain. |\n| Follow up and learn | CAP-12/20/26 | Actions, owners, due dates, progress, confirmation evidence and unresolved items remain connected. Management-reported completion differs from verified implementation and risk acceptance. Carry relevant unresolved/new information into the next coverage plan under current access. |\n| Repeat a supported check | CAP-12 / FR-23/24; UJ-8 | Agreed inputs/Method/identity/limits and trigger are explicit; results, failures, missing inputs and retained progress are visible. Revocation, duplication/effect reconciliation and appropriate recovery apply. |\n\nThe applicable new stories and dependency sequence are in the [current epic plan](../../planning-artifacts/epics.md), [November scope/dependencies](../../planning-artifacts/epic-scope-and-dependencies-2026-11-05.md) and [traceability artifact](../../planning-artifacts/epic-traceability-2026-11-05.json). Existing W1–W3/M1 and A01–A18 acceptance are retained, with external-audit-specific examples held for their future activation rather than imposed on this internal-audit V1.\n\n## Faithful execution and human judgment\nFor each supported substantial procedure, define the agreed population/scope and establish what actually ran. Reconcile completed, excluded, failed and unfinished work, including interruptions and resumed work, without silent omission or duplicate effects. Preserve inspectable method, parameters, source/version and result evidence; expose concise conclusions plus drill-down rather than asking the auditor to reperform every record.\n\nThat proves faithful execution only to the defined evidence standard, not that a human chose an appropriate procedure or that risk is adequately addressed. Professional judgment remains human. Spot checks, record counts or a completed model turn alone do not prove coverage; more records do not necessarily mean more significant risks covered. Concrete procedures, representative scale and expected-result/recovery cases must be specified before acceptance; no millions-of-record promise, numerical threshold or exactly-once architecture is selected.\n\n## Working records, authority and export\nFor audit plan, engagement programme, evidence, workpapers, findings, report and actions identify the working artifact/location, designated external formal authority, review/approval evidence, and export/handoff. This is a specification obligation, not a newly selected native schema or record platform. Preserve periods, versions, source provenance, current grants and known change impact across the cycle. Private conversations or retained extracts do not become shared institutional knowledge automatically.\n\nExternal-authority V1/native-authority V2 remains. First validation is desktop-first with Excel, Word, PowerPoint and CSV and no named external record system, import/export only (OQ-6). Exact supported features and link/history preservation must be tested before reliance. No promise of lossless all-system migration.\n\n## Reuse and recurrence\nUse the [capability inventory](../../planning-artifacts/capability-reuse-inventory-2026-11-05.md): retain and qualify existing Codex implementations before creating replacements. The fork supplies durable queue, mailbox and sleep mechanisms; it does not automatically supply a qualified recurring host lifecycle or independently provisioned cloud service. Current private Task restrictions require protected integration, not bypass.\n\nBefore enabling the supported check, specify trigger supply, eligible host/app/session, data availability, acting identity/mandate, current grants, limits, missed-run/restart handling and effect reconciliation. A sleeping/offline host or absent input is not a successful run. No always-on hosted execution, silent fallback or automatic retry of uncertain effects is promised. Broader compatible SDK/event/schedule capabilities remain V1 obligations, not removed by this minimal end-to-end acceptance case.\n\n## Dependence-point gates\nIsrael is product decision owner; other role assignments are proposed until named.\n\n| Gate | Decision/evidence | Proposed participants | Revisit before |\n|---|---|---|---|\n| OQ-17 | Supported procedures/populations, context/readiness inputs, sources/formats/connections and practical history intake. | Israel, audit and engineering owners | Relevant story specification and use; no universal required-field scheme invented. |\n| OQ-18 | Recurrence trigger, identity/session eligibility, limits, host availability and missed-run/recovery contract. | Israel, engineering/security owners | Enabling/promising the check or committing its implementation specifics. |\n| OQ-19 | Working/authority allocation, review evidence, export formats and preserved/lost links/history. | Israel, audit/data-policy and engineering owners | Reliance on affected output or handoff. |\n| OQ-20 | Pilot authorisation, actual baseline/proof tasks, cost measurements and commercial arrangement. | Israel, pilot organisation and relevant policy owners | Real engagement/data use, benefit claims and purchase respectively. |\n\nBefore real engagement use: demonstrate dependable supported execution/recovery, verify access controls and audit-data handling, make evidence/failures/human review inspectable, and agree authorised data/use with the organisation. While building: select the pilot engagement and sources, specify procedures/connections, establish baseline, measure costs and determine exports before their dependent reliance. Refine pricing and broaden support from observed use; understand costs and commercial arrangement before asking a customer to buy. No launch date, price, percentage gain or acceptance of customer data is implied.\n\n## Current evidence, not release approval\nPreserve Epic 1 exactly and judge its authored behavior against current story-specific evidence. The [5 November engineering handoff](../../implementation-artifacts/handoff/HANDOFF-2026-11-05.md) reports 2,169 Linux desktop tests but final-head full smoke 17/18 with a later isolated visual pass; these are not a combined full-suite pass. Windows/real WSL, actual provider and applicable owner acceptance remain distinct. Planning validation does not settle them or authorise implementation, unapproved installs/downloads, credentials, paid inference, deployments or outreach.\n"
+  }
+}

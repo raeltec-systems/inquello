@@ -1,0 +1,28 @@
+# Windows/WSL verification preparation, 2026-11-05
+
+Read-only inspection, not passing acceptance evidence. No tests, builds, installs, downloads, database changes, configuration edits or process stops were performed by this preparation worker. Inquello-Engine was started for inspection and left running; docker-desktop and unrelated lending Vitest were not interrupted.
+
+## Host prerequisites
+PostgreSQL 18 service is running; client tools exist in C:\Program Files\PostgreSQL\18\bin. Parent separately verified PostgreSQL 180006, expected inquello_test database and CREATEDB, using the process-only safe loader load-local-test-config.ps1. No credential values belong in this report. OpenSSL exists in C:\Program Files\Git\usr\bin; it is not on the initial process PATH. Electron is installed in desktop/node_modules/electron/dist. Use D: TEMP/TMP. The topology creates and normally drops its own random inquello_dev_ database; do not use the retained pilot database or --drop-stale. Current smoke requires 18 reports; older WSL README counts are stale. Set only INQUELLO_FIXTURE_APP_SERVER_BIN for quota/visual override; keep normal runtime default. Coordinate exclusive Vitest use.
+
+## Actual guest observations
+Rust and Cargo 1.99.1 execute successfully from /opt/inquello/toolchains/rustup/toolchains/1.99.1-x86_64-unknown-linux-gnu/bin. Cargo registry cache/index/src and git checkouts/db exist. Python3, OpenSSL, C compiler, pkg-config, CMake, Git and tar resolve. Installed codex, codex-linux-sandbox and bwrap under /opt/inquello/runtime/bin hash-match the Nov1 receipt and are root-owned mode0555. Broker/executor under /usr/local/libexec hash-match current repository scripts.
+
+Selected guest source archive is a28e505af109663b578cffbfb40ea182821ffafeadacfbc0241687a05cd28ceb. It lacks inquello_program.rs, has an older inquello_wsl.rs, and its normalized Cargo.lock differs from current host. The intact old runtime is not a current-source rebuild. Active boot ID and 4GiB /dev/sdc swap match recorded storage-proof fields; narrow forbidden-mount check was false. These observations do not replace full storage/isolation gates.
+
+CodeRabbit/cr did not resolve in /home/inquello/.local/bin, /home/inquello/.coderabbit/bin, /usr/local/bin, /usr/bin or /bin. No login or review attempted.
+
+## Offline rebuild path (not executed)
+Approved context: spec-1-21-wsl-execution-backend.md, frozen approval2026-10-30, and handoff/WSL-BACKEND-DESIGN.md. Preserve dedicated guest and D-only storage; no shared restart or global setting changes.
+1. From repository, run python desktop/scripts/wsl/freeze-source.py. It writes .tmp/wsl-source-<digest>.tar and JSON, including current tracked/untracked measured sources with normalized text. It does not use HEAD alone as provenance.
+2. Run python desktop/scripts/wsl/stage-source.py D:\...\wsl-source-<digest>.tar --sha256 <digest>. It verifies and transfers over stdin, creates a digest-addressed source directory and updates guest selected-source. Existing digest destinations fail rather than overwrite. Reconcile before retrying.
+3. Feed checked-in build-guest.sh through the minimal existing-guest transport with its two literal cargo build --locked -j 4 commands changed IN MEMORY to cargo build --offline --locked -j 4. Assert exactly two replacements. Keep source file unchanged. Add CARGO_NET_OFFLINE=true to clean guest environment. The script uses installed pinned toolchain, existing /opt/inquello/build/target, jobs4, no incremental/debug data, and refreshes staged source timestamps once. It writes a build receipt only after both sandbox-helper and CLI builds succeed. Do not run the unmodified script with network available: Cargo may fetch dependencies.
+4. Verify built hashes against build receipt and stage identity before any installation. Coordinate quiescence of owned guest workloads. Preserve old runtime/receipt for deliberate recovery. install-runtime.py replaces root-owned runtime binaries, broker/executor and manifest, reapplies existing modes/ownership, then updates host build receipt. It performs no download or WSL/network configuration. It is a mutating privileged installation step, not read-only verification; confirm applicable authorization first. Replacement is per-file, not a transactional all-or-nothing runtime swap.
+5. Re-read installed hashes/receipt, then run required actual Windows/guest gates under parent coordination.
+
+## Offline limits and exclusions
+Read-only current-lock inventory examined1297 registry packages. Many archives/extracted sources are absent, including platform-specific/test packages and alsa, alsa-sys, v8 and insta. Git packages had matching checkout-prefix directories, not independently verified complete objects. This does not establish whether the selected Linux CLI/helper dependency graph can build offline. Only an offline locked resolver/build can settle it. Stop at a missing dependency, without changing versions or silently downloading. Cargo offline governs Cargo fetching, not arbitrary build-script network behavior; preserve applicable network restrictions and inspect any additional download requirement.
+
+Never rerun bootstrap-guest.sh (apt, curl, Rust installation), configure-existing-guest.sh (mount/DNS/interop changes), prepare/install/image scripts, or WSL shutdown as part of this rebuild. None is needed to reuse the existing toolchain and guest.
+
+Windows native gate distinction: inquello_messages_runtime is Linux-only and selects zero tests on Windows. Authorization/lifecycle/navigation fixtures explicitly support Windows; nonzero required selection and execution must be established. No tests may be skipped or weakened to turn prerequisites into success.

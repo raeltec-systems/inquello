@@ -1,0 +1,135 @@
+
+> inquello-desktop@0.0.0 test D:\Projects\inquello\desktop
+> vitest run --configLoader runner "test/identity-session.test.ts" "test/policy-units.test.ts" "test/tasks-progress.test.ts" "test/tasks-lifecycle.test.ts" "test/live-conversation.test.tsx" "--maxWorkers=1"
+
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.5 [39m[90mD:/Projects/inquello/desktop[39m
+
+ [31m❯[39m test/identity-session.test.ts [2m([22m[2m48 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[33m 103841[2mms[22m[39m
+   [32m✓[39m sign-in [2m(2)[22m
+     [33m[2m✓[22m[39m signs in through the browser, loopback, token exchange and bootstrap[33m 2171[2mms[22m[39m
+     [33m[2m✓[22m[39m a second sign-in while one is running is refused, and a signed-in session stays[33m 3302[2mms[22m[39m
+   [32m✓[39m wrong state [2m(2)[22m
+     [33m[2m✓[22m[39m rejects a mismatched state, stays signing-in until the timeout, then signs out[33m 812[2mms[22m[39m
+     [33m[2m✓[22m[39m an issuer error on the callback ends the sign-in without a token exchange[33m 729[2mms[22m[39m
+   [32m✓[39m PKCE mismatch [2m(1)[22m
+     [33m[2m✓[22m[39m the issuer rejects the verifier; signed out with a reason and no secret[33m 912[2mms[22m[39m
+   [32m✓[39m untrusted certificate [2m(1)[22m
+     [33m[2m✓[22m[39m a failed TLS connection makes the shared service unavailable and sign-in fail[33m 795[2mms[22m[39m
+   [32m✓[39m OS store [2m(2)[22m
+     [33m[2m✓[22m[39m persists an encrypted session that survives a restart[33m 1594[2mms[22m[39m
+     [33m[2m✓[22m[39m a session for another service or issuer is discarded on load[33m 1502[2mms[22m[39m
+   [32m✓[39m no OS store [2m(3)[22m
+     [32m✓[39m backend basic_text keeps the session in memory and writes nothing[32m 7[2mms[22m[39m
+     [32m✓[39m backend unknown keeps the session in memory and writes nothing[32m 6[2mms[22m[39m
+     [32m✓[39m backend null keeps the session in memory and writes nothing[32m 6[2mms[22m[39m
+   [32m✓[39m refresh [2m(5)[22m
+     [33m[2m✓[22m[39m rotation replaces both credentials, and concurrent refreshes are serialized[33m 4082[2mms[22m[39m
+     [33m[2m✓[22m[39m refreshes before a protected request when the access credential is about to expire[33m 2418[2mms[22m[39m
+     [33m[2m✓[22m[39m a reuse rejection discards the family, revokes it and requires sign-in[33m 1527[2mms[22m[39m
+     [33m[2m✓[22m[39m a lost refresh response discards the family and revokes it with the old credential[33m 1595[2mms[22m[39m
+     [33m[2m✓[22m[39m a refresh the service could not attempt keeps the family[33m 1536[2mms[22m[39m
+   [32m✓[39m service down [2m(2)[22m
+     [33m[2m✓[22m[39m shows the shared service unavailable while private work stays local[33m 1550[2mms[22m[39m
+     [33m[2m✓[22m[39m a revoked session on the service signs the desktop out[33m 1440[2mms[22m[39m
+   [32m✓[39m logout [2m(4)[22m
+     [33m[2m✓[22m[39m sends one SC-2 logout envelope and clears the credentials[33m 3243[2mms[22m[39m
+     [33m[2m✓[22m[39m self-logout lost: the retry reuses the operation ID and unauthenticated means logged out[33m 3087[2mms[22m[39m
+     [33m[2m✓[22m[39m a pending logout is retried by the next status check[33m 3177[2mms[22m[39m
+     [33m[2m✓[22m[39m a stale epoch is rejected without a mutation and a new operation is prepared once[33m 5201[2mms[22m[39m
+   [32m✓[39m logout when the refresh cannot be attempted (review R02) [2m(3)[22m
+     [33m[2m✓[22m[39m a first unauthorized attempt with an unavailable refresh stays pending with its operation ID, then the retry confirms it[33m 6048[2mms[22m[39m
+     [33m[2m✓[22m[39m an expired access credential with an unavailable refresh while preparing is not reported as signed out[33m 3960[2mms[22m[39m
+     [33m[2m✓[22m[39m local data deletion then says revocation was not confirmed[33m 4061[2mms[22m[39m
+   [32m✓[39m local removal during a sign-in (review R04) [2m(3)[22m
+     [33m[2m✓[22m[39m local removal: the late result is never installed or saved, and its server session is revoked[33m 1530[2mms[22m[39m
+     [33m[2m✓[22m[39m sign-out: the late result is never installed or saved, and its server session is revoked[33m 1645[2mms[22m[39m
+     [33m[2m✓[22m[39m a new sign-in started after the removal wins over the old one finishing late[33m 1566[2mms[22m[39m
+   [32m✓[39m vault save failure (review R05) [2m(2)[22m
+     [33m[2m✓[22m[39m a failed save after rotation removes the stale record, says memory-only, and a restart retries nothing stale[33m 2798[2mms[22m[39m
+     [33m[2m✓[22m[39m a failed save of a pending logout leaves nothing a restart could resurrect, and the retry still finishes[33m 3094[2mms[22m[39m
+   [32m✓[39m bootstrap response lost [2m(1)[22m
+     [33m[2m✓[22m[39m abandons the transaction (revoking the session it created) and asks for a new sign-in[33m 1595[2mms[22m[39m
+   [32m✓[39m renderer probe [2m(1)[22m
+     [33m[2m✓[22m[39m status and results carry no credential, proof, code or token[33m 4165[2mms[22m[39m
+   [32m✓[39m configuration [2m(2)[22m
+     [32m✓[39m not configured: nothing is contacted[32m 1[2mms[22m[39m
+     [32m✓[39m an invalid configuration blocks the identity[32m 1[2mms[22m[39m
+   [32m✓[39m local data deletion support (Story 1.12) [2m(1)[22m
+     [33m[2m✓[22m[39m forgetLocally drops the session from memory and the vault without contacting the service[33m 1822[2mms[22m[39m
+   [31m❯[39m bounded fresh execution-policy reads [2m(11)[22m
+     [33m[2m✓[22m[39m allows four GETs, bounds the waiting queue, and recovers every permit[33m 1838[2mms[22m[39m
+     [33m[2m✓[22m[39m releases permits after endpoint errors without retrying a denial[33m 1629[2mms[22m[39m
+     [33m[2m✓[22m[39m serializes one expiry rotation across concurrent fresh GETs[33m 2824[2mms[22m[39m
+     [33m[2m✓[22m[39m coalesces concurrent old-token 401s into one rotation, not four[33m 2570[2mms[22m[39m
+     [33m[2m✓[22m[39m uses an already rotated token after a late 401 and stops after a second 401[33m 3610[2mms[22m[39m
+     [33m[2m✓[22m[39m does not dispatch a near-expiry read after dependency refresh failure[33m 1675[2mms[22m[39m
+     [33m[2m✓[22m[39m does not dispatch a near-expiry read after lost refresh failure[33m 1793[2mms[22m[39m
+     [33m[2m✓[22m[39m does not dispatch a near-expiry read after reuse refresh failure[33m 1604[2mms[22m[39m
+[31m     [31m×[31m suppresses queued reads and late success after logout, including same-principal sign-in[39m[33m 4998[2mms[22m[39m
+     [33m[2m✓[22m[39m does not publish a late failure into a replacement session[33m 2883[2mms[22m[39m
+     [33m[2m✓[22m[39m leaves general request and explicit refresh serialization unchanged[33m 1730[2mms[22m[39m
+   [32m✓[39m concurrent policy availability ordering [2m(2)[22m
+     [33m[2m✓[22m[39m does not overwrite a later policy failure with an old GET success[33m 1960[2mms[22m[39m
+     [33m[2m✓[22m[39m does not overwrite a later serialized failure with an old GET success[33m 1717[2mms[22m[39m
+ [32m✓[39m test/policy-units.test.ts [2m([22m[2m47 tests[22m[2m)[22m[33m 33695[2mms[22m[39m
+   [32m✓[39m the policy service [2m(6)[22m
+     [33m[2m✓[22m[39m derives thread settings only from the effective policy and the broad mode[33m 1163[2mms[22m[39m
+   [32m✓[39m the policy smoke evaluation [2m(1)[22m
+     [33m[2m✓[22m[39m passes the signed-out run and fails a broad mode that was not refused[33m 395[2mms[22m[39m
+   [32m✓[39m runTool revalidates authority after permission [2m(9)[22m
+     [33m[2m✓[22m[39m refetches unchanged policy and executes the exact authorized command once[33m 2337[2mms[22m[39m
+     [33m[2m✓[22m[39m runs nothing when forbid changes during the wait[33m 2386[2mms[22m[39m
+     [33m[2m✓[22m[39m runs nothing when read-only changes during the wait[33m 2261[2mms[22m[39m
+     [33m[2m✓[22m[39m runs nothing when epoch changes during the wait[33m 2357[2mms[22m[39m
+     [33m[2m✓[22m[39m runs nothing when wider-profile changes during the wait[33m 2283[2mms[22m[39m
+     [33m[2m✓[22m[39m runs nothing when membership removed before approval[33m 1114[2mms[22m[39m
+     [33m[2m✓[22m[39m runs nothing when service unavailable before approval[33m 1113[2mms[22m[39m
+     [33m[2m✓[22m[39m does not transfer approval to a new principal[33m 1133[2mms[22m[39m
+     [33m[2m✓[22m[39m does not transfer approval to a new runtime[33m 1123[2mms[22m[39m
+   [32m✓[39m local environment inspection and actual tool preflight [2m(8)[22m
+     [33m[2m✓[22m[39m dispatches neither probe nor tool if runtime changes during policy read[33m 1219[2mms[22m[39m
+     [33m[2m✓[22m[39m rechecks readiness after permission without dispatching the authorized command[33m 1166[2mms[22m[39m
+   [32m✓[39m environment private boundaries and permitted Full access [2m(2)[22m
+     [33m[2m✓[22m[39m retains explicitly permitted Full access without requiring a sandbox probe[33m 2961[2mms[22m[39m
+   [32m✓[39m post-dispatch uncertainty preserves effects and private outputs [2m(6)[22m
+     [33m[2m✓[22m[39m reports uncertain success-replaced after effects (authorized retry: false)[33m 1144[2mms[22m[39m
+     [33m[2m✓[22m[39m reports uncertain rejected-disconnected after effects (authorized retry: false)[33m 1120[2mms[22m[39m
+     [33m[2m✓[22m[39m reports uncertain owner-changed after effects (authorized retry: false)[33m 1092[2mms[22m[39m
+     [33m[2m✓[22m[39m reports uncertain success-replaced after effects (authorized retry: true)[33m 2412[2mms[22m[39m
+     [33m[2m✓[22m[39m reports uncertain rejected-disconnected after effects (authorized retry: true)[33m 2403[2mms[22m[39m
+     [33m[2m✓[22m[39m reports uncertain owner-changed after effects (authorized retry: true)[33m 2287[2mms[22m[39m
+ [32m✓[39m test/live-conversation.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 3286[2mms[22m[39m
+   [32m✓[39m live message text for the open conversation [2m(3)[22m
+     [33m[2m✓[22m[39m refreshes a running open Task faster than the general invalidation cadence, through the same read[33m 521[2mms[22m[39m
+     [33m[2m✓[22m[39m does not use the fast lane once the open Task has ended[33m 660[2mms[22m[39m
+     [33m[2m✓[22m[39m bounds reads during a long delta burst and never announces streamed text[33m 1411[2mms[22m[39m
+   [33m[2m✓[22m[39m does not resurrect an old completed read when a follow-up starts during that read[33m 527[2mms[22m[39m
+ [32m✓[39m test/tasks-lifecycle.test.ts [2m([22m[2m44 tests[22m[2m)[22m[33m 481[2mms[22m[39m
+ [32m✓[39m test/tasks-progress.test.ts [2m([22m[2m67 tests[22m[2m)[22m[33m 381[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m test/identity-session.test.ts[2m > [22mbounded fresh execution-policy reads[2m > [22msuppresses queued reads and late success after logout, including same-principal sign-in
+[31m[1mAssertionError[22m: expected '00000000-0000-4000-8000-0000000000c9' to be '00000000-0000-4000-8000-0000000000c3' // Object.is equality[39m
+
+Expected: [32m"00000000-0000-4000-8000-0000000000c[7m3[27m"[39m
+Received: [31m"00000000-0000-4000-8000-0000000000c[7m9[27m"[39m
+
+[36m [2m❯[22m test/identity-session.test.ts:[2m746:106[22m[39m
+    [90m744|[39m     const read=vi.spyOn(w.service,'executionPolicy').mockImplementatio…
+    [90m745|[39m     const pending=Array.from({length:8},()=>session.readExecutionPolic…
+    [90m746|[39m     expect((await session.signOut()).ok).toBe(true);await session.sign…
+    [90m   |[39m                                                                                                          [31m^[39m
+    [90m747|[39m     held.release();expect(await Promise.all(pending)).toEqual(Array(8)…
+    [90m748|[39m     expect(await session.readExecutionPolicy(workspace)).toEqual(polic…
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m4 passed[39m[22m[90m (5)[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[1m[32m211 passed[39m[22m[90m (212)[39m
+[2m   Start at [22m 16:51:44
+[2m   Duration [22m 156.14s[2m (tests 93%, environment 3%, import 3%, transform 1%)[22m
+
+ ELIFECYCLE  Test failed. See above for more details.

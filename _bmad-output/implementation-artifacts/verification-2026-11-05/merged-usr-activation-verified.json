@@ -1,0 +1,343 @@
+{
+  "status": "PASS",
+  "backup": "D:\\Inquello\\backups\\runtime-before-merged-usr-20261105-213345",
+  "source": "87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41",
+  "before": {
+    "files": {
+      "/opt/inquello/runtime/bin/codex": {
+        "uid": 0,
+        "gid": 0,
+        "mode": 365,
+        "bytes": 832046320,
+        "regular": true,
+        "directory": false,
+        "sha256": "6e1c642e7fa44db6d283121cf39245430a6cb6b4bec8ae9f68ceef532cc2afbd"
+      },
+      "/opt/inquello/runtime/bin/codex-linux-sandbox": {
+        "uid": 0,
+        "gid": 0,
+        "mode": 365,
+        "bytes": 52292432,
+        "regular": true,
+        "directory": false,
+        "sha256": "ae28366dcc0c06931f85832b59a1ed0d60dba43153af6302117ea555de5fe363"
+      },
+      "/opt/inquello/runtime/bin/bwrap": {
+        "uid": 0,
+        "gid": 0,
+        "mode": 365,
+        "bytes": 565336,
+        "regular": true,
+        "directory": false,
+        "sha256": "bda71794266ac7c3a105e1cb977b754d5d297d26c6028b46dc2a4e69f0f75f9d"
+      },
+      "/usr/local/libexec/inquello-broker.py": {
+        "uid": 0,
+        "gid": 0,
+        "mode": 365,
+        "bytes": 18477,
+        "regular": true,
+        "directory": false,
+        "sha256": "b45569127659f63e3f5afc6abb322f582ec8eddb9cb21244bb9ba2e86a89f69e"
+      },
+      "/usr/local/libexec/inquello-executor": {
+        "uid": 0,
+        "gid": 0,
+        "mode": 365,
+        "bytes": 91,
+        "regular": true,
+        "directory": false,
+        "sha256": "9bb7124684fb766fcbb4b6f265e124d8e53a0c17e3b6d15b4be37c023b97f273"
+      },
+      "/opt/inquello/runtime/manifest.json": {
+        "uid": 0,
+        "gid": 0,
+        "mode": 292,
+        "bytes": 543,
+        "regular": true,
+        "directory": false,
+        "sha256": "d9d893fab81839e18d279e7892bed9baa6d8d6317566dfeacb3545f113a2a663"
+      }
+    },
+    "directories": {
+      "/opt/inquello/runtime": {
+        "uid": 0,
+        "gid": 0,
+        "mode": 493,
+        "bytes": 4096,
+        "regular": false,
+        "directory": true
+      },
+      "/opt/inquello/runtime/bin": {
+        "uid": 0,
+        "gid": 0,
+        "mode": 493,
+        "bytes": 4096,
+        "regular": false,
+        "directory": true
+      },
+      "/usr/local/libexec": {
+        "uid": 0,
+        "gid": 0,
+        "mode": 493,
+        "bytes": 4096,
+        "regular": false,
+        "directory": true
+      },
+      "/var/lib/inquello/tasks": {
+        "uid": 1000,
+        "gid": 1000,
+        "mode": 448,
+        "bytes": 16384,
+        "regular": false,
+        "directory": true
+      },
+      "/var/lib/inquello/locks": {
+        "uid": 1000,
+        "gid": 1000,
+        "mode": 448,
+        "bytes": 208896,
+        "regular": false,
+        "directory": true
+      },
+      "/var/lib/inquello/transfers": {
+        "uid": 1000,
+        "gid": 1000,
+        "mode": 448,
+        "bytes": 16384,
+        "regular": false,
+        "directory": true
+      },
+      "/var/lib/inquello/executor": {
+        "uid": 1000,
+        "gid": 1000,
+        "mode": 448,
+        "bytes": 16384,
+        "regular": false,
+        "directory": true
+      }
+    },
+    "receipt": {
+      "version": 1,
+      "sourceArchiveSha256": "87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41",
+      "cargoLocked": true,
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+      "cargoLockSha256": "da492069dc9ba1dc01932a6ed080c7ad7741c711a28c9b781f1dcc4619581563",
+      "binaries": {
+        "codex": "7a5ce0cbfe7d2037c26dd622ddd814259f4187cbe426c9fccaa61f766c3bede7",
+        "codex-linux-sandbox": "f75fd744d405a9ce0da729ac7b51ec9e2996296e66af6afc03ee6185e01dfb4c",
+        "bwrap": "feddb1aae1d3cc2ae0059b180d52234cb2881f073e56e9dabf15fc1be599c0a4"
+      }
+    },
+    "new": {
+      "codex": {
+        "uid": 1000,
+        "gid": 1000,
+        "mode": 448,
+        "bytes": 832143624,
+        "regular": true,
+        "directory": false,
+        "sha256": "7a5ce0cbfe7d2037c26dd622ddd814259f4187cbe426c9fccaa61f766c3bede7"
+      },
+      "codex-linux-sandbox": {
+        "uid": 1000,
+        "gid": 1000,
+        "mode": 448,
+        "bytes": 52390816,
+        "regular": true,
+        "directory": false,
+        "sha256": "f75fd744d405a9ce0da729ac7b51ec9e2996296e66af6afc03ee6185e01dfb4c"
+      },
+      "bwrap": {
+        "uid": 1000,
+        "gid": 1000,
+        "mode": 448,
+        "bytes": 565336,
+        "regular": true,
+        "directory": false,
+        "sha256": "feddb1aae1d3cc2ae0059b180d52234cb2881f073e56e9dabf15fc1be599c0a4"
+      }
+    },
+    "manifest": {
+      "version": 1,
+      "binaries": {
+        "codex": "6e1c642e7fa44db6d283121cf39245430a6cb6b4bec8ae9f68ceef532cc2afbd",
+        "codex-linux-sandbox": "ae28366dcc0c06931f85832b59a1ed0d60dba43153af6302117ea555de5fe363",
+        "bwrap": "bda71794266ac7c3a105e1cb977b754d5d297d26c6028b46dc2a4e69f0f75f9d"
+      },
+      "sourceArchiveSha256": "9e8f47c61315ccf013a4fbb0616418de2d5c7de69c731ce1e855eff8ce4deeb3",
+      "inquello-broker.py": "b45569127659f63e3f5afc6abb322f582ec8eddb9cb21244bb9ba2e86a89f69e",
+      "inquello-executor": "9bb7124684fb766fcbb4b6f265e124d8e53a0c17e3b6d15b4be37c023b97f273"
+    },
+    "bootId": "f9f45cea-9ed4-4f9b-b932-c5ad14dbaba7"
+  },
+  "after": {
+    "files": {
+      "/opt/inquello/runtime/bin/codex": {
+        "uid": 0,
+        "gid": 0,
+        "mode": 365,
+        "bytes": 832143624,
+        "regular": true,
+        "directory": false,
+        "sha256": "7a5ce0cbfe7d2037c26dd622ddd814259f4187cbe426c9fccaa61f766c3bede7"
+      },
+      "/opt/inquello/runtime/bin/codex-linux-sandbox": {
+        "uid": 0,
+        "gid": 0,
+        "mode": 365,
+        "bytes": 52390816,
+        "regular": true,
+        "directory": false,
+        "sha256": "f75fd744d405a9ce0da729ac7b51ec9e2996296e66af6afc03ee6185e01dfb4c"
+      },
+      "/opt/inquello/runtime/bin/bwrap": {
+        "uid": 0,
+        "gid": 0,
+        "mode": 365,
+        "bytes": 565336,
+        "regular": true,
+        "directory": false,
+        "sha256": "feddb1aae1d3cc2ae0059b180d52234cb2881f073e56e9dabf15fc1be599c0a4"
+      },
+      "/usr/local/libexec/inquello-broker.py": {
+        "uid": 0,
+        "gid": 0,
+        "mode": 365,
+        "bytes": 19084,
+        "regular": true,
+        "directory": false,
+        "sha256": "7783196dd43a2d0fc5069b79557843073345bfb4eabc090fc14ecd8408e12880"
+      },
+      "/usr/local/libexec/inquello-executor": {
+        "uid": 0,
+        "gid": 0,
+        "mode": 365,
+        "bytes": 91,
+        "regular": true,
+        "directory": false,
+        "sha256": "9bb7124684fb766fcbb4b6f265e124d8e53a0c17e3b6d15b4be37c023b97f273"
+      },
+      "/opt/inquello/runtime/manifest.json": {
+        "uid": 0,
+        "gid": 0,
+        "mode": 292,
+        "bytes": 543,
+        "regular": true,
+        "directory": false,
+        "sha256": "47ba8260d36c53d223469bc8be1befbc712be3d5edc6f99b178681e55b9aabec"
+      }
+    },
+    "directories": {
+      "/opt/inquello/runtime": {
+        "uid": 0,
+        "gid": 0,
+        "mode": 493,
+        "bytes": 4096,
+        "regular": false,
+        "directory": true
+      },
+      "/opt/inquello/runtime/bin": {
+        "uid": 0,
+        "gid": 0,
+        "mode": 493,
+        "bytes": 4096,
+        "regular": false,
+        "directory": true
+      },
+      "/usr/local/libexec": {
+        "uid": 0,
+        "gid": 0,
+        "mode": 493,
+        "bytes": 4096,
+        "regular": false,
+        "directory": true
+      },
+      "/var/lib/inquello/tasks": {
+        "uid": 1000,
+        "gid": 1000,
+        "mode": 448,
+        "bytes": 16384,
+        "regular": false,
+        "directory": true
+      },
+      "/var/lib/inquello/locks": {
+        "uid": 1000,
+        "gid": 1000,
+        "mode": 448,
+        "bytes": 208896,
+        "regular": false,
+        "directory": true
+      },
+      "/var/lib/inquello/transfers": {
+        "uid": 1000,
+        "gid": 1000,
+        "mode": 448,
+        "bytes": 16384,
+        "regular": false,
+        "directory": true
+      },
+      "/var/lib/inquello/executor": {
+        "uid": 1000,
+        "gid": 1000,
+        "mode": 448,
+        "bytes": 16384,
+        "regular": false,
+        "directory": true
+      }
+    },
+    "receipt": {
+      "version": 1,
+      "sourceArchiveSha256": "87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41",
+      "cargoLocked": true,
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+      "cargoLockSha256": "da492069dc9ba1dc01932a6ed080c7ad7741c711a28c9b781f1dcc4619581563",
+      "binaries": {
+        "codex": "7a5ce0cbfe7d2037c26dd622ddd814259f4187cbe426c9fccaa61f766c3bede7",
+        "codex-linux-sandbox": "f75fd744d405a9ce0da729ac7b51ec9e2996296e66af6afc03ee6185e01dfb4c",
+        "bwrap": "feddb1aae1d3cc2ae0059b180d52234cb2881f073e56e9dabf15fc1be599c0a4"
+      }
+    },
+    "new": {
+      "codex": {
+        "uid": 1000,
+        "gid": 1000,
+        "mode": 448,
+        "bytes": 832143624,
+        "regular": true,
+        "directory": false,
+        "sha256": "7a5ce0cbfe7d2037c26dd622ddd814259f4187cbe426c9fccaa61f766c3bede7"
+      },
+      "codex-linux-sandbox": {
+        "uid": 1000,
+        "gid": 1000,
+        "mode": 448,
+        "bytes": 52390816,
+        "regular": true,
+        "directory": false,
+        "sha256": "f75fd744d405a9ce0da729ac7b51ec9e2996296e66af6afc03ee6185e01dfb4c"
+      },
+      "bwrap": {
+        "uid": 1000,
+        "gid": 1000,
+        "mode": 448,
+        "bytes": 565336,
+        "regular": true,
+        "directory": false,
+        "sha256": "feddb1aae1d3cc2ae0059b180d52234cb2881f073e56e9dabf15fc1be599c0a4"
+      }
+    },
+    "manifest": {
+      "version": 1,
+      "binaries": {
+        "codex": "7a5ce0cbfe7d2037c26dd622ddd814259f4187cbe426c9fccaa61f766c3bede7",
+        "codex-linux-sandbox": "f75fd744d405a9ce0da729ac7b51ec9e2996296e66af6afc03ee6185e01dfb4c",
+        "bwrap": "feddb1aae1d3cc2ae0059b180d52234cb2881f073e56e9dabf15fc1be599c0a4"
+      },
+      "sourceArchiveSha256": "87a50bf6654c32b6eb703e825a40e31f28c734274133f85733201969350c4f41",
+      "inquello-broker.py": "7783196dd43a2d0fc5069b79557843073345bfb4eabc090fc14ecd8408e12880",
+      "inquello-executor": "9bb7124684fb766fcbb4b6f265e124d8e53a0c17e3b6d15b4be37c023b97f273"
+    },
+    "bootId": "f9f45cea-9ed4-4f9b-b932-c5ad14dbaba7"
+  }
+}

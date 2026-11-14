@@ -7,13 +7,16 @@ paradigm: Hybrid desktop/shared service with layered Rust domain ports and adapt
 scope: Whole Inquello platform and consistency between its features
 status: final
 created: 2026-10-27
-updated: 2026-10-27
-binds: [P01-P22, FR-1-FR-44, NFR-1-NFR-10, UJ-1-UJ-8]
+updated: 2026-11-05
+binds: [P01-P22, FR-1-FR-45, NFR-1-NFR-10, UJ-1-UJ-10]
 sources:
   - ../../prds/prd-inquello-2026-10-26/prd.md
   - ../../prds/prd-inquello-2026-10-26/addendum.md
   - ../../ux-designs/ux-inquello-2026-10-26/DESIGN.md
   - ../../ux-designs/ux-inquello-2026-10-26/EXPERIENCE.md
+  - ../../capability-reuse-inventory-2026-11-05.md
+  - ../../course-correction-2026-11-05/reuse-first-reconciliation.md
+  - ../../../specs/spec-customer-onboarding/SPEC.md
   - .memlog.md
   - .working/upstream-architecture.md
   - .working/technology-evidence.md
@@ -27,9 +30,11 @@ companions:
 
 ## Design Paradigm
 
-**Layered modular Rust domain with ports and adapters**, surrounding the retained Codex engine/app-server and an Electron React/TypeScript desktop client. The adopted hybrid extends AD-1–4: local execution/files and domain working metadata coexist with a shared Inquello identity, permission and collaboration service (AD-15). Shared audit modules own consistent domain rules; adapters connect runtime, local persistence, the shared service, files and external systems; clients expose the supplied UX. No shared-service vendor is selected. AD-18–21 record the owner-adopted technical direction with architect-derived contracts; AD-22 derives recovery controls. No supplier or deployment is selected.
+**Layered modular Rust domain with ports and adapters**, surrounding the retained Codex engine/app-server and an Electron React/TypeScript desktop client. The adopted hybrid extends AD-1–4: local execution/files and domain working metadata coexist with a shared Inquello identity, permission and collaboration service (AD-15). Shared audit modules own consistent domain rules; adapters connect runtime, local persistence, the shared service, files and external systems; clients expose the supplied UX. Auth0 hosted OIDC is selected by later customer onboarding; shared-service hosting/operator/region remain unselected. AD-18–21 record the owner-adopted technical direction with architect-derived contracts; AD-22 derives recovery controls. Identity selection does not establish deployed-service or real-data qualification.
 
-This initiative contract binds independently implemented features. The full target retains **41 V1 FRs and three V2 FRs (38, 40, 42)**, all applicable NFRs, eight source journeys and the PRD's detailed inventory. Prior review snapshots are historical; this update has current spine lint, three service-contract reviewer reports and the bounded adoption/connectivity recheck under reviews/. The hybrid technical direction is adopted (OQ-16A, 2026-10-27); actual supply/data eligibility (OQ-16B) and external-audit boundaries (OQ-15) prevent a blanket readiness claim. SC-1–6 are architect-derived interoperability contracts, not claims that the owner individually reviewed each protocol field. Nothing here claims implemented capability, runtime validation or release approval.
+This initiative contract binds independently implemented features. Approved V1 serves one organisation and its internal audit team through setup/context, risk-based coverage planning, engagement work, review/reporting, action follow-up and the next plan, including a supported recurring check. Retain all compatible Codex capabilities through reuse, exposure/adaptation and qualification, not a scope cut or rebuild. Historical FR-1–44 and UJ-1–8 keep their IDs; FR-45 and UJ-9/10 add explicit planning and setup/feedback. Native-authority FR-38/40/42 remain V2. External-audit-specific workflows/client switching, broad marketplace and complex resource management follow explicit PRD exclusions; technical/advisory capabilities remain useful within internal audit.
+
+The [capability reuse inventory](../../capability-reuse-inventory-2026-11-05.md) records inherited source, patches, effective configuration, UI/IPC/native paths, authority adaptation, supply and acceptance per feature. Existing source/wiring does not prove every route is enabled; private Task protections are integration requirements. Prior reviews/technology snapshots remain historical. OQ-16A direction is adopted, later onboarding selects Auth0, and OQ-16B actual-route/data eligibility stays gated. OQ-15 is a future external-audit activation gate, not an internal-audit blocker. SC-1–6 remain derived interoperability contracts. This update makes no fresh runtime, release or production acceptance claim.
 
 Arrows below denote allowed dependencies; dashed arrows denote port implementation. The composition host wires implementations. Domain modules do not import Electron or concrete runtime/storage adapters.
 
@@ -62,7 +67,7 @@ AD-1–4 and AD-15–17 are user-adopted choices. AD-5–14 derive enforcement r
 
 - **Binds:** All runtime-dependent features.
 - **Prevents:** Independent replacement engines and an invented greenfield foundation.
-- **Rule:** Derive Inquello from public `openai/codex`; inherit verified runtime/app-server contracts at an identified revision. Establish component availability and service eligibility per capability. The inspected source revision is evidence, not the silently selected delivery fork cut.
+- **Rule:** Derive Inquello from public `openai/codex`; inherit verified runtime/app-server contracts at an identified revision. Establish component availability and service eligibility per capability. The older inspected revision is historical; AGENTS.md/FORK-CUT.md and the November source audit establish engine/ at rust-v0.165.0 with deliberate patches. Reuse verified source and existing wiring before audit adaptation, then qualify each feature in the shared inventory.
 
 ### AD-2 — Separate audit semantics from the agent runtime [ADOPTED]
 
@@ -92,7 +97,7 @@ AD-1–4 and AD-15–17 are user-adopted choices. AD-5–14 derive enforcement r
 
 - **Binds:** Navigation, clients/jobs, provenance, review and delivery.
 - **Prevents:** Conversation IDs, model claims or UI status becoming professional identity or acceptance.
-- **Rule:** Keep stable Workspace, optional Engagement, Task, Source and Artifact identity with explicit runtime thread/turn/item/branch references and origin. The shared Inquello identity/authorisation service supplies authenticated acting/reviewer identity, membership and current permitted scope; the trusted host validates that scoped authority and fails closed for shared use when it cannot establish it. Model output cannot mint a human decision. Provider/connector credentials are not organisation review authority. Preserve separate run, artifact, checks, human-review, Professional Approval and delivery states with applicable scope/version. The shared domain owns a common reviewed-basis revision covering decision-relevant outputs, Sources/evidence, Method/departures and policy versions; review and delivery use that same reference. Retained historical decision attribution is immutable and distinct from current applicability. No universal audit state machine is imposed.
+- **Rule:** Keep stable Workspace, optional Engagement, Task, Source and Artifact identity with explicit runtime thread/turn/item/branch references and origin. The shared Inquello identity/authorisation service supplies authenticated acting/reviewer identity, membership and current permitted scope; the trusted host validates that scoped authority and fails closed for shared use when it cannot establish it. Model output cannot mint a human decision. Provider/connector credentials are not organisation review authority. Preserve separate run, artifact, checks, human-review, Professional Approval and delivery states with applicable scope/version. The shared domain owns a common reviewed-basis revision covering decision-relevant outputs, Sources/evidence, Method/departures and policy versions; review and delivery use that same reference. Retained historical decision attribution is immutable and distinct from current applicability. Connect sourced objectives/risk context and coverage-plan revisions to engagement objectives/scope/criteria/work programme, evidence, findings/conclusions/report and action/follow-up references, including period, gaps and known change impact. Manager review of a proposal is distinct from actual governance approval of a plan or significant change. No universal audit state machine or new record schema is imposed.
 
 ### AD-7 — Owned mutations and cross-store recovery [DERIVED]
 
@@ -110,13 +115,13 @@ AD-1–4 and AD-15–17 are user-adopted choices. AD-5–14 derive enforcement r
 
 - **Binds:** Analysis, supported editors/files, alternatives and specialist work.
 - **Prevents:** Stale overwrites, lost supported content and assumed live-state access.
-- **Rule:** Preserve the same supported saved files and unrelated content; distinguish live application and remote-record access. Compare relevant versions before replacement; preserve intervening edits or leave conflicts unapplied. Promote alternatives deliberately with origin history. Retain input/Method/derivation, population, exclusions, duplicate treatment, applicable sampling parameters and actual coverage. Changed inputs recompute or mark affected results stale. Changes to the reviewed basis mark affected decisions' applicability stale; resolve applicability under the actual Method/policy before relying on or delivering affected work. Preserve the historical decision and external authority. Unsupported conversions are disclosed before destructive change.
+- **Rule:** Preserve the same supported saved files and unrelated content; distinguish live application and remote-record access. Compare relevant versions before replacement; preserve intervening edits or leave conflicts unapplied. Promote alternatives deliberately with origin history. Retain input/Method/derivation, population, exclusions, duplicate treatment, applicable sampling parameters and actual coverage. Changed inputs recompute or mark affected results stale. Changes to the reviewed basis mark affected decisions' applicability stale; resolve applicability under the actual Method/policy before relying on or delivering affected work. Preserve the historical decision and external authority. For each supported procedure reconcile actual execution against agreed population/scope: completed, excluded, failed and unfinished work, with recovery without silent omissions or duplicate effects. A completed turn, passed sample or human spot check alone does not establish full-population execution; procedure suitability and human acceptance remain separate. Unsupported conversions are disclosed before destructive change.
 
 ### AD-10 — Method departures and knowledge boundaries [DERIVED]
 
 - **Binds:** Reusable guidance, analysis/review, history and memory.
 - **Prevents:** Case evidence or model memory becoming maintained Method or enforced policy.
-- **Rule:** Retain Method/version/parameters and permitted Task-specific departures, rationale and affected scope separately from shared-guidance changes. Expose them with relied-on outputs and identify changed-Method/evidence impacts. Keep memory contribution, memory use, history and optional activity capture/recall distinct under policy. Denied departures remain unapplied; no silent case-to-team Method promotion. Team-wide institutional recall follows AD-16 admission and current access, not unconditional visibility of retained extracts. It is isolated between company Workspaces; external-audit client boundaries remain OQ-15. Preserve instructions, skills, tools, agents and eligible demonstration-to-skill mechanisms without imposing a general workflow engine.
+- **Rule:** Retain Method/version/parameters and permitted Task-specific departures, rationale and affected scope separately from shared-guidance changes. Expose them with relied-on outputs and identify changed-Method/evidence impacts. Keep memory contribution, memory use, history and optional activity capture/recall distinct under policy. Denied departures remain unapplied; no silent case-to-team Method promotion. Preserve applicable prior work-programme approval and prompt approval of changes. Where the selected methodology requires annual documented risk assessment, dynamic plan updates or conditional documented reliance on other assurance providers, retain that timing, evidence and responsibility without imposing a universal software cadence or assurance-mapping suite. Team-wide institutional recall follows AD-16 admission and current access, not unconditional visibility of retained extracts. It is isolated between company Workspaces; external-audit client boundaries remain OQ-15. Setup context and later plan/report/action history follow declared source, audience, use, retention and current-access rules; relevance never creates permission. Historical action status is not proof of implemented remediation. Preserve instructions, skills, tools, agents and eligible demonstration-to-skill mechanisms without imposing a general workflow engine.
 
 ### AD-11 — Bounded external effects and reconciliation [DERIVED]
 
@@ -128,19 +133,19 @@ AD-1–4 and AD-15–17 are user-adopted choices. AD-5–14 derive enforcement r
 
 - **Binds:** Schedules/events, programmatic work, team review, remote clients and reassignment.
 - **Prevents:** Local SQLite or runtime primitives being mistaken for complete shared backends.
-- **Rule:** Retain trigger/input/Method/identity/limits/destination/escalation mandates and actual event/run outcomes. Each accepted run and its effects bind to one immutable authorised mandate revision. Configuration changes apply prospectively unless a trusted, explicit domain rebind records the authority and impact checks for running work. Current revocation and restrictive policy always apply. Disabling changes future eligibility; handle running work separately. Enforce ownership/revocation and duplicate-effect controls across supported entry paths using shared domain rules. Observe execution-host/context availability; never assume automatic cloud continuation. Scheduler, team-coordination and hosted-route gaps remain required V1 implementation dependencies with the owners/gates below. AD-15 selects the shared-service responsibility boundary; its implementation and the scheduler supply remain unproven. Basic sharing revocation is mandatory before first team enablement; advanced unattended-job reassignment can follow with automation.
+- **Rule:** Retain trigger/input/Method/identity/limits/destination/escalation mandates and actual event/run outcomes. Each accepted run and its effects bind to one immutable authorised mandate revision. Configuration changes apply prospectively unless a trusted, explicit domain rebind records the authority and impact checks for running work. Current revocation and restrictive policy always apply. Disabling changes future eligibility; handle running work separately. Enforce ownership/revocation and duplicate-effect controls across supported entry paths using shared domain rules. Observe execution-host/context availability; never assume automatic cloud continuation. V1 acceptance includes a selected supported recurring audit check with defined inputs/source availability, Method, identity, limits, outputs and escalation; results feed human-directed follow-up and later planning. Inherited durable queue/mailbox/sleep primitives exist; recurrence and protected Task invocation require exposure/adaptation and qualification. Before reliance, specify trigger registration, host/app availability, unattended session eligibility, missed-run policy and restart/duplicate/recovery behavior. No-input, not-run, partial, failed and completed outcomes stay distinct; a sleeping/offline host is not a completed run. Scheduler integration, team-coordination and hosted-route gaps remain V1 dependencies with the owners/gates below. AD-15 selects the shared-service responsibility boundary; its implementation and the scheduler supply remain unproven. Basic sharing revocation is mandatory before first team enablement; advanced unattended-job reassignment can follow with automation.
 
 ### AD-13 — Phase-specific record authority [DERIVED]
 
 - **Binds:** V1 review/delivery and V2 records/migration.
 - **Prevents:** Local metadata, agent completion or silent mode changes conferring formal authority.
-- **Rule:** V1 retains useful local working/review records and links any Method-required formal acceptance to verified designated external authority. Preserve authorised human/scope/version attribution and affected approvals. V1-held files, histories, extracts, derived knowledge and shared coordination still require access, retention/deletion and recovery controls for enabled routes. Only V2 adds FR-38/40/42 native authoritative record identity, relationships, lifecycle, hold/amendment/retention, recovery/export and deliberate organisation/Workspace migration. Tasks/Engagements cannot silently change authority; operational source systems remain separate. V2 policy is not a V1 gate.
+- **Rule:** V1 retains useful local working/review records and links any Method-required formal acceptance to verified designated external authority. Preserve authorised human/scope/version attribution and affected approvals. V1-held files, histories, extracts, derived knowledge and shared coordination still require access, retention/deletion and recovery controls for enabled routes. Only V2 adds FR-38/40/42 native authoritative record identity, relationships, lifecycle, hold/amendment/retention, recovery/export and deliberate organisation/Workspace migration. Tasks/Engagements cannot silently change authority; operational source systems remain separate. For each supported plan, workpaper, finding/report and action-follow-up deliverable identify its working location, actual external formal authority, review/approval evidence, transfer/export path and preserved/lost links before reliance. Working coordination cannot silently become formal authority. V2 policy is not a V1 gate.
 
 ### AD-14 — Capability evidence and operating commitments [DERIVED]
 
 - **Binds:** All features, operations and release claims.
 - **Prevents:** Silent scope cuts, invented service guarantees and activity counts labelled assurance.
-- **Rule:** Each enabled route declares owner, actual implementation/service supply, identity/processing/source limits, versions and capability-specific acceptance. Keep missing/partial/failed/uncertain outcomes, diagnostics, recovery and cost evidence inspectable under data policy. Select workload, support, accessibility, budget and recovery commitments at their gates. Deferred or unverified requirements remain unmet scope; a smaller shipping increment cannot claim full parity.
+- **Rule:** Each enabled route declares owner, actual implementation/service supply, identity/processing/source limits, versions and capability-specific acceptance. Keep missing/partial/failed/uncertain outcomes, diagnostics, recovery and cost evidence inspectable under data policy. Select workload, support, accessibility, budget and recovery commitments at their gates. The shared inventory distinguishes retained implementation, exposure/adaptation, external supply and verified acceptance. Deferred or unverified requirements remain unmet scope; a smaller increment cannot claim full parity. Risk coverage, conclusion quality/business relevance and usable direction/review precede efficiency metrics. Dependable supported recovery and authorized data handling gate real engagement use; no numerical target is invented.
 
 ### AD-15 — Hybrid authority and explicit private-to-shared handoff [ADOPTED]
 
@@ -172,7 +177,7 @@ AD-1–4 and AD-15–17 are user-adopted choices. AD-5–14 derive enforcement r
 
 - **Binds:** Identity service, trusted desktop host and all shared commands.
 - **Prevents:** Email-based identity collision, provider login as membership and stale token claims as grants.
-- **Rule:** Following the adopted direction, implement SC-1 in the [shared-service contract proposal](shared-service-contract-proposal-2026-10-27.md): external-browser OIDC native PKCE flow, issuer/subject principal mapping, opaque revocable app sessions, rotating refresh families and current server-side membership checks. Keep credentials outside renderer/model/tools. Issuer/vendor and real-data eligibility remain OQ-16B.
+- **Rule:** Following the adopted direction, implement SC-1 in the [shared-service contract proposal](shared-service-contract-proposal-2026-10-27.md): external-browser OIDC native PKCE flow, issuer/subject principal mapping, opaque revocable app sessions, rotating refresh families and current server-side membership checks. Keep credentials outside renderer/model/tools. The later [customer-onboarding contract](../../../specs/spec-customer-onboarding/SPEC.md) selects Auth0 hosted OIDC and eligible verified-user self-service creation/invitation, extending operator-only entry without removing that path. Exact issuer/subject, fresh service-validated verified-email proof, explicit invitation acceptance and receipt/revision recovery remain binding. Real tenant/callback/signup/delivery and deployment/data eligibility remain qualification gates.
 
 ### AD-19 — One transactional shared-command authority [ADOPTED DIRECTION; DERIVED CONTRACT]
 
@@ -212,7 +217,7 @@ AD-1–4 and AD-15–17 are user-adopted choices. AD-5–14 derive enforcement r
 
 ## Stack
 
-Historical cold-start seeds retained from [technology evidence](.working/technology-evidence.md); this update makes no fresh-current version claim or new stack choice. Code/lockfiles own the detail once implementation exists. Reverify against primary sources and the selected fork before dependent implementation. No install/build has validated the combined stack.
+Historical cold-start seeds retained from [technology evidence](.working/technology-evidence.md); this update makes no fresh-current version claim or new stack choice. Code/lockfiles own the detail once implementation exists. Reverify against primary sources and the selected fork before dependent implementation. This planning update runs no install/build and makes no fresh combined-stack acceptance claim; current implementation evidence belongs to the dated engineering handoff.
 
 | Name | Version |
 | --- | --- |
@@ -222,16 +227,16 @@ Historical cold-start seeds retained from [technology evidence](.working/technol
 | Rust | 1.99.1, edition 2024 |
 | pnpm | 10.34.5 |
 
-TypeScript 5.9.2 is the inspected locked baseline, not a claim that it is the newest compiler. SQLite is adopted; its driver/runtime revision is a persistence implementation gate. Source pin `970111f6cb62cc02fe36a82ea7d71b37a2889c97` and inspected main `efab30992b28bb8fc5064dbac9c12090b8818e98` are evidence snapshots. Select the actual fork cut and verify API/toolchain compatibility before implementation; source availability does not establish hosted-service entitlement. Current documentation calls the app-server command and WebSocket transport experimental/unsupported for production in its remote Code Mode host section. Default stdio availability establishes neither blanket production support nor Inquello readiness; verify and harden the selected fork/route before release.
+TypeScript 5.9.2 is the inspected locked baseline, not a claim that it is the newest compiler. SQLite is adopted; its driver/runtime revision is a persistence implementation gate. Source pin `970111f6cb62cc02fe36a82ea7d71b37a2889c97` and inspected main `efab30992b28bb8fc5064dbac9c12090b8818e98` are evidence snapshots. Current AGENTS.md/FORK-CUT.md names engine/ at rust-v0.165.0; verify actual API/toolchain compatibility before dependent implementation; source availability does not establish hosted-service entitlement. Current documentation calls the app-server command and WebSocket transport experimental/unsupported for production in its remote Code Mode host section. Default stdio availability establishes neither blanket production support nor Inquello readiness; verify and harden the selected fork/route before release.
 
 Verify the domain store's resolved SQLite runtime includes the WAL-reset corruption fix (3.51.3+ or a documented fixed backport); the inspected upstream check does not verify a separately linked driver. Evidence is recorded in the [technology review](reviews/review-technology.md).
 
 ## Structural Seed and Operating Envelope
 
-Cold-start package names below are seed, not mandatory permanent directories or separate services. Preserve verified upstream ownership; use demonstrated extension/facade seams before focused core changes.
+The current root is engine/ (renamed from fork/ on 2026-10-28). Cold-start package names below are seed, not mandatory permanent directories or separate services. Preserve verified upstream ownership; use demonstrated extension/facade seams before focused core changes.
 
 ```text
-fork/
+engine/
   codex-rs/
     core/, core-api/, app-server/, ext/   retained runtime and integration seams
     rollout/, state/, thread-store/      retained runtime continuity
@@ -245,14 +250,14 @@ The separate domain store owns working metadata; saved artifacts remain in their
 | Envelope / supply gap | Required contract and owner/gate |
 | --- | --- |
 | Local desktop | Main manages the local runtime child; local sources remain tied to that host. Scheduled work needing those files observes actual computer/app availability. Loss of host/connection exposes unavailable or interrupted work, not cloud completion. |
-| Scheduler/event supply | Architecture/integration lead with team administrator owns the missing production trigger/scheduler/mandate route. OQ-5/6/8/9 are decided (2026-10-27); the missing production route still gates enablement and promises. Queue/heartbeat support alone is insufficient; FR-23/24 remain V1. |
+| Scheduler/event supply | Architecture/integration lead with team administrator owns reuse/qualification of inherited queue/mailbox/sleep into supported recurrence. OQ-5/6/8/9 stay decided. Trigger registration, protected invocation, host availability, unattended identity, missed runs and recovery require evidence. No always-on backend is selected; FR-23/24 remain V1. |
 | Team coordination and cross-host work | Product/audit leads with architecture/integration lead are proposed owners of the AD-15 shared-service route. Identity, grants and coordination authority are decided; SC-1–6 define interoperable protocol, accessible version/context materialisation, invalidation and recovery under the adopted OQ-16A direction; OQ-16B actual-route/data controls remain. Local threads/SQLite alone do not implement FR-35/36. First team enablement requires AD-16 basic revocation, not later automation. |
 | Remote execution and connected services | Architecture/integration lead with organisation policy/security owner names the actual service, identity, context and provider eligibility before use under OQ-6/9. No inferred hosted backend, automatic local-to-cloud handoff or fully local inference. |
 | Environments and operations | Product/design/operations leads with policy owner set workload, availability/support, recovery/loss, deployment/data eligibility and retention under OQ-2/8/9. Synthetic fixtures may proceed; real-data and production promises wait for their gates. Collect total effort, costs, recovery and quality counter-metrics, not token/run counts as assurance. |
 
 ## Capability → Architecture Map
 
-All 22 source groups and 44 FRs remain; locations are logical responsibilities. **V2 is marked per FR, not per whole group.** UJ-1–8 retain their final EXPERIENCE flows. The original detailed inventory and W1–W3/M1 fixtures remain governing, unexecuted acceptance inputs.
+All 22 source groups and FR-1–44 retain IDs and compatible capability coverage; FR-45 adds risk-based planning. Locations are logical responsibilities. **V2 is marked per FR, not per whole group.** UJ-1–8 remain, extended by UJ-9/10. Apply the PRD's explicit audience/exclusions. Original fixtures retain exact acceptance criteria; actual execution status belongs to dated engineering evidence.
 
 | Capability / FRs | Lives in | Governed by; quality references |
 | --- | --- | --- |
@@ -267,7 +272,7 @@ All 22 source groups and 44 FRs remain; locations are logical responsibilities. 
 | P09 Review/technical investigation; FR-17–18 | Private reviewer Tasks and domain review; actual tool-driven reperformance and technical tools | AD-6/8/9/13/17; NFR-2/3/7 |
 | P10 Reusable Methods; FR-19–20 | Rust Method/departure rules, inherited skills/instructions | AD-4/8/10; NFR-3/7 |
 | P11 Extensible tools; FR-21–22 | Verified extension/MCP/plugin/hook/app-server seams | AD-2/5/8; NFR-3/8/9 |
-| P12 Programmatic/continuous work; FR-23–24 | CLI/SDK/job adapters; required scheduler supply | AD-7/11/12/14; NFR-4/6/10 |
+| P12 Programmatic/continuous work; FR-23–24 | Retained CLI/SDK/queue/sleep; protected job integration and qualified recurrence | AD-7/11/12/14; NFR-4/6/10 |
 | P13 Delegation/alternatives; FR-25–26 | Codex subagents/branches, domain origins and promotion | AD-6/7/8/9; NFR-3/4/7 |
 | P14 History/memory; FR-27–28 | Runtime continuity; admitted team memory/activity adapters | AD-7/8/10/16; NFR-3/7/8 |
 | P15 Models/routes/usage; FR-29–30 | Provider/policy and consumption adapters | AD-8/12/14; NFR-6/8/9 |
@@ -278,6 +283,7 @@ All 22 source groups and 44 FRs remain; locations are logical responsibilities. 
 | P20 Practice workflows; FR-39 V1, FR-40 V2 | Domain Methods/review, external adapters; V2 records | AD-6/10/11/13; NFR-5/7 |
 | P21 Delivery/record mode; FR-41 V1, FR-42 V2 | External-operation owner; V2 mode/migration | AD-7/11/13; NFR-4/7/9 |
 | P22 Coherent experience; FR-43–44 | Shared identity/state/capability contracts across all paths | AD-5–17; NFR-1–10 |
+| Risk-based coverage planning; FR-45 / CAP-26 | Existing working artifacts, linkage/Methods and permitted history; UJ-9/10 | AD-6/8/9/10/13/16; NFR-2/3/4/7 |
 
 ## Deferred
 
@@ -301,13 +307,32 @@ Open choices retain proposed role owners, not named appointments. Rows marked de
 | OQ-14 | Product lead with architecture and security leads; decided 2026-10-27, module design pending | Inquello owns identity/authorisation via its own auth module (Workspace membership, audit-team roles, Engagement membership, internal vs external audit models). Provider sign-in only selects the inference route. Supersedes reliance on trusted host/policy context as identity source; AD-15 now places shared identity/membership/permission authority in the Inquello service, with local execution/files retained. Claude API-key preference now selected; CR-1 adapter compatibility and actual-route eligibility remain; subscription is conditional per AD-23. |
 | AS-UX1/2 | Design with practitioner/reviewer and client/architecture leads; before layouts/client commitments | Validate derived placements and responsive arrangements; four imported references/nine written surfaces are not runtime evidence. |
 | AS-UX3/4 | Design/implementation/accessibility reviewers; before supported-interaction/shipping claims | Verify handlers, focus, recovery, rendered contrast and targets on actual clients. |
-| OQ-16A technical direction | Product owner; adopted 2026-10-27, Sentinel_f111d58b637c8191a30a23234ec55314 | OIDC separate from inference, shared Rust service/PostgreSQL/private selected-file storage and clarified model/service connectivity adopted. Detailed SC-1–6 rules are architect-derived; no supplier, spend, region or implementation authorization follows. |
+| OQ-16A technical direction | Product owner; adopted 2026-10-27, Sentinel_f111d58b637c8191a30a23234ec55314 | OIDC separate from inference, shared Rust service/PostgreSQL/private selected-file storage and clarified model/service connectivity adopted. Detailed SC-1–6 rules are architect-derived; later Auth0 selection is recorded in customer onboarding; no spend, region or implementation authorization follows from this update. |
 | OQ-16B actual-route/data-controls subgate | Organisation policy/security and operations leads (proposed); before real shared data | Select actual hosting/operator/region and processing eligibility; validate revocation, derived-data retention/deletion, backups/restore and recovery for enabled V1 routes. No new V2 native lifecycle implied. |
 | OQ-15 external-audit boundaries | Audit/independence and data-policy leads (proposed); before external-audit shared recall | Resolve client confidentiality/independence, team/Engagement and item grants. Internal-company Workspace memory is not silently generalised across external clients. |
-| Implementation seed | Architecture/implementation leads; before dependent code | Delivery fork cut, concrete facade/extension/protocol seams, compiler/package/SQLite-driver compatibility, schema/migrations, conflict mechanics, secure data paths, packaging/update and ownership-transfer contracts. The AD ownership/direction rules remain fixed. |
+| OQ-17–20 lifecycle reliance | Product/audit leads with design/integration; before dependent reliance | Select supported procedures/sources, first-engagement readiness, Method/delegation, external authority/export/link preservation, recurring trigger/host/identity/missed-run policy and execution/recovery evidence. Lifecycle and recurrence are approved; no mandatory fields or schema invented. |
+| Implementation seed | Architecture/implementation leads; before dependent code | Current engine/ cut is established by FORK-CUT.md; concrete facade/extension/protocol seams, compiler/package/SQLite-driver compatibility, schema/migrations, conflict mechanics, secure data paths, packaging/update and ownership-transfer contracts. The AD ownership/direction rules remain fixed. |
 
 Detailed code layout can wait for implementation; shared authority, dependency direction and mutation ownership cannot vary by feature. OQ-16A direction is now adopted and SC-1–6 fix the dependent interoperability seams. OQ-16B deployment and real-data gates still apply to the actual route; architecture finalization does not authorize implementation. These gates need not block unrelated synthetic local-foundation work, but that work cannot claim team capability. The named V1 supply gaps remain owned delivery work until implemented and verified.
 
 ## Dependency and delivery evidence
 
-Epics must preserve the full target with explicit old-to-new story traceability while removing forward dependencies. Shared identity/grants, accessible version/context handoff, basic revocation and necessary held-data controls precede first team-enabled review/recall. Advanced unattended-job reassignment follows with automation; it cannot delay basic removal/withdrawal enforcement. A local workbook analysis → same-file Excel edit → recomputation → accessible human/agent review → export checkpoint proves an end-to-end engineering path, not a restriction on practitioner-selected validation task types or eventual product breadth. No checkpoint has executed.
+Epics must preserve the full target with explicit old-to-new story traceability while removing forward dependencies. Shared identity/grants, accessible version/context handoff, basic revocation and necessary held-data controls precede first team-enabled review/recall. Advanced unattended-job reassignment follows with automation; it cannot delay basic removal/withdrawal enforcement. A local workbook analysis → same-file Excel edit → recomputation → accessible human/agent review → export checkpoint proves an end-to-end engineering path, not a restriction on practitioner-selected validation task types or eventual product breadth. The October assertion that no checkpoint had executed is historical. Current authored code and fixture/smoke/provider/Windows evidence belong to the latest dated engineering handoff; this update runs no tests and changes no statuses.
+
+### Lifecycle linkage within existing authority
+
+```mermaid
+flowchart LR
+  CTX[Permitted context and objectives] --> PLAN[Human reviewed coverage plan]
+  PLAN --> ENG[Engagement scope and programme]
+  ENG --> EVID[Procedure evidence and actual coverage]
+  EVID --> REVIEW[Private review and human report decision]
+  REVIEW --> ACT[Actions and follow-up evidence]
+  ACT --> PLAN
+  CHECK[Supported recurring check] --> EVID
+  ACT --> HIST[Eligible history with current access]
+  HIST --> PLAN
+  REVIEW --> EXT[Designated external formal authority]
+```
+
+Arrows are traceable working-artifact/reviewed-basis relationships, not automatic transitions, new tables or grants. Actual plan/significant-change governance approval and report issuance remain attributable to authorized humans/external authority. Unresolved actions, risk acceptance and management-reported completion are distinct from verified implementation.

@@ -1,0 +1,64 @@
+source-sha256:c7cc44396822ac8b3d9a2e6c6436d5fbbb7510aeea5660764c2b56aae24c805d
+da492069dc9ba1dc01932a6ed080c7ad7741c711a28c9b781f1dcc4619581563  Cargo.lock
+rustc 1.99.1 (58cf8f9c3 2026-10-13)
+cargo 1.99.1 (5f94df478 2026-08-27)
+   Compiling codex-app-server-protocol v0.165.0 (/opt/inquello/build/sources/c7cc44396822ac8b3d9a2e6c6436d5fbbb7510aeea5660764c2b56aae24c805d/engine/codex-rs/app-server-protocol)
+   Compiling inquello-adapters v0.165.0 (/opt/inquello/build/sources/c7cc44396822ac8b3d9a2e6c6436d5fbbb7510aeea5660764c2b56aae24c805d/engine/codex-rs/inquello-adapters)
+   Compiling codex-analytics v0.165.0 (/opt/inquello/build/sources/c7cc44396822ac8b3d9a2e6c6436d5fbbb7510aeea5660764c2b56aae24c805d/engine/codex-rs/analytics)
+   Compiling codex-thread-store v0.165.0 (/opt/inquello/build/sources/c7cc44396822ac8b3d9a2e6c6436d5fbbb7510aeea5660764c2b56aae24c805d/engine/codex-rs/thread-store)
+   Compiling codex-core-plugins v0.165.0 (/opt/inquello/build/sources/c7cc44396822ac8b3d9a2e6c6436d5fbbb7510aeea5660764c2b56aae24c805d/engine/codex-rs/core-plugins)
+   Compiling codex-skills-extension v0.165.0 (/opt/inquello/build/sources/c7cc44396822ac8b3d9a2e6c6436d5fbbb7510aeea5660764c2b56aae24c805d/engine/codex-rs/ext/skills)
+   Compiling codex-guardian-reviewer v0.165.0 (/opt/inquello/build/sources/c7cc44396822ac8b3d9a2e6c6436d5fbbb7510aeea5660764c2b56aae24c805d/engine/codex-rs/ext/guardian-reviewer)
+   Compiling codex-connectors-extension v0.165.0 (/opt/inquello/build/sources/c7cc44396822ac8b3d9a2e6c6436d5fbbb7510aeea5660764c2b56aae24c805d/engine/codex-rs/ext/connectors)
+   Compiling codex-core v0.165.0 (/opt/inquello/build/sources/c7cc44396822ac8b3d9a2e6c6436d5fbbb7510aeea5660764c2b56aae24c805d/engine/codex-rs/core)
+   Compiling codex-guardian-v2 v0.165.0 (/opt/inquello/build/sources/c7cc44396822ac8b3d9a2e6c6436d5fbbb7510aeea5660764c2b56aae24c805d/engine/codex-rs/ext/guardian-v2)
+   Compiling codex-memories-write v0.165.0 (/opt/inquello/build/sources/c7cc44396822ac8b3d9a2e6c6436d5fbbb7510aeea5660764c2b56aae24c805d/engine/codex-rs/memories/write)
+   Compiling codex-app-server-transport v0.165.0 (/opt/inquello/build/sources/c7cc44396822ac8b3d9a2e6c6436d5fbbb7510aeea5660764c2b56aae24c805d/engine/codex-rs/app-server-transport)
+   Compiling codex-external-agent-migration v0.165.0 (/opt/inquello/build/sources/c7cc44396822ac8b3d9a2e6c6436d5fbbb7510aeea5660764c2b56aae24c805d/engine/codex-rs/external-agent-migration)
+   Compiling codex-app-server-daemon v0.165.0 (/opt/inquello/build/sources/c7cc44396822ac8b3d9a2e6c6436d5fbbb7510aeea5660764c2b56aae24c805d/engine/codex-rs/app-server-daemon)
+   Compiling codex-queue-extension v0.165.0 (/opt/inquello/build/sources/c7cc44396822ac8b3d9a2e6c6436d5fbbb7510aeea5660764c2b56aae24c805d/engine/codex-rs/ext/queue)
+   Compiling codex-mcp-extension v0.165.0 (/opt/inquello/build/sources/c7cc44396822ac8b3d9a2e6c6436d5fbbb7510aeea5660764c2b56aae24c805d/engine/codex-rs/ext/mcp)
+   Compiling codex-memories-extension v0.165.0 (/opt/inquello/build/sources/c7cc44396822ac8b3d9a2e6c6436d5fbbb7510aeea5660764c2b56aae24c805d/engine/codex-rs/ext/memories)
+   Compiling codex-goal-extension v0.165.0 (/opt/inquello/build/sources/c7cc44396822ac8b3d9a2e6c6436d5fbbb7510aeea5660764c2b56aae24c805d/engine/codex-rs/ext/goal)
+   Compiling codex-image-generation-extension v0.165.0 (/opt/inquello/build/sources/c7cc44396822ac8b3d9a2e6c6436d5fbbb7510aeea5660764c2b56aae24c805d/engine/codex-rs/ext/image-generation)
+   Compiling codex-agent-extension v0.165.0 (/opt/inquello/build/sources/c7cc44396822ac8b3d9a2e6c6436d5fbbb7510aeea5660764c2b56aae24c805d/engine/codex-rs/ext/agent)
+   Compiling codex-history-notes-extension v0.165.0 (/opt/inquello/build/sources/c7cc44396822ac8b3d9a2e6c6436d5fbbb7510aeea5660764c2b56aae24c805d/engine/codex-rs/ext/history-notes)
+   Compiling codex-web-search-extension v0.165.0 (/opt/inquello/build/sources/c7cc44396822ac8b3d9a2e6c6436d5fbbb7510aeea5660764c2b56aae24c805d/engine/codex-rs/ext/web-search)
+   Compiling codex-chatgpt v0.165.0 (/opt/inquello/build/sources/c7cc44396822ac8b3d9a2e6c6436d5fbbb7510aeea5660764c2b56aae24c805d/engine/codex-rs/chatgpt)
+   Compiling core_test_support v0.165.0 (/opt/inquello/build/sources/c7cc44396822ac8b3d9a2e6c6436d5fbbb7510aeea5660764c2b56aae24c805d/engine/codex-rs/core/tests/common)
+   Compiling codex-app-server v0.165.0 (/opt/inquello/build/sources/c7cc44396822ac8b3d9a2e6c6436d5fbbb7510aeea5660764c2b56aae24c805d/engine/codex-rs/app-server)
+   Compiling app_test_support v0.165.0 (/opt/inquello/build/sources/c7cc44396822ac8b3d9a2e6c6436d5fbbb7510aeea5660764c2b56aae24c805d/engine/codex-rs/app-server/tests/common)
+    Finished `test` profile [unoptimized] target(s) in 5m 59s
+     Running tests/all.rs (/opt/inquello/build/offline-20261105-1752/target/debug/deps/all-69e4a9939a19c66c)
+
+running 1 test
+test suite::v2::mcp_server_status::oauth_cancel_rpc_selects_exact_attempt_and_prevents_late_token_persistence ... writing message to stdin: Request(JSONRPCRequest { id: Integer(0), method: "initialize", params: Some(Object {"capabilities": Object {"experimentalApi": Bool(true), "optOutNotificationMethods": Null, "requestAttestation": Bool(false)}, "clientInfo": Object {"name": String("codex-app-server-tests"), "title": Null, "version": String("0.1.0")}}), trace: None })
+[mcp stderr] [2m2026-11-06T16:34:53.668749Z[0m [31mERROR[0m [2mcodex_app_server[0m[2m:[0m Codex could not find bubblewrap on PATH. Install bubblewrap with your OS package manager. See the sandbox prerequisites: https://developers.openai.com/codex/concepts/sandboxing#prerequisites. Codex will use the bundled bubblewrap in the meantime.
+read message from stdout: Response(JSONRPCResponse { id: Integer(0), result: Object {"codexHome": String("/tmp/.tmp4DTFB8"), "platformFamily": String("unix"), "platformOs": String("linux"), "userAgent": String("codex-app-server-tests/0.165.0 (Ubuntu 24.4.0; x86_64) unknown (codex-app-server-tests; 0.1.0)")} })
+writing message to stdin: Notification(JSONRPCNotification { method: "initialized", params: None })
+writing message to stdin: Request(JSONRPCRequest { id: Integer(1), method: "mcpServer/oauth/login", params: Some(Object {"name": String("cancel_fixture"), "timeoutSecs": Number(20)}), trace: None })
+in read_stream_until_response_message(Integer(1))
+read message from stdout: Notification(JSONRPCNotification { method: "configWarning", params: Some(Object {"details": Null, "summary": String("Codex could not find bubblewrap on PATH. Install bubblewrap with your OS package manager. See the sandbox prerequisites: https://developers.openai.com/codex/concepts/sandboxing#prerequisites. Codex will use the bundled bubblewrap in the meantime.")}) })
+read message from stdout: Notification(JSONRPCNotification { method: "remoteControl/status/changed", params: Some(Object {"environmentId": Null, "installationId": String("25bc204e-f088-4f3b-9bd3-e6facfdaf7de"), "serverName": String("EC2AMAZ-FVVDJ21"), "status": String("disabled")}) })
+[mcp stderr] [2m2026-11-06T16:34:54.010858Z[0m [33m WARN[0m [2mrmcp::transport::auth[0m[2m:[0m authorization server metadata omits code_challenge_methods_supported; proceeding with an S256 challenge anyway
+read message from stdout: Response(JSONRPCResponse { id: Integer(1), result: Object {"authorizationUrl": String("http://127.0.0.1:41067/authorize?response_type=code&client_id=isolated-client&state=v9BjSsPv0zf5-4ZD0ZhjfQ&code_challenge=lQF7bNlTtGOyVUxte7KOqSNi2mNjkL_hO1K6go-4Lo4&code_challenge_method=S256&redirect_uri=http%3A%2F%2F127.0.0.1%3A40901%2Fcallback%2FkjUvLJ-Z8Wgt&resource=http%3A%2F%2F127.0.0.1%3A41067%2Fmcp"), "loginId": String("01a1b1b6-8fbb-75d2-a829-66485dfca531")} })
+writing message to stdin: Request(JSONRPCRequest { id: Integer(2), method: "mcpServer/oauth/cancel", params: Some(Object {"loginId": String("stale-attempt"), "name": String("cancel_fixture")}), trace: None })
+in read_stream_until_response_message(Integer(2))
+read message from stdout: Response(JSONRPCResponse { id: Integer(2), result: Object {"status": String("notFound")} })
+writing message to stdin: Request(JSONRPCRequest { id: Integer(3), method: "mcpServer/oauth/cancel", params: Some(Object {"loginId": String("01a1b1b6-8fbb-75d2-a829-66485dfca531"), "name": String("cancel_fixture")}), trace: None })
+in read_stream_until_response_message(Integer(3))
+read message from stdout: Response(JSONRPCResponse { id: Integer(3), result: Object {"status": String("cancelled")} })
+in read_stream_until_notification_message(mcpServer/oauthLogin/completed)
+[mcp stderr] Failed to complete OAuth login for 'cancel_fixture': MCP OAuth sign-in cancelled
+read message from stdout: Notification(JSONRPCNotification { method: "mcpServer/oauthLogin/completed", params: Some(Object {"error": String("MCP OAuth sign-in cancelled"), "loginId": String("01a1b1b6-8fbb-75d2-a829-66485dfca531"), "name": String("cancel_fixture"), "success": Bool(false), "threadId": Null}) })
+Error: deadline has elapsed
+FAILED
+
+failures:
+
+failures:
+    suite::v2::mcp_server_status::oauth_cancel_rpc_selects_exact_attempt_and_prevents_late_token_persistence
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 1640 filtered out; finished in 12.12s
+
+error: test failed, to rerun pass `-p codex-app-server --test all`

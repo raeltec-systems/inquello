@@ -1,0 +1,1146 @@
+[
+    {
+        "path":  "_bmad-output/implementation-artifacts/sprint-status.yaml",
+        "sha256":  "0BF1F2CD95E7F910D64FD717734F17C798D298AFA7F579977480CD386E46492A"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/architecture/architecture-inquello-2026-10-26/.memlog.md",
+        "sha256":  "354C602C2F138AE53DCDA219DC396A791822353C3E7092F0A965A5F7C4E70143"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/architecture/architecture-inquello-2026-10-26/.working/check-architecture.py",
+        "sha256":  "56F76653655BAC084B24AC01F9FFD12D13B52645860FA9CAEAC4DCD720095D78"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/architecture/architecture-inquello-2026-10-26/.working/current-docs.md",
+        "sha256":  "131FB1D36BF5A7D988622EA44A8EF0869B18391F6E28F602906702500FBCA010"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/architecture/architecture-inquello-2026-10-26/.working/decision-readiness.md",
+        "sha256":  "FDE17B1B63D7E52C2DC3DA856E138D099DB3E74D7E2D84F26AA090FCA83CE431"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/architecture/architecture-inquello-2026-10-26/.working/desktop-host-options.md",
+        "sha256":  "DCF1D1903C4D19E8F46D9160D85C98AB8389C2B1A8B478F015687E7972FD7DDC"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/architecture/architecture-inquello-2026-10-26/.working/final-verification.json",
+        "sha256":  "CBCA531B62941110FA6F64A3561FC32DEE65A996B46150455495FFE1F8A754FC"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/architecture/architecture-inquello-2026-10-26/.working/frontend-release-evidence.json",
+        "sha256":  "E025E9CCD25B2648A38D5B8DDC739C24993848E1A289658167777140EA9EEB51"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/architecture/architecture-inquello-2026-10-26/.working/inheritance-status.md",
+        "sha256":  "8695960664E99010D781F3D75A7EBBA3D36D45709C14FBB47D7FFB3CA99A78CD"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/architecture/architecture-inquello-2026-10-26/.working/input-product.md",
+        "sha256":  "778FAC4F845FD18101C5D1115ED2251365503BB80BC373AF3098A8254562709B"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/architecture/architecture-inquello-2026-10-26/.working/input-ux.md",
+        "sha256":  "FD350F74D33566102E6AF5B21F2AAB38C0B24116F9146A26ECAEEF3F8658A9D6"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/architecture/architecture-inquello-2026-10-26/.working/mechanical-draft.json",
+        "sha256":  "2FC65183D88D41574A326E6AE90A470ECCB380DD24662FD61973E94E82E4FF8B"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/architecture/architecture-inquello-2026-10-26/.working/mechanical-final.json",
+        "sha256":  "71FA2965F75429D76B37C66338FEB4316C4FA301C966F57277E2FD6B8765F6FB"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/architecture/architecture-inquello-2026-10-26/.working/reconcile-addendum.md",
+        "sha256":  "16D3641C7077C4AB7BFC457067A851325DD39B786A8BF0F13AD366433EA94745"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/architecture/architecture-inquello-2026-10-26/.working/reconciliation-resolution.json",
+        "sha256":  "8E52BA29E7205C6759DE7F34EAAD95C30A416E79EE78210B2BA39C4CFCF70694"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/architecture/architecture-inquello-2026-10-26/.working/source-baseline.json",
+        "sha256":  "7197F0DD14FCFFB53B80CAC462F2F0BA7054E27C6C16EA6568B40ABC4F9F7FE5"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/architecture/architecture-inquello-2026-10-26/.working/technology-evidence.md",
+        "sha256":  "44DA314013F95A45911E4C7A4E8EF750B8E00D2D42F30CC48ED9A33CD4DD2C8B"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/architecture/architecture-inquello-2026-10-26/.working/upstream-architecture.md",
+        "sha256":  "CC22A4B8418E0E74E12D6D9313A0FAA82599162DDCDC547E8B06E8A50D7E9013"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/architecture/architecture-inquello-2026-10-26/.working/upstream-current.json",
+        "sha256":  "B16CC7C8F8C7CE27F00294917F639FE77E304329F6A4101053FCB038EBCD478E"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/architecture/architecture-inquello-2026-10-26/ARCHITECTURE-SPINE.md",
+        "sha256":  "D08701B832998667491C98F15FB74AEDBB656C1D27B550926C0040C98D081EDA"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/architecture/architecture-inquello-2026-10-26/claude-access-routes-2026-10-27.md",
+        "sha256":  "F9F7CB59CBCE7638F1778FD2CE811B9F3B29EE7471CC09613E635DEE05DAFF6D"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/architecture/architecture-inquello-2026-10-26/reconcile-confirmed-decisions-2026-10-27.md",
+        "sha256":  "2E1753F4C6FB357962AB0B874CEA8592B4D897CE721F96A77E15AB010716D0D3"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/architecture/architecture-inquello-2026-10-26/reconcile-prd.md",
+        "sha256":  "D7BAFD086158C9009D393E929AF7BE6560B42DA0A13D09FC158C613109141BA3"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/architecture/architecture-inquello-2026-10-26/reconcile-upstream.md",
+        "sha256":  "BAD90CDD815D5A46BE7F68DD8186F434C9070EB30C6661F05B8BCC3BC04626D0"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/architecture/architecture-inquello-2026-10-26/reconcile-ux.md",
+        "sha256":  "F38E0407F5A87F9D89E232AA0B6DD65684EBA0B96F74BB93248952D348B34EB5"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/architecture/architecture-inquello-2026-10-26/reviews/reconciliation-2026-10-27.md",
+        "sha256":  "B4C07A70CFDF218E76381CDD143DEBC762B4E410FBB455295DF4023D4C0AAF88"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/architecture/architecture-inquello-2026-10-26/reviews/reconciliation-checks-2026-10-27.json",
+        "sha256":  "C4C101FEB9C9093EF02F96572AED7D91D78BC36B9737C4A820830848FD3159EF"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/architecture/architecture-inquello-2026-10-26/reviews/reconciliation-lint-2026-10-27.json",
+        "sha256":  "0F45FCF26E498891E1333000557AE982B765783D398760FC5AC1E3A529BEC1CD"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/architecture/architecture-inquello-2026-10-26/reviews/review-compatibility.md",
+        "sha256":  "1295CB481AABA3EA84DFD8654A4DF07335DF4014AD2967EB931789EA928D302B"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/architecture/architecture-inquello-2026-10-26/reviews/review-reconciliation-compatibility.md",
+        "sha256":  "76A31DB3A12B09D12AB819C626F17AE3FB842A70E612FB13EDDBB48FE6B2C3DE"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/architecture/architecture-inquello-2026-10-26/reviews/review-reconciliation-rubric.md",
+        "sha256":  "3A7D80ACB1F2EF5659A884E31EAF382CF7372E9D55C11B0EF1ADAF6E917C2A26"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/architecture/architecture-inquello-2026-10-26/reviews/review-reconciliation-security.md",
+        "sha256":  "7846E238EBD9EEBBED8111BE37368F491C49B5F49BF2DDDAEEF5EA85371D9A4D"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/architecture/architecture-inquello-2026-10-26/reviews/review-reconciliation-technology.md",
+        "sha256":  "4553DBD582306A3CFED2C438DFAE981E94A12E7BB80BE76BDC370A7149829C77"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/architecture/architecture-inquello-2026-10-26/reviews/review-resolution.md",
+        "sha256":  "12811480E870804874EC8A5586C23E298262B08543F1FEB1897841B5B089B624"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/architecture/architecture-inquello-2026-10-26/reviews/review-rubric.md",
+        "sha256":  "5268565F4E9069B11DFC65B162E9F469674B69A038176AE00C80EC280D6B1960"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/architecture/architecture-inquello-2026-10-26/reviews/review-security-data.md",
+        "sha256":  "7EB32B2AFB869E7BE9DB2A1241055C8370533522ACE916A1ECBC571236F1E78A"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/architecture/architecture-inquello-2026-10-26/reviews/review-service-rubric-2026-10-27.md",
+        "sha256":  "62CA1319D49556B657CEB0D870800BD83EE374A3AFB13F1998872EA783792048"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/architecture/architecture-inquello-2026-10-26/reviews/review-service-seams-2026-10-27.md",
+        "sha256":  "8E23B13F458E1A936B46777AB312D0CCF776F81E61127035120CB2018E7405A8"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/architecture/architecture-inquello-2026-10-26/reviews/review-service-technology-2026-10-27.md",
+        "sha256":  "8F1A6561597F4E22101F0D5E49AB13C561F941D76FEDCF8B17DDBF7C7403B1AA"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/architecture/architecture-inquello-2026-10-26/reviews/review-technology.md",
+        "sha256":  "53AFEAAD852F925A6B0EB7BA91D84B4C0C96CD16CFC5E95AE7EBBA054442C5CC"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/architecture/architecture-inquello-2026-10-26/reviews/service-lint-2026-10-27.json",
+        "sha256":  "0F45FCF26E498891E1333000557AE982B765783D398760FC5AC1E3A529BEC1CD"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/architecture/architecture-inquello-2026-10-26/shared-service-contract-proposal-2026-10-27.md",
+        "sha256":  "7BB1A9692FA207247813AE2859969A9AFF2E7795F361F465C617A949ECA89B50"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/epics.md",
+        "sha256":  "D1590C5B5D76A0B27DA712D8A10E2AAE00522F50AC289A3C3070AFF3BC589D0F"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/implementation-readiness.md",
+        "sha256":  "B53691D74A02B97EA1960E6B335AE0BB1EAA8552FC3C887F1EF7B9576E1EE27B"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/prds/prd-inquello-2026-10-26/.memlog.md",
+        "sha256":  "85A676F54490172DD60F5B9AA05047BDBBC4DCDFA93BA7572602E836D7CE1842"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/prds/prd-inquello-2026-10-26/addendum.md",
+        "sha256":  "D24A54F425E076358DF9F3FFC3B88639342879CCDD7AE75D650C1F8E67D14C60"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/prds/prd-inquello-2026-10-26/document-checks.json",
+        "sha256":  "689F8DCC2DC355CAF880CCD389C3815353022CA754653FB444442E7D4D324F1F"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/prds/prd-inquello-2026-10-26/input-brief-scope.md",
+        "sha256":  "99E323B146C220B3DA8B7D93B5DE2B4AC0E213E1271BD80CCA6B33F4D0E33DE8"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/prds/prd-inquello-2026-10-26/input-evaluation-decisions.md",
+        "sha256":  "59DF42485DDA7F714E70A69AFDA645BEC09A5ECED29505897E180E5CC912A820"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/prds/prd-inquello-2026-10-26/prd.md",
+        "sha256":  "4B8C81B8F96ADFA71C7E65071870923765FC2019AAD355DCD77D67EDA8356AA5"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/prds/prd-inquello-2026-10-26/reconcile-product-brief.md",
+        "sha256":  "1B730C594537F6CF4286D109F9611BBBACE6C0E9156E6B060FBEFDBE87573D1B"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/prds/prd-inquello-2026-10-26/reconcile-product-definition.md",
+        "sha256":  "2DAEA6F0CDFC8DCDDF0176B76ECEF55B04BE40A173FAA2033E72FE4338916370"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/prds/prd-inquello-2026-10-26/research-context.md",
+        "sha256":  "C5C0092D5CA8D8E5E8C4582D91602953CBCE0DA1D7C9F895E78287202A5714BB"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/prds/prd-inquello-2026-10-26/review-reconciliation-2026-10-27.md",
+        "sha256":  "1BCEB8CAD2BF1480929FA92C68A60B95A771731F44283B8421C4A32FFABC9A4D"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/prds/prd-inquello-2026-10-26/review-rubric.md",
+        "sha256":  "AD598FD98DFC8751400B3C66CA2DD9DD1F31D8BA97CF7FB1325EFD209203C147"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/prds/prd-inquello-2026-10-26/review-scope-decisions.md",
+        "sha256":  "E5C5FA93FF935E037C8492388004E17CF65644ED72F36DC1D2134A54EA4ACCCC"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/.memlog.md",
+        "sha256":  "15BEEB7C658210C02D4A35D4154CF17738F1585BEB1FC2087D8514468698E5F2"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/.working/check-spines.py",
+        "sha256":  "764189FFB1BC8646FA504789B77878A441109958FEDA436C238E4DFD7818508F"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/.working/design-coverage.md",
+        "sha256":  "134308FB44380A364C4D203496BEB82FBA99511DC680EE71F94F39F761AF2282"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/.working/experience-coverage.md",
+        "sha256":  "8EB04C02BD2EE8B41E4A501E5004ACFE5E52B25A424F0E6D0378A48447FDD78D"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/.working/extract-design-system.py",
+        "sha256":  "0DDC8EC0B452AA0DE3865DBAF7BA62FE1DE4D4D9AA992FC089068DAA5AA1612A"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/.working/input-design-system.md",
+        "sha256":  "1057280E1FDED894EB3D041F51C30E093BC001841F192C62D61A294B9E642169"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/.working/input-imported-experience.md",
+        "sha256":  "1EE2BBDC8AB21A526849C035B4F007F288EA59B1E22242AC813F3E71CF44F1BB"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/.working/input-prd-ux.md",
+        "sha256":  "57B83AFA0FEFF6751C320D253583A9932B49BC1425F647F1DBD4A81C70623357"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/.working/mechanical-draft.json",
+        "sha256":  "5AFFFE793229359E68A9A7C3BDC65378D6957B878D2876F57168EB02DDFECC46"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/.working/token-contract.json",
+        "sha256":  "56E444F5C07EA5359C3D001CE4EDCF4976A27078896DFF51E00DBCD951CB4504"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/DESIGN.md",
+        "sha256":  "7A4305D8A929A391F3EEEE95B147668EB3F39A8D562254B6A50F93C359DBC6D2"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/document-checks.json",
+        "sha256":  "9BD24C7179E1EA92C86663F2FF963268819A2878422BD0FE0C9577E203AC93E2"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/document-checks-2026-10-27.json",
+        "sha256":  "D43DC14CC63ADF98DC92617B07EE5431B41A5A622F4A3F4383D6DC7330936BD4"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/editorial-design.md",
+        "sha256":  "49F0C4D3CEA916C2CA8198F09B7CBD0137D7257B41EC0F9B4F35A921F7A6D710"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/editorial-experience.md",
+        "sha256":  "C51DD3320CDC997FB1F09DDD68901074AD222BCC155F434B99304207FB2B95DC"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/EXPERIENCE.md",
+        "sha256":  "C31CF11CE6D35876E5A158D52B794E9A1858C746CF2005AFC077E76E8265A8E0"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/handoff-checks.json",
+        "sha256":  "46AD4DF0B7F2E7D7B5D4065EA0A26E943E82D47C609673DDA0C4570225D2AB77"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/import-integrity.json",
+        "sha256":  "F6918E029B3A32CE112AB12C347BFE4A2B2621749FBBC7F77659C2A82E51EE61"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/IMPORT-MANIFEST.md",
+        "sha256":  "29CD2F4221CF8E3585ECBB4C8B0AFC53C664797CC0E890C2DF1A3C381A9454B4"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system.zip",
+        "sha256":  "644ADADB6F6E0E693BA4DFC35A2E1ECC773753521F19DC683A04FC9F308718BF"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/assets/fonts/IBMPlexMono-400.woff2",
+        "sha256":  "08949F728DC52D528E69B1667D15C89A5686A4EE9A296FF90983985F99C380F7"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/assets/fonts/IBMPlexMono-500.woff2",
+        "sha256":  "01D285447409C8A588692162439A038B8CBD7871309EE20267B0D2D91C6E8E22"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/assets/fonts/IBMPlexSans-400.woff2",
+        "sha256":  "E2291E842CF5AF167122A22881A740C7F2DDA7716F1E8CD76680264F4A859470"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/assets/fonts/IBMPlexSans-500.woff2",
+        "sha256":  "E2291E842CF5AF167122A22881A740C7F2DDA7716F1E8CD76680264F4A859470"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/assets/fonts/IBMPlexSans-600.woff2",
+        "sha256":  "E2291E842CF5AF167122A22881A740C7F2DDA7716F1E8CD76680264F4A859470"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/assets/icons/arrow-up.svg",
+        "sha256":  "A5127EA628AD0A5BBB513BD3EC5DE8AB55A053F370272583D3E273731525F5FA"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/assets/icons/at-sign.svg",
+        "sha256":  "F6E65EC2E285493C0C694AC110BB3D400AC7E6C0D3A30C8D156F52E51A7DF159"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/assets/icons/check.svg",
+        "sha256":  "FCF470645A23D1311B935EA6D8C569AFA00C159B93F35426064DA047978886F9"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/assets/icons/chevron-down.svg",
+        "sha256":  "B2A51F49B4B11EF29B57A6FFA198CCC3E63BA479E1014F7812BAB67EC1605013"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/assets/icons/chevron-right.svg",
+        "sha256":  "229FC70EE3F53CC63EC81CA1DAC068E981329E4410811EA2F2BBF1F7BA9AB557"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/assets/icons/circle-alert.svg",
+        "sha256":  "D7B3EE1E2056A23841B6E0E2A51E80F0C38CA7E1353C36CB54547CEB94FE4389"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/assets/icons/clock.svg",
+        "sha256":  "3066AE540D35A1B0291F45815731298C8E5C76548626CF4B113C49E9941AF121"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/assets/icons/ellipsis.svg",
+        "sha256":  "78F9483C0C981832B599931EACABD3EC38CF7FAF721EC71E80D0069D6CB3E33E"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/assets/icons/external-link.svg",
+        "sha256":  "A67433E462CE089A061627D8398F9AA6BB09E4ED1B57268C37F56726F96D55DC"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/assets/icons/eye.svg",
+        "sha256":  "BF359BA3480298AB036DFFE632282C4A5686BC2640F026F71193C357C2E9BAC1"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/assets/icons/file.svg",
+        "sha256":  "1EB244369CD75A9ABC86B898876FEDD84EEC4C9CB79414C55C879F4BD818F244"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/assets/icons/file-spreadsheet.svg",
+        "sha256":  "5F7EFC399627632FC59EF0BD803DC49D4721B871F95B78DEF46A32DB311FD5CA"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/assets/icons/file-text.svg",
+        "sha256":  "0D94B8A332151E7C4B8EF799C49AEE13D9F4F8D193B67EDDE127D8909F79C4DE"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/assets/icons/folder.svg",
+        "sha256":  "1E9D47D7C797ED34736833D9680EBC0BEBDB9B40E9B8EF1AD5924172CFBDBBFF"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/assets/icons/git-compare.svg",
+        "sha256":  "BCDA74AFEEA424F1886E286E6627E584064C784EE1DAD1DC805F65BA901C2F49"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/assets/icons/history.svg",
+        "sha256":  "0C0007BBA8FA4D88DA2BE5B86123D03F225D1D244F0A723E76A3A99127CC8BB5"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/assets/icons/inbox.svg",
+        "sha256":  "23289FF534F1F4B547217CC3EF4BAD698BBDE88977886CAE3A9ACC8017D629A0"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/assets/icons/layers.svg",
+        "sha256":  "87C4ADBA3D466E990590598D6442C096C960A6E82D1704E1E3390B38113A467B"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/assets/icons/list-checks.svg",
+        "sha256":  "8F868C57FCE8DDE4018EF148A184C9FD381AC5FDCDCB55F3929F36DC38669AA9"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/assets/icons/maximize-2.svg",
+        "sha256":  "E41D484991951C74DFF63045ADA8D62006EA9CC128B1DE8C35A550922F14BC91"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/assets/icons/message-square.svg",
+        "sha256":  "3AF427B9C5211C4124677746E331C3E31D35678ED4F4253DFD720512E1689AC4"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/assets/icons/minimize-2.svg",
+        "sha256":  "6316BD0D908532A3489057BC78D74B645E0F921191574385B76D6DA8E45A390D"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/assets/icons/panel-left.svg",
+        "sha256":  "48B9290E2053D6FFC83460546151CF5CD3826A3A94C1C9C5AF21E3DA265D8CD5"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/assets/icons/panel-right.svg",
+        "sha256":  "B144EBB35A7BB5601725C159430EAB94329964F6361F9F12232D507A3C17CD61"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/assets/icons/paperclip.svg",
+        "sha256":  "993B085C0F05B7649303E4FF874117C2418E9677DF8C41ED5B11FF63D28EEC55"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/assets/icons/plus.svg",
+        "sha256":  "3E798C32A825CD434C8F27FE70653382A01F4B4FE0C30DD53A74D0616F05C271"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/assets/icons/refresh-cw.svg",
+        "sha256":  "EAC9B330CC0018BBB871CA8F53E09AB7FDB67B19D7B5A099D79599074A94F57D"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/assets/icons/search.svg",
+        "sha256":  "3F8D39F14E198F24564A95762C005EE45B844E4C317FA182A8FD51FE5975BE1E"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/assets/icons/send.svg",
+        "sha256":  "A289D860A9DA54CB58E8F039A90D6428A1790ED1202456F43F5A8BD1C7159F43"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/assets/icons/settings.svg",
+        "sha256":  "9F9D11FAF42DE4D54DB471B50AD4FC9B10E00FD4E9465AEF5C3063A69FE5F586"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/assets/icons/share-2.svg",
+        "sha256":  "CB96DA70EF4788615F10F3EDE90CCB8D47159231E1769833D0D5F79E1D5A5457"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/assets/icons/shield-check.svg",
+        "sha256":  "ECCFE4556F0F71458D78B4437EB118F42158AAB982B575477CE8D2FE23D11B20"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/assets/icons/slash.svg",
+        "sha256":  "CBEAFBEE40A261BA20DFA516111E60220725771C4DEDF748484847CB9D5D75FC"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/assets/icons/square.svg",
+        "sha256":  "E264DE988F12C9E531DD91C752B2C9C3028BD736D33DF9286DCDE13FB7C285CE"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/assets/icons/table.svg",
+        "sha256":  "E43FF36811FFFB679185F3EDE9880EEA8A62A0660B602D0990BA2150211C7598"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/assets/icons/terminal.svg",
+        "sha256":  "6C65610AED1D2FA260816A7CEFDC4EE5B293381DC65C94367569A7AFA54B6012"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/assets/icons/triangle-alert.svg",
+        "sha256":  "7121822CB1EE5A6E7DD4C99150B9B129435A4CE949C1172B2A401236417FF162"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/assets/icons/user.svg",
+        "sha256":  "921A865CC7D5FB6EEA536BCB31C009D0E0B893B057A7EE3A53539F16A5DCC264"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/assets/icons/x.svg",
+        "sha256":  "4D0DB044BCDDB5ADFE010EBA02D741C2E55A065E0C94FA2CA9087CA67988DE9F"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/assets/icons/zap.svg",
+        "sha256":  "60831C070351F169E7D992D9C69D5007C4B3833B706D40DF5064BB44AB0193D4"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/assets/logo/inquello-app-icon.svg",
+        "sha256":  "765F770812D2A04BBA347D10650682A61CE333729865A3B0F3B36292246896B7"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/assets/logo/inquello-app-icon-blue.svg",
+        "sha256":  "729F416A7670F3E78096E9657CE23CD08338E6348417B5703D9EB998B871CC0B"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/assets/logo/inquello-app-icon-reversed.svg",
+        "sha256":  "418A6037B1BB35B0ACB8138EC9A4472A5FE3BD63D9CEB2F2F66566C80321CE6A"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/assets/logo/inquello-app-icon-small.svg",
+        "sha256":  "E8FCCA331BF99ADDCE99140DC5F7FC13E9C8C7B647F6F654F64C718C74C70160"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/assets/logo/inquello-lockup.svg",
+        "sha256":  "612F3A6FB918FF011012ED65CB7E9CFC262B9B8D5A137DA393FEE477981B91D0"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/assets/logo/inquello-lockup-blue.svg",
+        "sha256":  "8AAEDA949B6517830A080A2B832AB4D086D4872715DFDBDC9372F561374351C3"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/assets/logo/inquello-lockup-reversed.svg",
+        "sha256":  "5BCFA95DF6847C66EC2E8079791951B960637DB8A1605AFDEED29C28247E43A1"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/assets/logo/inquello-symbol.svg",
+        "sha256":  "543EC0C42EE6BCCEA487FA2FA14B2A8ED56E4DFFC555557792CC51AEFC6CDE8C"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/assets/logo/inquello-symbol-blue.svg",
+        "sha256":  "7B703531923D153168BA01B0E1C4F30296B99C8ED10C2D92BE7A7BA4ACB632EB"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/assets/logo/inquello-symbol-reversed.svg",
+        "sha256":  "2B003B6B17E2C7A85398032A982DC3F97CE990972F4BB5325482C02673A4B40B"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/assets/logo/inquello-symbol-small.svg",
+        "sha256":  "6865D47637203077DA681A630FAE41326DDCA31F71F43A9BEF00455C93DC9267"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/assets/logo/inquello-symbol-small-reversed.svg",
+        "sha256":  "F9B95C56E7B6A65FCDCCEF8364EAFB003186D1AB0177378D2011AB981EB348A4"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/assets/logo/inquello-wordmark.svg",
+        "sha256":  "D38512EC1D7550F5295000CA6CE937BEA8871C9AC95E43F07D9F819130CC8E61"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/assets/logo/inquello-wordmark-reversed.svg",
+        "sha256":  "07B5B3C3C4E8B5139B0DE71A86FB1C4C1F16E8DB18AAE1A95474AB987ED34765"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/core/Avatar.d.ts",
+        "sha256":  "24DF4EFD361F3F43468805A841E38DB9ED5130A0BB07BFAF7A1579AA6F0353E6"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/core/Avatar.jsx",
+        "sha256":  "5A4F39D69F55030E1839961A58A6F84EC89007AACC76C733E01F24A1EB645A0F"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/core/Avatar.prompt.md",
+        "sha256":  "14BB8432921C7072B9EAAF123C2BC96C4195B714A92CCF3939F84A9C5EA8658E"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/core/Badge.d.ts",
+        "sha256":  "7D0EFC22059CAE311B354C9A5EE81F51A4969A654F31AA4783194A86F3C2EA5E"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/core/Badge.jsx",
+        "sha256":  "00AC8AA4542B9641D793C3E5844EECA12082E48A9022D9532723067FC26FAF57"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/core/Badge.prompt.md",
+        "sha256":  "F57D3245C49F5D207B48A1252E9D98F13988708FB68AC9793F5BEB5691D2172F"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/core/Button.d.ts",
+        "sha256":  "6907D4A2FF0C5B45B099F21A0D7539FE1706B7409F4DD65BB474491D48B1ED3E"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/core/Button.jsx",
+        "sha256":  "CD2D8CC10D9C11040B379F268AE3022C20F4BB438EE4E38D05D123DEF8FB865A"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/core/Button.prompt.md",
+        "sha256":  "8B6D579A6C084A7F587DEE7F2C57222B947F6623684415B95C0F7BD43D2064F3"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/core/core.card.html",
+        "sha256":  "07274088BB531FBA1E565EFF6DBBB244FBACBC9A0A32D0AAB82883631457D1F3"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/core/Icon.d.ts",
+        "sha256":  "4AAF61EC2289510C8F086C1B552F88AC42DBA75D8585ED44CEACA0AD3246FCF0"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/core/Icon.jsx",
+        "sha256":  "CB0B0FA6D5531E864A28213075B0AC38B826B499EF64D713E2CB2B7269C07F51"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/core/Icon.prompt.md",
+        "sha256":  "EDEB0EC2120F9ABF843058EA8E63D363DE8DF78E1A781B9A1CE7F8A025644E44"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/core/IconButton.d.ts",
+        "sha256":  "61CAE6FB35897BB9FF73AFBBC5CB21C126D27FADD46F3F051147F236AD1CBE6D"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/core/IconButton.jsx",
+        "sha256":  "E0AC7BC3D86FF4C554FEEA89AEE22EA1DDB432198776FF7950676C1C43829900"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/core/IconButton.prompt.md",
+        "sha256":  "1A62606B3A4E01620D0C41AC81105816B14F8609147C5B63C2E2F8A717E8B3D0"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/core/icon-paths.js",
+        "sha256":  "352A2FBBBA4201C3C37AEBAEF2AEC45AC1B6881117662A1E9B0D85B0E073C9D9"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/forms/Choice.d.ts",
+        "sha256":  "502FF9F432808911C32CEE16BE96B07B3A42E0626963D3BEB51903643FB44EAB"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/forms/Choice.jsx",
+        "sha256":  "BFD298D2ED3C3587A41B0AAE313AB5F3FC71427DE660519E5BA841DEC3E9261E"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/forms/Choice.prompt.md",
+        "sha256":  "CE21D23D8A98AC80C9635C9ABFFD0A096743151F8032E774F56BA780307C24EE"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/forms/forms.card.html",
+        "sha256":  "97003383DAD2EA46CFAFA1D2E067FA01825D2324D0BB0049B3A722C5791F1357"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/forms/SegmentedControl.d.ts",
+        "sha256":  "18115A0AFC06AF52B5A048430A349DE1BFED7C8EADAEDB7BA45F35F0F8C55461"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/forms/SegmentedControl.jsx",
+        "sha256":  "AA2B1ECFCB7627342D1E83095BA4E9A9D0D867D455459ECC1F30B2A5E499E1F3"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/forms/SegmentedControl.prompt.md",
+        "sha256":  "9F2328EA3E898516A291B33DD386AEABBB73FA48F9298319712B17EEFD73E9DE"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/forms/Switch.d.ts",
+        "sha256":  "1146A7522F845724932449C72F7E6AEF896B4E75D17DB3BC68DEA0C172716701"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/forms/Switch.jsx",
+        "sha256":  "9CF98283FF2FED7BFD5A07262B8D3ABD14475A61C60851DF4FC94A76037E1A39"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/forms/Switch.prompt.md",
+        "sha256":  "E64421E75A60795F4D0C1C371C04C268680A70DA191FF6ABF1B29A13ABD17D06"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/forms/TextField.d.ts",
+        "sha256":  "AA5C6D025771E219103FDC9AF6F7D774ABC1A70ECCAD34968BC45A8ED25406CC"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/forms/TextField.jsx",
+        "sha256":  "4349F82DE2BCC5375BD6668D1CE2952B3DB0E610C48581EEA32D834E3B0EA67D"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/forms/TextField.prompt.md",
+        "sha256":  "34E26476B3BCC93D72D811E1B4D631617C5E61C7CF3CC14D7DCDCA3C3EC67AD1"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/navigation/Menu.d.ts",
+        "sha256":  "F61754D8F52988DC413945DE9E1682A793B51F73723C60FA7CEED3BD5FE415B3"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/navigation/Menu.jsx",
+        "sha256":  "D41EF3340F8BAB41CD093A49EAC5CC5050723CEB7142B7EA2E6F3FE393B50F3B"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/navigation/Menu.prompt.md",
+        "sha256":  "42392257A83A2FE4D777005937F55EFEB7AFFBB12A9149A74F7732EC85F6EC90"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/navigation/navigation.card.html",
+        "sha256":  "1FE522E1E4116779D28780B55FEADA9C082187F0C6E463FE667673866FAAC275"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/navigation/Tabs.d.ts",
+        "sha256":  "F002E408020A23FC4A279460DCE0E7EC76C9CB4F3EDF390D2451A179412BFFB2"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/navigation/Tabs.jsx",
+        "sha256":  "163A33A84367432D1254C62B9A77D2B2F8EB6D36C85FA006FADEB7A95FD44754"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/navigation/Tabs.prompt.md",
+        "sha256":  "EE1BE0DC69BC7A0DC540E7F30489B4D6AB4EC9B4B2CB8B5443673BC0431A2770"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/preview-loader.js",
+        "sha256":  "8ED0BBC13B0388D2595F02E97DE39FDA18FE91E84A8543E28CAF73CD412B7798"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/status/FileChip.d.ts",
+        "sha256":  "9B90341DC33B553F9D99B48634408B5BE90140C1B41A73F0DC8D0D6153504A0D"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/status/FileChip.jsx",
+        "sha256":  "4BF1D5B6321C792E9AE98820614702998215A8E8DF68641890EA003C24C8D432"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/status/FileChip.prompt.md",
+        "sha256":  "949A1C69A1DAC2DA46814980C6F7E1116E672D8BD78D05299A03994B1946F190"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/status/JudgmentTag.d.ts",
+        "sha256":  "265A993436989E1D7B97AFEAEB61C140EFED9B011FB251E5236EC2E40EB15626"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/status/JudgmentTag.jsx",
+        "sha256":  "C1714EFB53EEB2007E687D9D50FFA3BE0E9D9714F279A8A8E293ACC4A44ECD78"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/status/JudgmentTag.prompt.md",
+        "sha256":  "30F66D43F99F6EA76EC88EF4F409CC541E8E3E6493B813B504AA0F4E055A8FBE"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/status/status.card.html",
+        "sha256":  "64515720E756681A90AF11316999906CEAEB482E74C85300303D931EB87911A2"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/status/StatusChip.d.ts",
+        "sha256":  "978C86528A84816F09E7288FBE5010B92CF1A362FF6DC5EDD97F27D2FA3C65C5"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/status/StatusChip.jsx",
+        "sha256":  "B91A3BE7E4F0259D6C02F5C070093570E82692996F4A1815B787B3EAFDF28E2F"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/status/StatusChip.prompt.md",
+        "sha256":  "9B9CCD821792B6B98B3A8390A212810025C902D698FAD949756AC58979F15626"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/workflow/ApprovalCard.d.ts",
+        "sha256":  "9BCF9139C6F2733CF87D32419730308ADEC0EFB8270956A2EA5F338675823705"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/workflow/ApprovalCard.jsx",
+        "sha256":  "3CF97B7545E7780BF4139E8F3F5B2573DDC1C06D19B7B42C31E9DBDAE84A9F81"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/workflow/ApprovalCard.prompt.md",
+        "sha256":  "1E4E1799500DC41F4F2721DC53DF32F313074666363BB7A92E12D4B69CBD2439"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/workflow/DiffLine.d.ts",
+        "sha256":  "A98068965E0B29B4AF1325D970985C65218BC8F53414B052CA993F71C9C5AA5F"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/workflow/DiffLine.jsx",
+        "sha256":  "42B64E32A9D96F14543E65E0BBB4DBDACF132B727DE20B0C3E9284F72CBAFEF1"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/workflow/DiffLine.prompt.md",
+        "sha256":  "2B00145876985402FD63890604B8EBF31B79720666B439C093206FDA1C31B044"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/workflow/PlanStep.d.ts",
+        "sha256":  "7B8238BC59997A08115DABEDA33A3B8A5435E3EFCCE07577B43A5CC9B036CCD1"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/workflow/PlanStep.jsx",
+        "sha256":  "B7C3FA4EB008EC46A54032E6D2EFC0C85BD9A511CE63D6425CE0E566E3B0C55A"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/workflow/PlanStep.prompt.md",
+        "sha256":  "8E58BDD7CBB6D53027DA739CF34C6F77AA2A4C58BA2AAC17A5B5DDEBF16CDF28"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/workflow/Toast.d.ts",
+        "sha256":  "7B6EAD6ECC0CEC2B2E7A6E8083CE7A546B01A9B3CD8B2F0D911E7EEF3835AD71"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/workflow/Toast.jsx",
+        "sha256":  "2EB64067F0632C8D35FE8349497D74CD500BA8E8A74968318717CDD0FBF42241"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/workflow/Toast.prompt.md",
+        "sha256":  "D5F9A7FA3BF363B82ECA8D9355C60FBC4919DF61CD071E332CEFB5C5BD650506"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/components/workflow/workflow.card.html",
+        "sha256":  "D8BFA675D1A1CC39CF0AEA41A158DE00FF2253CEF7780AD106BB467A3A9A94DE"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/guidelines/brand-app-icon.html",
+        "sha256":  "42598E4F5890C5710A222C9A21399884565A952B25C74989EBDE6F3E264E225C"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/guidelines/brand-clearspace.html",
+        "sha256":  "C17FB09FA67BD1CAD16EF47E5A443430E8BBB1C0E2A3B1B7D68EBAA08551F3E9"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/guidelines/brand-lockup.html",
+        "sha256":  "762A4AFE5BD2F0AD0AA6A6AB8368C19423BB8751EED7CA9BE8B075570F9B809E"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/guidelines/brand-sizes.html",
+        "sha256":  "0EF8F1A574165B71B5FD22A1B47611185D3BB7CAC4A9ED4D95915D0A77ED224B"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/guidelines/brand-symbol.html",
+        "sha256":  "E0F0EEF27E20C6B46EE1743047962D134298F006DB9FCC899628CDC74C38B45B"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/guidelines/colors-accents.html",
+        "sha256":  "D28682CDD5ED6EAD8101CCE51EFED6C49C47717EE5CA6E0FF7C56EC4FACAD58E"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/guidelines/colors-ink.html",
+        "sha256":  "ECF7AEE688B61116E15B83F6A0F798CBF338FFC48CFA34BE5F13828E6633607B"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/guidelines/colors-judgment.html",
+        "sha256":  "4DBC43491F1353A8FADC050E45D79685BF269B138263E5A077CCC58C3173BFFA"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/guidelines/colors-review.html",
+        "sha256":  "04E106BADBB0FFFBCA248CADA094F7080F50DA3CE07743532EDFBD0EFD463614"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/guidelines/colors-surfaces.html",
+        "sha256":  "4F4CEAF598B494A64EA3518025D8134A6646A4561E0D3C8AA7EC37013C897837"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/guidelines/colors-text.html",
+        "sha256":  "12B9A6F480912885320EFCA4E6089C08FE5EB19A0193B664F0D10053D3C26264"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/guidelines/content-voice.html",
+        "sha256":  "1BC3F0B954E351F17922229D4C787D56CDFD833155074907197E61B3DFC974B0"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/guidelines/icons-file-types.html",
+        "sha256":  "331CC3EC9CFC566936195C71873DC46963F00F5E2D8377B72317EB23F7C4C030"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/guidelines/icons-set.html",
+        "sha256":  "30A2A7E00CD3D47D80E990FCCDC4A226534BA2F6DB7D53D62DE6A79641BF36DB"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/guidelines/spacing-elevation.html",
+        "sha256":  "ACC22ED558E11A6AF70B2B83F5C378CDC19D8F08F558A6C58AA95802E7C3C589"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/guidelines/spacing-layout.html",
+        "sha256":  "A26F6DC5A6A1AD05D076D0C145BB97825225AEA89A9F19354E6284F6438D00A6"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/guidelines/spacing-radii.html",
+        "sha256":  "ADB9535813164BB4B90E0962AC5A5208120915D7387E853B950AC6FF10A23FA8"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/guidelines/spacing-scale.html",
+        "sha256":  "B37C02BC36304FE6A82D70A433968D16F18FA092B5FCA0C8066FBCE4C4A5F650"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/guidelines/type-body.html",
+        "sha256":  "6B297642977AE16D6F59475A46A328DF73364E1BC58AA0ECA156704376EDD73F"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/guidelines/type-display.html",
+        "sha256":  "F39BD1F63063185A41DD755DF5470FD8428727D5194C18BD0834ED617D4917A5"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/guidelines/type-mono.html",
+        "sha256":  "FC78E11E863C9086391AEE0EF27B88554A6429578229228881CC035DFA190BE4"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/guidelines/type-numbers.html",
+        "sha256":  "C01437AE9F10E48F56D8A147FD7DFD1CD08FD841EA5C9C44BFCD9A4244649681"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/readme.md",
+        "sha256":  "1C19BB579162605630608F27C8359460C96A5ED4DA80F2B85BA0CC1A3A8E24DC"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/SKILL.md",
+        "sha256":  "945680CC88F81C15320EB0635E2CB0EDB81F89102710F3A08C7219954C84B580"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/styles.css",
+        "sha256":  "7845F8787C29BBF63688BD44668512215194E918D8D33FC68495DC550F973832"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/tokens/base.css",
+        "sha256":  "0F102FA985CDD7C20134482E969087590C318100957FF1912C69D7AE0565CAF1"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/tokens/colors.css",
+        "sha256":  "E204D2F387B710CEC581AE0B456A9F71C0C7DB2049E0B9C64E1EF6E9F7A53079"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/tokens/fonts.css",
+        "sha256":  "DD448CB9B8635B59AB0F59099CF385AF3159CEAD37C2AAD3AC285B7FE86CC079"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/tokens/layout.css",
+        "sha256":  "D4E2FD65B95C85D46E2F2D3251A538BEE4356828AF6878BAD11CA4757F83B92B"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/tokens/typography.css",
+        "sha256":  "2AE602A256FC04A104611352C4B1A40A8A26D7D23FC6C81012A7B39DA7A3165C"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/ui_kits/workspace/ActiveScreen.jsx",
+        "sha256":  "FBE2D268988BFAA4BA78083BFAEAE06DDD063980C21EACFD26CEA53F544D6C3D"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/ui_kits/workspace/AutomationsScreen.jsx",
+        "sha256":  "79A6643F0F464C113C3C9518FC835CE2F86F30EAE48DFCDAE10A142163306C32"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/ui_kits/workspace/data.js",
+        "sha256":  "92D2E48F4E5B83DC07B387DB565A06A2F4D13653837CDBE894CC917A2FBAA0B5"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/ui_kits/workspace/index.html",
+        "sha256":  "C62AE1C8927CA7722CCD6A8246F566DF98C728337298F026EAEF1404F8EAAB56"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/ui_kits/workspace/README.md",
+        "sha256":  "A980FC27885376292CF466DA6092BBD36762646D7956ACA605D04EF611737FFD"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/ui_kits/workspace/ReviewScreen.jsx",
+        "sha256":  "2762A57599854E6312FF35214B4AC07544A52D666977FDF5C7D6AAE2F568AE94"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/ui_kits/workspace/Shell.jsx",
+        "sha256":  "CA8F39884F34FE571EAED405F84EA02D40430376ADB9483AC937D4CEEB8C52A9"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/imports/inquello-design-system/ui_kits/workspace/StartScreen.jsx",
+        "sha256":  "69ABB67727AD7D7A0390BEFED5D3A17B80B0670E45B5DA03EC3936051D71914C"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/reconcile-confirmed-decisions-2026-10-27.md",
+        "sha256":  "A077AC1816B524DB681E62D95FA1D87D1C6D282966173B04FC3CC44DBC1C98AB"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/reconcile-design-system.md",
+        "sha256":  "BFBD85AC15907BC20823CD63BFE8A60970BD413BAC43140583532FFFD0F0149A"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/reconcile-prd.md",
+        "sha256":  "6AF5CA2AB270CBF6F8EFC6452BBCC73A216B7A0A1D73F9CFFBF9C71BEE53E2E2"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/reconcile-prd-addendum.md",
+        "sha256":  "FA92D120256B5A54D3FB616966D6D66831C73661D1B119AD8B76E27B77F25D56"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/review-accessibility-authority.md",
+        "sha256":  "5DE383C61E991AC69520F3C65638E73D61CBA11C976B7350F2D33531E173D94A"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/review-rubric.md",
+        "sha256":  "B6BE833C5CF11581F85D44629E25C58804CD67D59C3810A8E80EC3307BFA6773"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/review-scope-fidelity.md",
+        "sha256":  "C2A5CAE80ECD16930F3D76345938C5C44BDAECDD429640011B7F52ED4521309B"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/review-update-2026-10-27.md",
+        "sha256":  "4FF516533BC035C52DDFA6D5A29BF53F2CAC4F49EDE686C16B689D107C9E6B80"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/validation-report.html",
+        "sha256":  "C8B60BCBAD8724BADD6F9EFDB8396C7DFFDB0873DCE4DD0B2E32704739CC4688"
+    },
+    {
+        "path":  "_bmad-output/planning-artifacts/ux-designs/ux-inquello-2026-10-26/validation-report.md",
+        "sha256":  "344C687F581BBA3D9E9E590E65A9128046FEBD3E031385821322CC9D05BA0575"
+    },
+    {
+        "path":  "_bmad-output/specs/spec-customer-onboarding/.memlog.md",
+        "sha256":  "183C6F343E76EF8BFE29C75808092BF0BF341BCA027BAFB164C4A25B46FCEF25"
+    },
+    {
+        "path":  "_bmad-output/specs/spec-customer-onboarding/brownfield-and-acceptance.md",
+        "sha256":  "E38B55B2B22FFB6AEFE3BEB4A3356E221A98FD278B41EAF03C1156818106FB21"
+    },
+    {
+        "path":  "_bmad-output/specs/spec-customer-onboarding/service-desktop-handoff.md",
+        "sha256":  "3BED10C87A2503FCACE4AA0D58F0DF5F5EE830C5CC2ABC686874759C137D5499"
+    },
+    {
+        "path":  "_bmad-output/specs/spec-customer-onboarding/SPEC.md",
+        "sha256":  "5C09796B3E0AE61EFF07F30F0CAA2EA4C0E6E1FE722EAB680A355C5B19D271C7"
+    },
+    {
+        "path":  "_bmad-output/specs/spec-inquello/.memlog.md",
+        "sha256":  "5636CA66FA4094BE788BAA0F90068A7103D11190E54607E5F5ABD6084E64DCF3"
+    },
+    {
+        "path":  "_bmad-output/specs/spec-inquello/.working/__pycache__/derive-spec.cpython-315.pyc",
+        "sha256":  "98C3CA98FDB9F8CFC7CA3A32E6CDECE15F495C2068A309B3DBAF9AFEB4764F8C"
+    },
+    {
+        "path":  "_bmad-output/specs/spec-inquello/.working/architecture-extract.md",
+        "sha256":  "CFD03C51597E54176CE2C0D8EAB1840DBBC76502A5FB0AC489361B67C95ECC9A"
+    },
+    {
+        "path":  "_bmad-output/specs/spec-inquello/.working/capability-map.json",
+        "sha256":  "F42FAFE533510F178D6336BF5B28A83BD87A980FAF10C5F1A19039993B396A18"
+    },
+    {
+        "path":  "_bmad-output/specs/spec-inquello/.working/check-spec.py",
+        "sha256":  "200AE47649F15C615C919035E3D5306B2412989463512BDF4A0FD1B4600C7966"
+    },
+    {
+        "path":  "_bmad-output/specs/spec-inquello/.working/derivation-final.json",
+        "sha256":  "DF2236DA2E5BB374AFA7C07514D63AF7CC8740BB5E57B7C3A29A4B38EDB9857D"
+    },
+    {
+        "path":  "_bmad-output/specs/spec-inquello/.working/derivation-progress.json",
+        "sha256":  "3892DEC2FA100AB1611E092258C091C546169E6B853AEF577914257DEE35019E"
+    },
+    {
+        "path":  "_bmad-output/specs/spec-inquello/.working/derive-2026-10-27.py",
+        "sha256":  "A4B0F862EBECC565F7E528D3B56E5CFCF419F62054527138E386A5F9FDF55487"
+    },
+    {
+        "path":  "_bmad-output/specs/spec-inquello/.working/derive-final.py",
+        "sha256":  "1F89E415CF86B2F9C32637ADB2748DCCE6CFB9345E6FDD7604F61AEC7F380F40"
+    },
+    {
+        "path":  "_bmad-output/specs/spec-inquello/.working/derive-spec.py",
+        "sha256":  "C5DBB45EFAB7CFC899B80930D3C3BF2EA3BEE241193676D11E046A619815B728"
+    },
+    {
+        "path":  "_bmad-output/specs/spec-inquello/.working/final-verification.json",
+        "sha256":  "1DA5E78658BAB968B4F8464BE4A4A78DA5E114CE33CB7B4F6F76CD95CCAAFB0C"
+    },
+    {
+        "path":  "_bmad-output/specs/spec-inquello/.working/mechanical-draft.json",
+        "sha256":  "D6D63CDC99E25F2262D1D793FC2306DF43061F184188C99AF1D9D637709A21EC"
+    },
+    {
+        "path":  "_bmad-output/specs/spec-inquello/.working/mechanical-final.json",
+        "sha256":  "72800D2989CB6AFA3F3A75905CAD828D90C5B71EC06E4D8B315B3D6BCA5DA480"
+    },
+    {
+        "path":  "_bmad-output/specs/spec-inquello/.working/oq13-14-2026-10-27.py",
+        "sha256":  "F492DB101DDBC16D4F1685F1385597B197EA5CCA1F3DB7DB1E9D948FE02846B8"
+    },
+    {
+        "path":  "_bmad-output/specs/spec-inquello/.working/oq7-2026-10-27.py",
+        "sha256":  "BB5672F04CB477C34125947F73E02E63EA5D157F0F300DD1372045C18374FBE1"
+    },
+    {
+        "path":  "_bmad-output/specs/spec-inquello/.working/product-extract.md",
+        "sha256":  "13B84BAE62578A7F5A4B0E418C3BC1CB32EB2DB25EF205ED35383FE77E1DBCB3"
+    },
+    {
+        "path":  "_bmad-output/specs/spec-inquello/.working/reconciliation-checks-2026-10-27.json",
+        "sha256":  "44B8CF82E2B39A0B9FD448DD7604E72F542A78C2A2110838AB94E62FECE02889"
+    },
+    {
+        "path":  "_bmad-output/specs/spec-inquello/.working/reconciliation-validation-2026-10-27.md",
+        "sha256":  "2CE3BD2FA5573B9484E5395AB24E4273E672AC7A53B9D47E34F6863B1049F189"
+    },
+    {
+        "path":  "_bmad-output/specs/spec-inquello/.working/source-baseline.json",
+        "sha256":  "3BDB8BC7D705502F365274BFF67945641D84A7226AD0541776AB2136106CC081"
+    },
+    {
+        "path":  "_bmad-output/specs/spec-inquello/.working/upstream-and-rederive-2026-10-27.py",
+        "sha256":  "BA19B889F40BBEED26747B92CD2F30E3042C84B7CFF3D754CC072EF4C047479B"
+    },
+    {
+        "path":  "_bmad-output/specs/spec-inquello/.working/upstream-part2-2026-10-27.py",
+        "sha256":  "80AF510571EEE9AEFF68B86BBDFB0FFA9AA456705AA5B4E43A907594D907FDD4"
+    },
+    {
+        "path":  "_bmad-output/specs/spec-inquello/.working/uv-cache/.gitignore",
+        "sha256":  "684888C0EBB17F374298B65EE2807526C066094C701BCC7EBBE1C1095F494FC1"
+    },
+    {
+        "path":  "_bmad-output/specs/spec-inquello/.working/uv-cache/.lock",
+        "sha256":  "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+        "path":  "_bmad-output/specs/spec-inquello/.working/uv-cache/CACHEDIR.TAG",
+        "sha256":  "5953156D7E0C564A427251316EAF26F8870E6483AE2197F916B630E4F93E31AE"
+    },
+    {
+        "path":  "_bmad-output/specs/spec-inquello/.working/uv-cache/interpreter-v4/415c604314b5d9f0/f58e316d024785ab.msgpack",
+        "sha256":  "B5A129252B00F53F50F9BAF6D9F95B66675A5807C05D97DF7CF319E2169F0E7D"
+    },
+    {
+        "path":  "_bmad-output/specs/spec-inquello/.working/uv-cache/sdists-v10/.git",
+        "sha256":  "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+        "path":  "_bmad-output/specs/spec-inquello/.working/uv-cache/sdists-v10/.gitignore",
+        "sha256":  "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+        "path":  "_bmad-output/specs/spec-inquello/.working/ux-extract.md",
+        "sha256":  "BB4796022517248AF66E63243080115C8BC7BB04616A6E9C1ABA93A1AAC339D4"
+    },
+    {
+        "path":  "_bmad-output/specs/spec-inquello/.working/validation-coherence.md",
+        "sha256":  "65304932D06CA73CF09738744D9F82DC46F0B24870E110B90D695174C7EF713B"
+    },
+    {
+        "path":  "_bmad-output/specs/spec-inquello/.working/validation-preservation-companions.md",
+        "sha256":  "1293EA779ACB3639D0ECD9B0B2EEDD3F2C183DAC7207795C7FFE809054F36E1B"
+    },
+    {
+        "path":  "_bmad-output/specs/spec-inquello/.working/validation-preservation-product.md",
+        "sha256":  "0FF66ADB25C05329F0E6BF9B72B3C734BB36FA48C99BFB148C6E55709C0C91A3"
+    },
+    {
+        "path":  "_bmad-output/specs/spec-inquello/collaboration-and-memory.md",
+        "sha256":  "BF308860A61C418DE0B520EDD68A78AA4391A232010EC500BB68D9396C09FF15"
+    },
+    {
+        "path":  "_bmad-output/specs/spec-inquello/glossary.md",
+        "sha256":  "D603FEC7ED8E169200ED9099138803506B7C10A6105BD6C8E0A9FC779E5CDFEA"
+    },
+    {
+        "path":  "_bmad-output/specs/spec-inquello/scope-and-gates.md",
+        "sha256":  "226026C92AFFC1B4E9C5A157A219835211A0A6FA6F8FE0683AFA3B04DE631114"
+    },
+    {
+        "path":  "_bmad-output/specs/spec-inquello/SPEC.md",
+        "sha256":  "DEA0F69BFFDC0127CCDE5E55AE7975A0F00CDD8908EC677A4AD9875B9191EF43"
+    },
+    {
+        "path":  "AGENTS.md",
+        "sha256":  "560A5887C8A39EAE5BD913B213E8114A27DF436B45AB7E11A806E071ADEC3368"
+    },
+    {
+        "path":  "CLAUDE.md",
+        "sha256":  "36D25DC35F8DCE0556B9A5D54D84EC41151D066EF43815C3C7B062F559AEE772"
+    },
+    {
+        "path":  "FORK-CUT.md",
+        "sha256":  "B9DD520197DF4108BED3C1B9C444E77FBA04D907F8078015891AB54D8E608D49"
+    }
+]

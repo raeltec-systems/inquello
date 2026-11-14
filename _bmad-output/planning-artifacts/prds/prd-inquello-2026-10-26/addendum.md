@@ -2,14 +2,22 @@
 title: Inquello PRD — evidence and implementation companion
 status: final
 created: 2026-10-26
-updated: 2026-10-26
+updated: 2026-11-05
 ---
 
 # Inquello PRD companion
 
-This companion to the [PRD](prd.md) preserves research detail and evaluation evidence. It introduces no new requirements or accepted architecture. The [product-definition addendum](../../../../docs/addendum.md) and [traceability map](../../../../docs/PRODUCT_BRIEF_TRACEABILITY.md) retain the complete original scope. All fixtures and acceptance scenarios below remain proposed and unexecuted.
+This companion to the [PRD](prd.md) preserves research detail and evaluation evidence. It introduces no new requirements or accepted architecture. The [product-definition addendum](../../../../docs/addendum.md) and [traceability map](../../../../docs/PRODUCT_BRIEF_TRACEABILITY.md) retain the complete original scope. These fixtures preserve exact expected results; their presence is not a claim of execution. Consult dated implementation evidence for actual results; this document update ran no runtime tests.
 
 > **Current-contract precedence (2026-10-27):** The historical evidence and exact fixtures below are preserved. Later adopted UX/architecture and the [collaboration contract](../../../specs/spec-inquello/collaboration-and-memory.md) supersede earlier unselected-design/topology wording. Hybrid sharing, team memory admission, first-increment revocation and agent-assisted review now bind the existing acceptance scenarios; no runtime evidence is implied.
+
+## Current course-correction precedence (2026-11-05)
+
+The approved PRFAQ and reuse-first correction now require the full internal-audit journey, coverage planning and a supported recurring check while retaining every compatible Codex capability and model route. Earlier review/reconciliation files remain historical evidence of their dated scope, not reviews of this update. See [input reconciliation](reconcile-course-correction-inputs-2026-11-05.md) and the [capability reuse inventory](../../capability-reuse-inventory-2026-11-05.md).
+
+The [current inherited-core audit](../../course-correction-2026-11-05/inherited-core-audit.md), [desktop wiring audit](../../course-correction-2026-11-05/desktop-capability-wiring-audit.md) and [public-fork boundary audit](../../course-correction-2026-11-05/public-fork-boundary-audit.md) supersede absence inferences drawn from the older study. They identify actual implementations at rust-v0.165.0, source exposure and protected integration boundaries, not runtime acceptance. Retain/configure/expose/adapt/qualify the fork rather than assume a greenfield rebuild. Marketplace/app hooks, subagents, memory, forks, voice, SDK clients and scheduling have different exposure and qualification states; do not bypass private-task restrictions. Public client code does not grant access to proprietary hosted services.
+
+The older foundation study below remains historical. Its desktop/hosted-source cautions remain valid where not superseded by current evidence.
 
 ## Source and mechanism constraints
 
@@ -33,10 +41,10 @@ Sources: [artifact validation](../../../../docs/research/2026-10-26-methodology/
 
 ## Acceptance evidence retained from A01–A18
 
-These are concise evidence summaries, not replacement requirements. A01–A10 and A13–A18 assess V1; A11 separates the phases; A12 applies only to V2. Full wording remains in [the original evaluation plan](../../../../docs/addendum.md#12-acceptance-and-evaluation-plan).
+These are concise evidence summaries, not replacement requirements. Compatible A01-A10 and A13-A18 assess V1, subject to A02's external-audit-specific exclusion; A11 separates the phases; A12 applies only to V2. Full wording remains in [the original evaluation plan](../../../../docs/addendum.md#12-acceptance-and-evaluation-plan).
 
 - **A01:** sourced ad hoc output and a continuation using retained work, without mandatory engagement setup.
-- **A02:** external-audit assertions/materiality/substantive work and advisory options, without mandatory controls or deficiency states.
+- **A02:** retain advisory options without mandatory controls or deficiency states in current V1. The original external-audit assertions/materiality/substantive-work portion is preserved as historical/future acceptance, explicitly outside current V1; it does not authorise deleting compatible capabilities.
 - **A03:** W1 populations, totals, duplicate-source identity and the changed-input result reconcile exactly.
 - **A04:** detect stale caches; preserve saved external edits, supported comments, named ranges and unrelated content, or surface conflicts before replacement.
 - **A05:** W2 distinguishes approval timing, preserves review metadata/evidence links and applies the correct effective policy.
@@ -60,6 +68,18 @@ The [methodology evidence](../../../../docs/CODEX_METHODOLOGY_STUDY.md) distingu
 
 ## Design inputs and pending technical handoffs
 
-Inquello is the working name. The [Open Inquiry candidate and illustrative screens](../../../../docs/branding/2026-10-26-refined-a/README.md) provide exploratory design inputs, not approved UX or demonstrated functionality. The [name research](../../../../docs/INQUELLO_NAME_CHECK.md) leaves final clearance unresolved.
+Inquello is the working name. The [Open Inquiry candidate and illustrative screens](../../../../docs/branding/2026-10-26-refined-a/README.md) are historical exploratory inputs; the later selected visual identity/UX is adopted under PRD OQ-12, without implying demonstrated functionality or public-brand/name clearance. The [name research](../../../../docs/INQUELLO_NAME_CHECK.md) leaves final clearance unresolved.
 
 Subsequent UX and architecture work must resolve supported clients/formats and Office round trips; component/service routes; identity, policy and data flows; named integration contracts; concurrency, cancellation and recovery; method/memory governance; actual reviewer responsibilities; and team baselines for scale, effort and cost. Saved-file access does not imply live unsaved-state access. Remote systems need their own version, retry, identity and verification contracts. V2 additionally needs native-record lifecycle, mode precedence and migration design. These are pending handoffs, not selected technologies, schemas or deployment topology; they introduce no additional V1/V2 cut.
+
+## Supplemental internal-audit acceptance (not replacement fixtures)
+
+- Setup/context: identify permitted organisational sources, period/uncertainty/gaps and current-engagement readiness; private material is not automatically team knowledge.
+- Coverage plan: link strategy/objectives, significant risks, history and unresolved actions to proposed coverage, gaps, rationale and changes. Preserve applicable approval evidence without requiring native plan authority or a universal approval hierarchy. Where GIAS applies, support at least annual documented risk assessment and dynamic updates (9.4), plus coordination and consideration of conditional, documented reliance on other assurance providers without transferring responsibility (9.5).
+- Engagement/review/report: distinguish objectives, scope, criteria, programme, potential versus evaluated findings, conclusions, recommendations and management action. Preserve applicable programme approval before implementation and prompt approval of changes; root cause when possible is not a mandatory five-Cs template.
+- Follow-up: retain owners/dates/progress and distinguish management-reported completion, evidence-based implementation confirmation and risk acceptance. Feed unresolved matters into later planning; no universal cadence or automatic overdue closure.
+- Faithful execution/recovery: independently establish selected procedure/population coverage and reconcile completed/excluded/failed/unfinished work across interruption. Spot checks alone do not prove full execution. No numeric workload, exactly-once mechanism or benchmark is selected.
+- Recurring check: inspect a supported local execution path, data/permission availability, retained progress, missing-input requests, results/failures and review/resumption. Define trigger, identity, limits, missed-run/restart behaviour and escalation under OQ-18 before reliance; no always-on or cloud-continuation claim.
+- Portability and authority: identify the working artifact, external formal authority, approval evidence and usable export/handoff for each supported lifecycle deliverable. Verify preserved/lost links under OQ-19. OQ-6 retains desktop-first Excel, Word, PowerPoint and CSV import/export only, with no named external record system for first validation.
+
+Before real engagement use, demonstrate dependable execution/recovery, verified access/data handling, visible work/evidence/failures/human review, and organisation-authorised data/use. Existing exact fixtures and security/route tests remain required; no runtime readiness, customer-data permission or implementation authorisation follows from planning approval. OQ-17 through OQ-20 record unresolved proof, methodology, source, export and commercial choices with owners/reliance gates.

@@ -1,0 +1,12 @@
+{
+  "status": "derived-from-acknowledged-log",
+  "capabilities": 26,
+  "new_id": "CAP-26",
+  "previous_ids_preserved": true,
+  "outputs": {
+    "SPEC.md": "3aa26d07fcb7b2f60f228d1086f3515e8ca51539f14ed4323fc9bee1a6724800",
+    "scope-and-gates.md": "374450ab5a6bdf58ecce94caa844632f3d57ee759a26d14ba7d4ab3c212b10e2",
+    "glossary.md": "e9f18187b5e3d9017690e2f8b0cfff5694ede7aa9fc5dc45aa06fed0dbb95060",
+    "lifecycle-and-readiness.md": "3b7914cecccff433403b77c6e8f5581788cc9b69d2aea43b701ff2caedea8f9b"
+  }
+}

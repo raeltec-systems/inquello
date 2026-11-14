@@ -1,0 +1,54 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.5 [39m[90mD:/Projects/inquello/desktop[39m
+
+2026-11-06T04:30:13.749726Z  INFO inquello_service::test_provider: synthetic OIDC provider listening issuer="https://127.0.0.1:54541"
+2026-11-06T04:30:14.135192Z  INFO inquello_service::server: inquello service listening local_addr=127.0.0.1:54544 https=true
+2026-11-06T04:30:14.242100Z  INFO sqlx::postgres::notice: relation "_sqlx_migrations" already exists, skipping
+2026-11-06T04:30:14.281116Z  INFO inquello_service::admin: workspace created by operator workspace_id=8ab9de95-e225-44a7-b660-22a05d03a543 receipt_id=6003e7e6-ed47-4c2c-9939-9f9d8dde3407
+2026-11-06T04:30:15.433047Z  INFO inquello_service::login: login transaction created login_transaction_id=701d1651-1da6-4130-9334-0eb3adfb85a6
+2026-11-06T04:30:15.443433Z  INFO inquello_service::test_provider: authorization code issued for the synthetic subject
+2026-11-06T04:30:15.457819Z  INFO inquello_service::test_provider: ID token issued for the synthetic subject
+2026-11-06T04:30:15.513907Z  INFO inquello_service::login: session created principal_id=f456572e-7399-4a8c-92dc-7ac703fe68b2 session_id=d6045f1b-cc78-4874-8bb9-b93497f53e4f
+2026-11-06T04:30:16.330279Z  INFO inquello_service::workspaces: invite accepted principal_id=f456572e-7399-4a8c-92dc-7ac703fe68b2 workspace_id=8ab9de95-e225-44a7-b660-22a05d03a543
+2026-11-06T04:30:16.437057Z  INFO inquello_dev_topology: dev topology stopping
+ [31m❯[39m test/policy-integration.test.ts [2m([22m[2m3 tests[22m[2m | [22m[31m1 failed[39m[2m | [22m[33m2 skipped[39m[2m)[22m[33m 3195[2mms[22m[39m
+   [31m❯[39m the effective policy against the real runtime and a permissive seeded Workspace [2m(3)[22m
+[31m     [31m×[31m binds the fixed authenticated read to stricter fixture policy and rejects foreign membership[39m[32m 49[2mms[22m[39m
+     [2m[90m↓[39m[22m shows the seeded Workspace policy in S07 with its revision, no device requirements and the contract
+     [2m[90m↓[39m[22m turns Full access on for one Task only after its confirmation, and derives the thread settings from it
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 1 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m test/policy-integration.test.ts[2m > [22mthe effective policy against the real runtime and a permissive seeded Workspace[2m > [22mbinds the fixed authenticated read to stricter fixture policy and rejects foreign membership
+[31m[1mAssertionError[22m: expected { …(4) } to match object { …(3) }
+(7 matching properties omitted from actual)[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[2m  {[22m
+[2m    "execution": {[22m
+[32m-     "sandbox": "read_only",[39m
+[31m+     "sandbox": "full_access",[39m
+[2m    },[22m
+[32m-   "policy_revision": "2",[39m
+[31m+   "policy_revision": "1",[39m
+[2m    "workspace_id": "8ab9de95-e225-44a7-b660-22a05d03a543",[22m
+[2m  }[22m
+
+[36m [2m❯[22m test/policy-integration.test.ts:[2m155:69[22m[39m
+    [90m153|[39m     stricterPolicy = true;
+    [90m154|[39m     try {
+    [90m155|[39m       expect(await identity.readExecutionPolicy(seed.workspace_id)).to…
+    [90m   |[39m                                                                     [31m^[39m
+    [90m156|[39m         workspace_id: seed.workspace_id, policy_revision: '2', executi…
+    [90m157|[39m       });
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m1 failed[39m[22m[2m | [22m[33m2 skipped[39m[90m (3)[39m
+[2m   Start at [22m 04:30:12
+[2m   Duration [22m 3.87s[2m (tests 88%, transform 7%, import 5%)[22m
+

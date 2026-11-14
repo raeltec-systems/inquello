@@ -1,0 +1,104 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.5 [39m[90mD:/Projects/inquello/desktop[39m
+
+2026-11-05T19:56:22.700590Z  INFO inquello_service::test_provider: synthetic OIDC provider listening issuer="https://127.0.0.1:54335"
+2026-11-05T19:56:23.077470Z  INFO inquello_service::server: inquello service listening local_addr=127.0.0.1:54338 https=true
+2026-11-05T19:56:23.207359Z  INFO sqlx::postgres::notice: relation "_sqlx_migrations" already exists, skipping
+2026-11-05T19:56:23.279041Z  INFO inquello_service::admin: workspace created by operator workspace_id=44b91126-b4f7-41eb-83d1-1e12732e034f receipt_id=b1a62720-0c1c-4a6e-a65a-0a9e475126d1
+2026-11-05T19:56:25.685043Z  INFO inquello_service::login: login transaction created login_transaction_id=193e97b3-64bb-4a38-84ee-1711dba0fc77
+2026-11-05T19:56:25.695616Z  INFO inquello_service::test_provider: authorization code issued for the synthetic subject
+2026-11-05T19:56:25.709685Z  INFO inquello_service::test_provider: ID token issued for the synthetic subject
+2026-11-05T19:56:25.773083Z  INFO inquello_service::login: session created principal_id=1f246e0a-147f-4558-884d-093de13514b5 session_id=fa1d559f-2b95-45ff-9411-3d74675b3735
+2026-11-05T19:56:26.608480Z  INFO inquello_service::workspaces: invite accepted principal_id=1f246e0a-147f-4558-884d-093de13514b5 workspace_id=44b91126-b4f7-41eb-83d1-1e12732e034f
+2026-11-05T19:56:26.723761Z  INFO inquello_dev_topology: dev topology stopping
+ [31m❯[39m test/tool-bounds-integration.test.ts [2m([22m[2m7 tests[22m[2m | [22m[31m1 failed[39m[2m | [22m[33m6 skipped[39m[2m)[22m[33m 4634[2mms[22m[39m
+   [31m❯[39m bounded tool reads, writes and network against the real runtime and local sandbox [2m(7)[22m
+[31m     [31m×[31m binds the fixed authenticated policy read to the fixture policy and rejects foreign membership[39m[32m 52[2mms[22m[39m
+     [2m[90m↓[39m[22m serializes concurrent Task sandbox inspection with real tool execution
+     [2m[90m↓[39m[22m keeps a standard Task inside its folder, read-only system locations and no destinations
+     [2m[90m↓[39m[22m reaches only the listed destinations through the proxy
+     [2m[90m↓[39m[22m makes the Task folder read only under a read_only ceiling
+     [2m[90m↓[39m[22m states the true reach of a permitted Full access mode and runs it without the sandbox
+     [2m[90m↓[39m[22m refuses to run, and says so, when the local sandbox cannot be applied
+2026-11-05T19:56:27.750341Z  INFO inquello_service::test_provider: synthetic OIDC provider listening issuer="https://127.0.0.1:54355"
+2026-11-05T19:56:28.141953Z  INFO inquello_service::server: inquello service listening local_addr=127.0.0.1:65531 https=true
+2026-11-05T19:56:28.253079Z  INFO sqlx::postgres::notice: relation "_sqlx_migrations" already exists, skipping
+2026-11-05T19:56:28.301753Z  INFO inquello_service::admin: workspace created by operator workspace_id=69d669e6-c082-4980-a065-e259b497dbfb receipt_id=371a681b-ddc4-4aef-b125-6c728a8747df
+2026-11-05T19:56:30.286565Z  INFO inquello_service::login: login transaction created login_transaction_id=3cf3b220-cd6e-4a3c-b9bf-175fbb5d2e46
+2026-11-05T19:56:30.298090Z  INFO inquello_service::test_provider: authorization code issued for the synthetic subject
+2026-11-05T19:56:30.316297Z  INFO inquello_service::test_provider: ID token issued for the synthetic subject
+2026-11-05T19:56:30.387424Z  INFO inquello_service::login: session created principal_id=5535902d-def6-4afc-8002-610b91334e56 session_id=6f057271-3956-4cb7-9af1-9622737cb1c1
+2026-11-05T19:56:31.323243Z  INFO inquello_service::workspaces: invite accepted principal_id=5535902d-def6-4afc-8002-610b91334e56 workspace_id=69d669e6-c082-4980-a065-e259b497dbfb
+2026-11-05T19:56:31.463068Z  INFO inquello_dev_topology: dev topology stopping
+ [31m❯[39m test/permissions-integration.test.ts [2m([22m[2m7 tests[22m[2m | [22m[31m1 failed[39m[2m | [22m[33m6 skipped[39m[2m)[22m[33m 4244[2mms[22m[39m
+   [31m❯[39m permission to act against the real runtime, its exec-policy matching and the local sandbox [2m(7)[22m
+[31m     [31m×[31m binds the fixed authenticated policy read to the fixture policy and rejects foreign membership[39m[32m 70[2mms[22m[39m
+     [2m[90m↓[39m[22m asks before a prompt-rule command; Deny runs nothing, Run runs it once inside the sandbox
+     [2m[90m↓[39m[22m refuses a forbidden command without a card, naming the rule and its source
+     [2m[90m↓[39m[22m applies a rule to the resolved program: other paths, the bare name and a symlink alias; no allow through a link or for an unresolved program
+     [2m[90m↓[39m[22m lets the person's forbid win over a Workspace allow, refuses a person's allow, and records Deny and forbid
+     [2m[90m↓[39m[22m keeps the automatic reviewer off by default and not available without a processing route
+     [2m[90m↓[39m[22m declines a request no one decides in time and runs nothing
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 2 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m test/permissions-integration.test.ts[2m > [22mpermission to act against the real runtime, its exec-policy matching and the local sandbox[2m > [22mbinds the fixed authenticated policy read to the fixture policy and rejects foreign membership
+[31m[1mAssertionError[22m: expected { …(4) } to match object { …(3) }
+(1 matching property omitted from actual)[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[2m  {[22m
+[32m-   "execution": {[39m
+[32m-     "allow_full_access": true,[39m
+[32m-   },[39m
+[32m-   "policy_revision": "2",[39m
+[31m+   "execution": null,[39m
+[31m+   "policy_revision": "1",[39m
+[2m    "workspace_id": "69d669e6-c082-4980-a065-e259b497dbfb",[22m
+[2m  }[22m
+
+[36m [2m❯[22m test/permissions-integration.test.ts:[2m170:18[22m[39m
+    [90m168|[39m     usePolicy({ allow_full_access: true });
+    [90m169|[39m     const view = await identity.readExecutionPolicy(seed.workspace_id);
+    [90m170|[39m     expect(view).toMatchObject({ workspace_id: seed.workspace_id, poli…
+    [90m   |[39m                  [31m^[39m
+    [90m171|[39m     await expect(identity.readExecutionPolicy(randomUUID())).rejects.t…
+    [90m172|[39m   });
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m test/tool-bounds-integration.test.ts[2m > [22mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22mbinds the fixed authenticated policy read to the fixture policy and rejects foreign membership
+[31m[1mAssertionError[22m: expected { …(4) } to match object { …(3) }
+(1 matching property omitted from actual)[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[2m  {[22m
+[32m-   "execution": {[39m
+[32m-     "allow_full_access": true,[39m
+[32m-   },[39m
+[32m-   "policy_revision": "2",[39m
+[31m+   "execution": null,[39m
+[31m+   "policy_revision": "1",[39m
+[2m    "workspace_id": "44b91126-b4f7-41eb-83d1-1e12732e034f",[22m
+[2m  }[22m
+
+[36m [2m❯[22m test/tool-bounds-integration.test.ts:[2m161:18[22m[39m
+    [90m159|[39m     usePolicy({ allow_full_access: true });
+    [90m160|[39m     const view = await identity.readExecutionPolicy(seed.workspace_id);
+    [90m161|[39m     expect(view).toMatchObject({ workspace_id: seed.workspace_id, poli…
+    [90m   |[39m                  [31m^[39m
+    [90m162|[39m     await expect(identity.readExecutionPolicy(randomUUID())).rejects.t…
+    [90m163|[39m   });
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m2 failed[39m[22m[90m (2)[39m
+[2m      Tests [22m [1m[31m2 failed[39m[22m[2m | [22m[33m12 skipped[39m[90m (14)[39m
+[2m   Start at [22m 19:56:21
+[2m   Duration [22m 10.05s[2m (tests 92%, import 4%, transform 4%)[22m
+

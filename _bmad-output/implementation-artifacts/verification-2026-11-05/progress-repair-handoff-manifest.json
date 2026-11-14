@@ -1,0 +1,219 @@
+{
+  "created": "2026-11-05T17:44:12.023Z",
+  "head": "c407483170e93ad9bea0f2d1c36e9d32693b0c44",
+  "status": "partial implementation; acceptance remains open",
+  "files": [
+    {
+      "path": "desktop/src/main/identity/session.ts",
+      "sha256": "4286bbf72e6678c92163876c7329e16ed03586315bd753deeff9d31bde9d8f15"
+    },
+    {
+      "path": "desktop/src/main/policy/service.ts",
+      "sha256": "ba1e26b84cccdb6c17e48143dcb4edfef069ed165fc0327d2da9f02dbd07d9a6"
+    },
+    {
+      "path": "desktop/src/main/tasks/service.ts",
+      "sha256": "4856d31ec965ffeccfb4ea362bc29f72fe122f4455c929e5215566dc6639795b"
+    },
+    {
+      "path": "desktop/src/renderer/Shell/task-observation.ts",
+      "sha256": "93bc2ae6166dea3d7bd07550ccda80236e4a4b50db5c7e1f11cf95c37914a7be"
+    },
+    {
+      "path": "desktop/test/identity-session.test.ts",
+      "sha256": "3e9f7be195280534e51ba4384ba270755d6e38aa3fbaf90b05345613ff71a59f"
+    },
+    {
+      "path": "desktop/test/policy-units.test.ts",
+      "sha256": "3369f3369b962869c55f3a05c0df4fb2cf3014261d31e1592570b9e8e97302be"
+    },
+    {
+      "path": "desktop/test/tasks-progress.test.ts",
+      "sha256": "b03cf8ce706a8f9286acfb3394c30ce0cc3e1111d0579c87b0541b6dfb03cda1"
+    },
+    {
+      "path": "desktop/test/live-conversation.test.tsx",
+      "sha256": "4ab81a3dff71eaa3c0985fff446cb7793562298252407a1e3437740319077297"
+    }
+  ],
+  "diagnosticOnlyFilesClean": [
+    "desktop/src/main/smoke-probe.ts",
+    "desktop/src/main/usage/service.ts",
+    "desktop/scripts/run-seeded-smoke.cjs",
+    "engine/codex-rs/app-server/src/request_processors/inquello_tasks.rs",
+    "engine/codex-rs/app-server/src/request_processors/thread_processor.rs",
+    "engine/codex-rs/app-server/src/request_processors/thread_lifecycle.rs",
+    "engine/codex-rs/inquello-adapters/src/tasks.rs"
+  ],
+  "diff": "D:/Projects/inquello/_bmad-output/implementation-artifacts/verification-2026-11-05/progress-repair-handoff.diff",
+  "diffSha256": "996396f4b8543a977096e78cfd401c9e4f6737338acbac4b73da6cadb0b02d52",
+  "focused": {
+    "files": 5,
+    "passed": 214,
+    "failed": 0,
+    "skipped": 0,
+    "seconds": 146.04,
+    "log": "D:/Projects/inquello/_bmad-output/implementation-artifacts/verification-2026-11-05/progress-repair-focused-final.log"
+  },
+  "builds": [
+    {
+      "log": "D:/Projects/inquello/_bmad-output/implementation-artifacts/verification-2026-11-05/fixture-build-progress-final.log",
+      "passed": true
+    },
+    {
+      "log": "D:/Projects/inquello/_bmad-output/implementation-artifacts/verification-2026-11-05/desktop-build-progress-final.log",
+      "passed": true
+    }
+  ],
+  "phases": [
+    {
+      "tag": "progress-final-1",
+      "dir": "DVZ0CC",
+      "status": "failed",
+      "kind": "clean candidate",
+      "reason": "Exact main-bridge selection did not atomically align its saved settings",
+      "phase": "D:/Inquello/tmp/inquello-seeded-smoke-DVZ0CC/visual",
+      "log": "D:/Projects/inquello/_bmad-output/implementation-artifacts/verification-2026-11-05/visual-smoke-docker-progress-final-1.log",
+      "fixture": {
+        "calls": 2,
+        "bCalls": 1,
+        "totalCalls": 3,
+        "invalidCalls": 0,
+        "heldCancelled": false,
+        "heldTimedOut": false,
+        "contextMatches": [
+          true,
+          true
+        ]
+      },
+      "captures": [
+        "D:/Inquello/tmp/inquello-seeded-smoke-DVZ0CC/visual/captures/01-home-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-DVZ0CC/visual/captures/01b-home-collapsed-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-DVZ0CC/visual/captures/01c-account-workspace-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-DVZ0CC/visual/captures/01d-multiline-unsent-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-DVZ0CC/visual/captures/02-completed-conversation-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-DVZ0CC/visual/captures/02b-narrow-conversation-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-DVZ0CC/visual/captures/02c-independent-sol-and-reopened-terra-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-DVZ0CC/visual/captures/03-followup-conversation-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-DVZ0CC/visual/captures/failure-synthetic.png"
+      ]
+    },
+    {
+      "tag": "switch-diagnostic-1",
+      "dir": "zzO8EW",
+      "status": "passed",
+      "kind": "temporary result diagnostics",
+      "reason": null,
+      "phase": "D:/Inquello/tmp/inquello-seeded-smoke-zzO8EW/visual",
+      "log": "D:/Projects/inquello/_bmad-output/implementation-artifacts/verification-2026-11-05/visual-smoke-docker-switch-diagnostic-1.log",
+      "fixture": {
+        "calls": 4,
+        "bCalls": 1,
+        "totalCalls": 5,
+        "invalidCalls": 0,
+        "heldCancelled": true,
+        "heldTimedOut": false,
+        "contextMatches": [
+          true,
+          true,
+          true,
+          true
+        ]
+      },
+      "captures": [
+        "D:/Inquello/tmp/inquello-seeded-smoke-zzO8EW/visual/captures/01-home-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-zzO8EW/visual/captures/01b-home-collapsed-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-zzO8EW/visual/captures/01c-account-workspace-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-zzO8EW/visual/captures/01d-multiline-unsent-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-zzO8EW/visual/captures/02-completed-conversation-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-zzO8EW/visual/captures/02b-narrow-conversation-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-zzO8EW/visual/captures/02c-independent-sol-and-reopened-terra-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-zzO8EW/visual/captures/03-followup-conversation-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-zzO8EW/visual/captures/03b-live-streaming-conversation-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-zzO8EW/visual/captures/04-interrupted-conversation-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-zzO8EW/visual/captures/04a-readable-composer-narrow-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-zzO8EW/visual/captures/04b-reader-jump-narrow-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-zzO8EW/visual/captures/05-reopened-conversation-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-zzO8EW/visual/captures/06-resumed-conversation-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-zzO8EW/visual/captures/07-task-details-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-zzO8EW/visual/captures/08-settings-processing-routes.png"
+      ]
+    },
+    {
+      "tag": "switch-diagnostic-2",
+      "dir": "MyVJdT",
+      "status": "failed",
+      "kind": "temporary result diagnostics",
+      "reason": "Completed conversation follow-up did not render; native WSL exec-server transport closed before turn dispatch",
+      "phase": "D:/Inquello/tmp/inquello-seeded-smoke-MyVJdT/visual",
+      "log": "D:/Projects/inquello/_bmad-output/implementation-artifacts/verification-2026-11-05/visual-smoke-docker-switch-diagnostic-2.log",
+      "fixture": {
+        "calls": 1,
+        "bCalls": 1,
+        "totalCalls": 2,
+        "invalidCalls": 0,
+        "heldCancelled": false,
+        "heldTimedOut": false,
+        "contextMatches": [
+          true
+        ]
+      },
+      "captures": [
+        "D:/Inquello/tmp/inquello-seeded-smoke-MyVJdT/visual/captures/01-home-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-MyVJdT/visual/captures/01b-home-collapsed-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-MyVJdT/visual/captures/01c-account-workspace-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-MyVJdT/visual/captures/01d-multiline-unsent-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-MyVJdT/visual/captures/02-completed-conversation-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-MyVJdT/visual/captures/02b-narrow-conversation-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-MyVJdT/visual/captures/02c-independent-sol-and-reopened-terra-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-MyVJdT/visual/captures/failure-synthetic.png"
+      ]
+    }
+  ],
+  "final1PersistedAtomicAlignment": {
+    "routes": [
+      {
+        "task_id": "b239a45a-2d33-4ae7-ad2b-50b09fe8a880",
+        "revision": 2,
+        "principal_id": "853899ad-e2df-4f39-bf91-2d1c428b3517",
+        "route_id": "codex-responses",
+        "configuration_revision": 2,
+        "recorded_at_ms": 1793898954007
+      }
+    ],
+    "settings": [
+      {
+        "task_id": "b239a45a-2d33-4ae7-ad2b-50b09fe8a880",
+        "revision": 2,
+        "record": "{\"revision\":2,\"route_revision\":2,\"choices\":{\"reasoning\":\"default\",\"speed\":\"default\"}}"
+      }
+    ],
+    "receipt": [
+      {
+        "operation_id": "32163349-37d3-450e-9b2a-50861c94e110",
+        "command": "set_task_route",
+        "scope_id": "b239a45a-2d33-4ae7-ad2b-50b09fe8a880",
+        "expected_revision": 1,
+        "resulting_revision": 2,
+        "status": "applied",
+        "recorded_at_ms": 1793898954007
+      }
+    ]
+  },
+  "diagnostic2NativeFailure": [
+    {
+      "ts": 1793900079,
+      "level": "WARN",
+      "target": "codex_app_server::request_processors::thread_processor",
+      "feedback_log_body": "app_server.request{otel.kind=\"server\" otel.name=\"inquello/tasks/resume\" rpc.system=\"jsonrpc\" rpc.method=\"inquello/tasks/resume\" rpc.transport=\"stdio\" rpc.request_id=585 app_server.connection_id=0 app_server.api_version=\"v2\" app_server.client_name=\"inquello_desktop\" app_server.client_version=\"0.0.0\"}: Linux Task executor unavailable: Linux isolated executor connection failed: exec-server transport closed"
+    }
+  ],
+  "open": [
+    "Two sequential unchanged clean visual passes not achieved.",
+    "Immediate usage observation failure after atomic model switch not fully diagnosed.",
+    "Current-source offline WSL guest build is being owned separately; no activation yet.",
+    "Full desktop suite and full seeded smoke not passed; independent baseline Windows/WSL/OAuth failures remain.",
+    "Real-provider qualification and SQLite writer-contention gates remain open."
+  ],
+  "ownedExecution": "No active build/test; handed execution ownership to build_current_guest_offline."
+}

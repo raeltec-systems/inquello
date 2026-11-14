@@ -1,0 +1,23 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.5 [39m[90mD:/Projects/inquello/desktop[39m
+
+2026-11-06T04:31:11.103882Z  INFO inquello_service::test_provider: synthetic OIDC provider listening issuer="https://127.0.0.1:55045"
+2026-11-06T04:31:11.405732Z  INFO inquello_service::server: inquello service listening local_addr=127.0.0.1:55048 https=true
+2026-11-06T04:31:11.510157Z  INFO sqlx::postgres::notice: relation "_sqlx_migrations" already exists, skipping
+2026-11-06T04:31:11.551860Z  INFO inquello_service::admin: workspace created by operator workspace_id=2f00c1e0-0b10-45b0-9d9a-09d5acbbbabd receipt_id=288d2c8d-426b-4eb9-bf95-b605ba442d86
+2026-11-06T04:31:12.781229Z  INFO inquello_service::login: login transaction created login_transaction_id=205c5827-155d-4391-a753-79696a31ae63
+2026-11-06T04:31:12.791030Z  INFO inquello_service::test_provider: authorization code issued for the synthetic subject
+2026-11-06T04:31:12.808206Z  INFO inquello_service::test_provider: ID token issued for the synthetic subject
+2026-11-06T04:31:12.880089Z  INFO inquello_service::login: session created principal_id=ccf854a7-bd83-42cf-9f06-402d271a4fe2 session_id=681d6c28-04a5-477b-8747-205d47b821f5
+2026-11-06T04:31:13.740052Z  INFO inquello_service::workspaces: invite accepted principal_id=ccf854a7-bd83-42cf-9f06-402d271a4fe2 workspace_id=2f00c1e0-0b10-45b0-9d9a-09d5acbbbabd
+2026-11-06T04:31:13.822382Z  INFO inquello_service::error: request refused kind=Denied reason="not_a_member"
+2026-11-06T04:32:06.398679Z  INFO inquello_dev_topology: dev topology stopping
+ [32m✓[39m test/policy-integration.test.ts [2m([22m[2m3 tests[22m[2m)[22m[33m 59126[2mms[22m[39m
+   [32m✓[39m the effective policy against the real runtime and a permissive seeded Workspace [2m(3)[22m
+     [33m[2m✓[22m[39m turns Full access on for one Task only after its confirmation, and derives the thread settings from it[33m 52352[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m1 passed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[32m3 passed[39m[22m[90m (3)[39m
+[2m   Start at [22m 04:31:10
+[2m   Duration [22m 59.76s[2m (tests 99%)[22m
+

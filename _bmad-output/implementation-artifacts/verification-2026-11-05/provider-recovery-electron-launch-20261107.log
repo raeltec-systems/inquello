@@ -1,0 +1,2 @@
+
+{"ok":false,"output":"D:/Inquello/tmp/provider-recovery-ui-hk89Gn","error":"ERR_FAILED (-2) loading 'file:///D:\\Projects\\inquello\\desktop\\dist\\renderer\\index.html#settings-providers'","reports":[{"mode":"sync","provider":"claude","ok":true,"dispatches":2,"keyCleared":true,"controlsRecovered":true},{"mode":"sync","provider":"codex","ok":true,"dispatches":2,"keyCleared":true,"controlsRecovered":true}]}

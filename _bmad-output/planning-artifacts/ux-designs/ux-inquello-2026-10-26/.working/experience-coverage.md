@@ -115,3 +115,16 @@ The `.working/token-contract.json` mirror is the checkable DESIGN frontmatter co
 - Reference coverage: four imported routed compositions are identified; remaining arrangements are spine-only. Imports are retained with a manifest; visual values/file inventory are owned by DESIGN.
 - Unresolved work: implementation handlers and integration effects are not verified; unprovided placements, responsive arrangements, interaction completion and existing-token accessibility applications are explicit AS-UX1–AS-UX4 design assumptions with proposed owners/revisit conditions. The current EXPERIENCE Open Items section carries decided OQs and remaining OQ-11/OQ-12/OQ-15/OQ-16 gates; earlier blanket statements that all OQs remained open are superseded.
 - No new mock generated; no product/runtime test is claimed; no scope cut or production framework selected.
+
+## Approved course-correction coverage — 2026-11-05
+
+The earlier 44-FR/eight-journey counts describe the historical baseline. Preserve every original ID and apply the amended PRD's explicit applicability, retaining all compatible Codex capabilities. The current total is FR-1–FR-45 and UJ-1–UJ-10. Native FR-38/40/42 remain V2. OQ-16A is adopted; OQ-16B remains actual-route/data qualification. Auth0 selection is recorded in the later onboarding contract.
+
+| Added or extended outcome | Requirement / journey | Surfaces / behavior |
+| --- | --- | --- |
+| Guided organisational context/readiness | UJ-9; existing context/Method/access FRs | S01/S02/S06/S07/S08/S09; settings plus assistance, provenance, blocked versus deferrable readiness, no mandatory field invention |
+| Risk-based coverage and next-plan feedback | FR-45; UJ-10 | S01/S02/S03/S05/S06/S08/S09/S10; proposed/revised plan, actual governance approval, engagement linkage and eligible follow-up history |
+| Engagement through report and actions | FR-39; extended UJ-2 | Existing private review loop preserved; objectives/scope/criteria/programme, evaluated finding/conclusion/report, external formal authority and action follow-up |
+| Supported recurring check | FR-23/24; extended UJ-8 | S04/S02/S03/S09/S10; expected input/host/identity/mandate, actual coverage, missed/not-run/partial/failure, human follow-up/next plan |
+| Faithful execution and recovery | FR-7/8/11/12 and NFR-2/4 | S02/S03/S04 concise actual execution evidence, expandable coverage/exclusions/failures/recovery; no inference from completed turn |
+| Visual preservation | Existing component/token contract | All 13 surfaces/28 components and imports retained. New lifecycle arrangements spine-only; no new visual token/component/mock. |

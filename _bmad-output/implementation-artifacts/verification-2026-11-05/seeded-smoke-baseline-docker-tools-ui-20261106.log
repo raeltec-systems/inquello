@@ -1,0 +1,15 @@
+Smoke logs: D:\Inquello\tmp\inquello-seeded-smoke-aEOChF
+2026-11-06T17:21:47.740772Z  INFO inquello_service::test_provider: synthetic OIDC provider listening issuer="https://127.0.0.1:57734"
+2026-11-06T17:21:47.992842Z  INFO inquello_service::server: inquello service listening local_addr=127.0.0.1:57737 https=true
+2026-11-06T17:21:48.102722Z  INFO sqlx::postgres::notice: relation "_sqlx_migrations" already exists, skipping
+2026-11-06T17:21:48.131379Z  INFO inquello_service::admin: workspace created by operator workspace_id=c779a914-d064-4105-9dd6-bd4b43b7dc60 receipt_id=c9bc4bfc-29cf-482c-bd20-6e234b0de8d5
+2026-11-06T17:22:08.511156Z  INFO inquello_service::login: login transaction created login_transaction_id=db48e544-5cae-41e5-8db8-c8e69fa1d8e7
+2026-11-06T17:22:08.519466Z  INFO inquello_service::test_provider: authorization code issued for the synthetic subject
+2026-11-06T17:22:08.541279Z  INFO inquello_service::test_provider: ID token issued for the synthetic subject
+2026-11-06T17:22:08.577044Z  INFO inquello_service::login: session created principal_id=640f2c1b-ddc5-4b57-82ae-497fb575ab06 session_id=c08492db-c130-4fed-86da-729d57e501f4
+2026-11-06T17:22:31.311161Z  INFO inquello_service::sessions: refresh family revoked principal_id=640f2c1b-ddc5-4b57-82ae-497fb575ab06 family_id=2cf3ce73-47aa-471f-af8f-6570e93abe06 reason="logout"
+2026-11-06T17:22:31.322950Z  INFO inquello_service::commands: command applied principal_id=640f2c1b-ddc5-4b57-82ae-497fb575ab06 operation_id=logout-391ab92f-b85b-4b98-97b2-099b41d8c82d receipt_id=9197f174-4fe9-4199-bccc-eaf390f26bb7
+{"phase":"tools","exitCode":1,"required":1,"missingOrFailed":["tools-management"],"zeroFixtureCalls":true}
+2026-11-06T17:22:31.672344Z  INFO inquello_dev_topology: dev topology stopping
+{"phase":"tools","phaseResult":{"ok":false,"missing":["tools-management"],"events":[],"cleanupErrors":[]}}
+{"ok":false,"isolatedPhase":"tools","required":1,"missingOrFailed":["tools-management"],"cleanupErrors":[]}

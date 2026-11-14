@@ -1,0 +1,53 @@
+{
+  "passed": true,
+  "scope": "Artifact parity with unchanged November 7 measured source and applicable historical synthetic checkpoint; no live-provider acceptance",
+  "currentBuild": {
+    "native": {
+      "completedUtc": "2026-11-09T20:40:18.4416621Z",
+      "exitCode": 0,
+      "offline": true,
+      "toolchainTempAccessVerified": true,
+      "locked": true,
+      "jobs": 4
+    },
+    "desktop": {
+      "offline": true,
+      "buildExit": 0,
+      "protocolExit": 0,
+      "completedUtc": "2026-11-09T20:41:20.7364560Z"
+    },
+    "protocolStampSha256": "334f29f8891cde10fbf24a45747b5f3833be791e8efc953f9e674d05abe33a0b",
+    "manifest": {
+      "manifestVersion": 2,
+      "createdUtc": "2026-11-09T20:41:59.070Z",
+      "head": "daf2dbae7ff1bc229c0bbc012cb9bc89cb09a7e3",
+      "engineTree": "d2e7f259a8110d7e25cfec6b66f679d075cfd72b",
+      "serviceEngineTree": "d2e7f259a8110d7e25cfec6b66f679d075cfd72b",
+      "runtime": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\codex-app-server.exe",
+      "cli": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\codex.exe",
+      "service": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\inquello-service.exe",
+      "runtimeSha256": "f2ec0ad1ed69be4603630642e2689a497451246fcf2abff163927d4d8858dcb7",
+      "cliSha256": "ca75a2f119eb7c37741d37a293bdddf7c7056463c18fb938003896786f332fbe",
+      "serviceSha256": "a903ee2e273fb986504fd4600d88c868a315f1c11c822a45188b83efd60b0252",
+      "desktopDistSha256": "c3312e1248fa0ac7c79a29564b745eae03864815a117846460a59457c1c50488"
+    }
+  },
+  "historical": {
+    "sourceManifestSha256": "828a5436066aa72799ada2135e0148f67dd6c12eb4cc151163d07191cbfad4bc",
+    "suite": {
+      "sha256": "3f88257f984f6cc004a464211d766c1b25787bc039637383bdf6ca405c9576db",
+      "passed": 2265,
+      "skipped": 21,
+      "date": "2026-11-07"
+    },
+    "syntheticSmoke": {
+      "sha256": "a2b22ff8c1a8fa448221bddb8d56c13179f5984461f18f8684df88e1022a37cf",
+      "required": 19,
+      "passed": 19,
+      "date": "2026-11-07"
+    }
+  },
+  "noPolicyOrProviderQualificationCreated": true,
+  "liveProviderAcceptance": "pending",
+  "at": "2026-11-09T20:42:01.082Z"
+}

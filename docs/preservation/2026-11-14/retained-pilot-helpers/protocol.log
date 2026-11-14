@@ -1,0 +1,12 @@
+node:internal/process/promises:394
+    triggerUncaughtException(err, true /* fromPromise */);
+    ^
+
+[Error: EPERM: operation not permitted, opendir 'C:\Users\Administrator\AppData\Local\node\corepack\v1\pnpm'] {
+  errno: -4048,
+  code: 'EPERM',
+  syscall: 'opendir',
+  path: 'C:\\Users\\Administrator\\AppData\\Local\\node\\corepack\\v1\\pnpm'
+}
+
+Node.js v24.22.0

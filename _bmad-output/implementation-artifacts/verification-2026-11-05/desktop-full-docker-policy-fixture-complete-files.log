@@ -1,0 +1,101 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.5 [39m[90mD:/Projects/inquello/desktop[39m
+
+2026-11-05T19:58:51.574278Z  INFO inquello_service::test_provider: synthetic OIDC provider listening issuer="https://127.0.0.1:57156"
+2026-11-05T19:58:51.940759Z  INFO inquello_service::server: inquello service listening local_addr=127.0.0.1:57159 https=true
+2026-11-05T19:58:52.049857Z  INFO sqlx::postgres::notice: relation "_sqlx_migrations" already exists, skipping
+2026-11-05T19:58:52.093945Z  INFO inquello_service::admin: workspace created by operator workspace_id=7ca29e24-70d3-4635-8da5-2e5906d73d41 receipt_id=237d6802-c19e-4129-a84f-6945f9ac1e2f
+2026-11-05T19:58:54.063700Z  INFO inquello_service::login: login transaction created login_transaction_id=d1a7b8d8-3bf3-4058-9d37-d81344910241
+2026-11-05T19:58:54.072834Z  INFO inquello_service::test_provider: authorization code issued for the synthetic subject
+2026-11-05T19:58:54.087679Z  INFO inquello_service::test_provider: ID token issued for the synthetic subject
+2026-11-05T19:58:54.143919Z  INFO inquello_service::login: session created principal_id=3e668eab-0fed-426c-8189-f7282ad75a60 session_id=2c8a6e6b-7592-41cd-a299-2a50d9428fb3
+2026-11-05T19:58:55.005548Z  INFO inquello_service::workspaces: invite accepted principal_id=3e668eab-0fed-426c-8189-f7282ad75a60 workspace_id=7ca29e24-70d3-4635-8da5-2e5906d73d41
+2026-11-05T19:58:55.083609Z  INFO inquello_service::error: request refused kind=Denied reason="not_a_member"
+2026-11-05T20:06:38.573700Z  INFO inquello_dev_topology: dev topology stopping
+ [31m❯[39m test/tool-bounds-integration.test.ts [2m([22m[2m7 tests[22m[2m | [22m[31m2 failed[39m[2m)[22m[33m 471017[2mms[22m[39m
+   [31m❯[39m bounded tool reads, writes and network against the real runtime and local sandbox [2m(7)[22m
+     [32m✓[39m binds the fixed authenticated policy read to the fixture policy and rejects foreign membership[32m 78[2mms[22m[39m
+     [33m[2m✓[22m[39m serializes concurrent Task sandbox inspection with real tool execution[33m 95070[2mms[22m[39m
+[31m     [31m×[31m keeps a standard Task inside its folder, read-only system locations and no destinations[39m[33m 180008[2mms[22m[39m
+[31m     [31m×[31m reaches only the listed destinations through the proxy[39m[33m 120005[2mms[22m[39m
+     [33m[2m✓[22m[39m makes the Task folder read only under a read_only ceiling[33m 44711[2mms[22m[39m
+     [33m[2m✓[22m[39m states the true reach of a permitted Full access mode and runs it without the sandbox[33m 7327[2mms[22m[39m
+     [33m[2m✓[22m[39m refuses to run, and says so, when the local sandbox cannot be applied[33m 16299[2mms[22m[39m
+2026-11-05T20:06:43.006807Z  INFO inquello_service::test_provider: synthetic OIDC provider listening issuer="https://127.0.0.1:58408"
+2026-11-05T20:06:43.520269Z  INFO inquello_service::server: inquello service listening local_addr=127.0.0.1:58411 https=true
+2026-11-05T20:06:43.704242Z  INFO sqlx::postgres::notice: relation "_sqlx_migrations" already exists, skipping
+2026-11-05T20:06:43.803583Z  INFO inquello_service::admin: workspace created by operator workspace_id=8805251d-24a4-4d3e-a653-f8b6dc183589 receipt_id=cb8797e9-7330-4a5d-9a11-66c8caacbd9d
+2026-11-05T20:06:46.146988Z  INFO inquello_service::login: login transaction created login_transaction_id=6f28a91f-5364-4b69-bed2-43527c832075
+2026-11-05T20:06:46.156024Z  INFO inquello_service::test_provider: authorization code issued for the synthetic subject
+2026-11-05T20:06:46.170276Z  INFO inquello_service::test_provider: ID token issued for the synthetic subject
+2026-11-05T20:06:46.234936Z  INFO inquello_service::login: session created principal_id=f51f0e9f-3ed1-4721-997e-86c7788b6841 session_id=c83c923d-cdc6-4257-b2a4-463bb4b8451a
+2026-11-05T20:06:47.050522Z  INFO inquello_service::workspaces: invite accepted principal_id=f51f0e9f-3ed1-4721-997e-86c7788b6841 workspace_id=8805251d-24a4-4d3e-a653-f8b6dc183589
+2026-11-05T20:06:47.117836Z  INFO inquello_service::error: request refused kind=Denied reason="not_a_member"
+2026-11-05T20:09:40.047223Z  INFO inquello_dev_topology: dev topology stopping
+ [31m❯[39m test/permissions-integration.test.ts [2m([22m[2m7 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[33m 181101[2mms[22m[39m
+   [31m❯[39m permission to act against the real runtime, its exec-policy matching and the local sandbox [2m(7)[22m
+     [32m✓[39m binds the fixed authenticated policy read to the fixture policy and rejects foreign membership[32m 67[2mms[22m[39m
+     [33m[2m✓[22m[39m asks before a prompt-rule command; Deny runs nothing, Run runs it once inside the sandbox[33m 58971[2mms[22m[39m
+     [33m[2m✓[22m[39m refuses a forbidden command without a card, naming the rule and its source[33m 16360[2mms[22m[39m
+[31m     [31m×[31m applies a rule to the resolved program: other paths, the bare name and a symlink alias; no allow through a link or for an unresolved program[39m[33m 19364[2mms[22m[39m
+     [33m[2m✓[22m[39m lets the person's forbid win over a Workspace allow, refuses a person's allow, and records Deny and forbid[33m 37821[2mms[22m[39m
+     [33m[2m✓[22m[39m keeps the automatic reviewer off by default and not available without a processing route[33m 18552[2mms[22m[39m
+     [33m[2m✓[22m[39m declines a request no one decides in time and runs nothing[33m 21786[2mms[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 3 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m test/permissions-integration.test.ts[2m > [22mpermission to act against the real runtime, its exec-policy matching and the local sandbox[2m > [22mapplies a rule to the resolved program: other paths, the bare name and a symlink alias; no allow through a link or for an unresolved program
+[31m[1mAssertionError[22m: expected { ok: true, …(1) } to match object { Object (ok, code) }
+(6 matching properties omitted from actual)[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[2m  {[22m
+[32m-   "code": "command-forbidden",[39m
+[32m-   "ok": false,[39m
+[31m+   "ok": true,[39m
+[2m  }[22m
+
+[36m [2m❯[22m test/permissions-integration.test.ts:[2m252:23[22m[39m
+    [90m250|[39m     for (const program of ['/usr/bin/sh', 'sh', alias]) {
+    [90m251|[39m       const refused = await policy.runTool(task, [program, '-c', 'true…
+    [90m252|[39m       expect(refused).toMatchObject({ ok: false, code: 'command-forbid…
+    [90m   |[39m                       [31m^[39m
+    [90m253|[39m       expect((refused as { reason: string }).reason).toContain(`Rule: …
+    [90m254|[39m     }
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m test/tool-bounds-integration.test.ts[2m > [22mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[31m[1mError[22m: Test timed out in 180000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".[39m
+[36m [2m❯[22m test/tool-bounds-integration.test.ts:[2m191:3[22m[39m
+    [90m189|[39m   }, 120_000);
+    [90m190|[39m
+    [90m191|[39m   it('keeps a standard Task inside its folder, read-only system locati…
+    [90m   |[39m   [31m^[39m
+    [90m192|[39m     usePolicy(null);
+    [90m193|[39m     const task = await newTask('Bounded');
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m test/tool-bounds-integration.test.ts[2m > [22mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22mreaches only the listed destinations through the proxy
+[31m[1mError[22m: Test timed out in 120000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".[39m
+[36m [2m❯[22m test/tool-bounds-integration.test.ts:[2m253:3[22m[39m
+    [90m251|[39m   }, 180_000);
+    [90m252|[39m
+    [90m253|[39m   it('reaches only the listed destinations through the proxy', async (…
+    [90m   |[39m   [31m^[39m
+    [90m254|[39m     usePolicy({ network: 'allowed', allowed_domains: ['example.org'] }…
+    [90m255|[39m     const task = await newTask('Listed destinations');
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m2 failed[39m[22m[90m (2)[39m
+[2m      Tests [22m [1m[31m3 failed[39m[22m[2m | [22m[1m[32m11 passed[39m[22m[90m (14)[39m
+[2m   Start at [22m 19:58:50
+[2m   Duration [22m 653.29s[2m (tests 100%)[22m
+

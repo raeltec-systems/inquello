@@ -1,0 +1,293 @@
+diff --git a/engine/codex-rs/app-server/src/request_processors/inquello_processor.rs b/engine/codex-rs/app-server/src/request_processors/inquello_processor.rs
+index 47c481e056..7b36dd1bfa 100644
+--- a/engine/codex-rs/app-server/src/request_processors/inquello_processor.rs
++++ b/engine/codex-rs/app-server/src/request_processors/inquello_processor.rs
+@@ -116,6 +116,8 @@ use codex_app_server_protocol::InquelloWorkspaceTreeParams;
+ use codex_app_server_protocol::InquelloWorkspaceTreeResponse;
+ use codex_app_server_protocol::JSONRPCErrorError;
+ use codex_app_server_protocol::SandboxMode;
++#[cfg(windows)]
++use codex_utils_absolute_path::AbsolutePathBuf;
+ use inquello_adapters::SqliteWorkingStore;
+ use inquello_adapters::SystemClock;
+ use inquello_domain::Clock;
+@@ -1273,9 +1275,10 @@ pub(crate) struct ExecLookup<'a> {
+ /// word holding `/` is a path (relative to `cwd`), a bare word is looked up
+ /// along PATH (empty or relative entries against `cwd`), the first
+ /// executable regular file wins. The result is canonical: symlinks followed.
+-/// `None` when it cannot be resolved here, including on a Windows host. A
+-/// bounded command there runs in the Linux guest and is resolved inside it
+-/// (see [`ExecPlacement`]).
++/// On Windows, only ordinary fully-qualified drive paths to existing `.exe`
++/// files are resolved. No PATH/PATHEXT search or shell expansion is attempted.
++/// Bounded commands still resolve inside the Linux guest (see [`ExecPlacement`]).
++/// Unsupported or missing programs remain unresolved.
+ pub(crate) fn resolve_program(program: &str, lookup: ExecLookup<'_>) -> Option<PathBuf> {
+     #[cfg(unix)]
+     {
+@@ -1313,7 +1316,38 @@ pub(crate) fn resolve_program(program: &str, lookup: ExecLookup<'_>) -> Option<P
+             .ok()
+             .filter(|path| executable(path))
+     }
+-    #[cfg(not(unix))]
++    #[cfg(windows)]
++    {
++        use std::path::Component;
++        use std::path::Path;
++        use std::path::Prefix;
++
++        let _ = lookup;
++        let ordinary_exe = |path: &Path| {
++            let Some(text) = path.to_str() else {
++                return false;
++            };
++            let mut components = path.components();
++            matches!(components.next(), Some(Component::Prefix(prefix)) if matches!(prefix.kind(), Prefix::Disk(_)))
++                && matches!(components.next(), Some(Component::RootDir))
++                && !text.contains('\0')
++                && !text.get(2..).is_some_and(|tail| tail.contains(':'))
++                && path
++                    .extension()
++                    .is_some_and(|extension| extension.eq_ignore_ascii_case("exe"))
++        };
++        let path = Path::new(program);
++        if !ordinary_exe(path) {
++            return None;
++        }
++        let canonical = AbsolutePathBuf::from_absolute_path_checked(path)
++            .ok()?
++            .canonicalize()
++            .ok()?
++            .into_path_buf();
++        (ordinary_exe(&canonical) && canonical.is_file()).then_some(canonical)
++    }
++    #[cfg(not(any(unix, windows)))]
+     {
+         let _ = (program, lookup);
+         None
+diff --git a/engine/codex-rs/app-server/src/request_processors/inquello_processor_tests.rs b/engine/codex-rs/app-server/src/request_processors/inquello_processor_tests.rs
+index c25e74eb5e..68417ade15 100644
+--- a/engine/codex-rs/app-server/src/request_processors/inquello_processor_tests.rs
++++ b/engine/codex-rs/app-server/src/request_processors/inquello_processor_tests.rs
+@@ -1396,6 +1396,39 @@ async fn a_standard_task_profile_names_its_boundaries_and_runtime_form() {
+     );
+ }
+ 
++// These tests plan host commands; they do not spawn them. Use actual native
++// executables so the positive path exercises resolution on every platform.
++#[cfg(windows)]
++fn windows_host_test_program(relative: &str) -> String {
++    let root = std::env::var_os("SystemRoot")
++        .unwrap_or_else(|| panic!("SystemRoot is required for native Windows fixtures"));
++    let path = PathBuf::from(root).join(relative);
++    assert!(
++        path.is_file(),
++        "native fixture is missing: {}",
++        path.display()
++    );
++    path.to_string_lossy().into_owned()
++}
++
++fn host_noop_command(unix_command: &[&str]) -> Vec<String> {
++    #[cfg(windows)]
++    {
++        let _ = unix_command;
++        words(&[
++            &windows_host_test_program(r"System32\WindowsPowerShell\v1.0\powershell.exe"),
++            "-NoProfile",
++            "-NonInteractive",
++            "-Command",
++            "exit 0",
++        ])
++    }
++    #[cfg(not(windows))]
++    {
++        words(unix_command)
++    }
++}
++
+ #[tokio::test]
+ async fn a_permitted_full_access_profile_states_no_filesystem_limits() {
+     let Fixture { dir, processor } = fixture();
+@@ -1433,10 +1466,12 @@ async fn a_permitted_full_access_profile_states_no_filesystem_limits() {
+     // The Workspace's standard reach stays bounded.
+     assert!(response.reach.bounded);
+ 
++    let command_words = host_noop_command(&["true"]);
++    let command: Vec<_> = command_words.iter().map(String::as_str).collect();
+     let plan = processor
+         .tools_exec_plan(
+             DESKTOP,
+-            exec_params(open(), &task_id, &folder, &["true"]),
++            exec_params(open(), &task_id, &folder, &command),
+             DeviceRequirements::default(),
+             UserConfig::default(),
+         )
+@@ -1451,6 +1486,7 @@ async fn a_permitted_full_access_profile_states_no_filesystem_limits() {
+         Some(codex_app_server_protocol::SandboxPolicy::DangerFullAccess)
+     );
+     assert_eq!(plan.exec.permission_profile, None);
++    assert_eq!(plan.exec.command, command_words);
+ }
+ 
+ #[tokio::test]
+@@ -1589,6 +1625,159 @@ fn words(command: &[&str]) -> Vec<String> {
+     command.iter().map(ToString::to_string).collect()
+ }
+ 
++#[cfg(windows)]
++#[test]
++fn windows_host_resolution_accepts_only_existing_drive_rooted_executables() {
++    let dir = TempDir::new().unwrap_or_else(|error| panic!("{error}"));
++    let exe = dir.path().join("Program.exe");
++    std::fs::write(&exe, b"resolution fixture").unwrap_or_else(|error| panic!("{error}"));
++    let lookup = ExecLookup {
++        cwd: Some(dir.path()),
++        search_path: Some(dir.path().as_os_str()),
++    };
++    let canonical = AbsolutePathBuf::from_absolute_path_checked(&exe)
++        .unwrap_or_else(|error| panic!("{error}"))
++        .canonicalize()
++        .unwrap_or_else(|error| panic!("{error}"))
++        .into_path_buf();
++    for spelling in [
++        exe.to_string_lossy().into_owned(),
++        exe.to_string_lossy().to_uppercase(),
++        exe.to_string_lossy().replace('\\', "/"),
++        dir.path()
++            .join(".")
++            .join("Program.exe")
++            .to_string_lossy()
++            .into_owned(),
++    ] {
++        assert_eq!(
++            resolve_program(&spelling, lookup),
++            Some(canonical.clone()),
++            "{spelling}"
++        );
++    }
++    let directory = dir.path().join("directory.exe");
++    std::fs::create_dir(&directory).unwrap_or_else(|error| panic!("{error}"));
++    let script = dir.path().join("script.cmd");
++    std::fs::write(&script, b"echo fixture").unwrap_or_else(|error| panic!("{error}"));
++    let rejected = [
++        String::new(),
++        "Program.exe".into(),
++        ".\\Program.exe".into(),
++        "D:Program.exe".into(),
++        "\\Program.exe".into(),
++        r"\\server\share\Program.exe".into(),
++        format!(r"\\?\{}", exe.display()),
++        format!(r"\\.\{}", exe.display()),
++        format!("{}:stream.exe", exe.display()),
++        format!("{}\0.exe", exe.display()),
++        dir.path()
++            .join("missing.exe")
++            .to_string_lossy()
++            .into_owned(),
++        directory.to_string_lossy().into_owned(),
++        script.to_string_lossy().into_owned(),
++    ];
++    for spelling in rejected {
++        assert_eq!(resolve_program(&spelling, lookup), None, "{spelling:?}");
++    }
++    let missing = dir
++        .path()
++        .join("missing.exe")
++        .to_string_lossy()
++        .into_owned();
++    // Rule tokens use literal forward slashes; backslashes are rejected by
++    // the existing domain grammar. Command argv retains its Windows spelling.
++    let rule_head = missing.replace('\\', "/");
++    let rules = vec![sourced(
++        &[&rule_head],
++        execution_policy::RuleDecision::Allow,
++    )];
++    let matches = matched_rules(&words(&[&missing]), &rules, lookup)
++        .unwrap_or_else(|error| panic!("{error:?}"));
++    assert_eq!(
++        matches.resolution,
++        execution_policy::ProgramResolution::Unresolved
++    );
++    assert_eq!(matches.matched, vec![false]);
++}
++
++#[cfg(windows)]
++#[test]
++fn windows_host_forbid_matches_canonical_case_and_symlink_aliases() {
++    use execution_policy::RuleDecision::*;
++    let dir = TempDir::new().unwrap_or_else(|error| panic!("{error}"));
++    let exe = dir.path().join("Program.exe");
++    let alias = dir.path().join("Alias.exe");
++    let other = dir.path().join("Other.exe");
++    for file in [&exe, &other] {
++        std::fs::write(file, b"resolution fixture").unwrap_or_else(|error| panic!("{error}"));
++    }
++    std::os::windows::fs::symlink_file(&exe, &alias)
++        .unwrap_or_else(|error| panic!("create fixture symlink: {error}"));
++    let lookup = ExecLookup {
++        cwd: None,
++        search_path: None,
++    };
++    let exe = exe.to_string_lossy().into_owned();
++    let alias = alias.to_string_lossy().into_owned();
++    let other = other.to_string_lossy().into_owned();
++    for head in [&exe, &alias, &exe.to_uppercase()] {
++        let rule_head = head.replace('\\', "/");
++        let other_head = other.replace('\\', "/");
++        let rules = vec![
++            sourced(&[&rule_head], Forbid),
++            sourced(&[&other_head], Allow),
++        ];
++        for command in [&exe, &alias, &exe.to_uppercase()] {
++            let argv = words(&[command, "-fixture"]);
++            let original = argv.clone();
++            let matches =
++                matched_rules(&argv, &rules, lookup).unwrap_or_else(|error| panic!("{error:?}"));
++            assert_eq!(
++                matches.resolution,
++                execution_policy::ProgramResolution::Resolved
++            );
++            assert_eq!(matches.matched, vec![true, false]);
++            assert_eq!(argv, original);
++        }
++    }
++    let bare = sourced(&["Program.exe"], Forbid);
++    assert_eq!(
++        matched_rules(&words(&[&exe]), &[bare], lookup)
++            .unwrap_or_else(|error| panic!("{error:?}"))
++            .matched,
++        vec![true]
++    );
++}
++
++#[cfg(windows)]
++#[test]
++fn windows_host_resolution_rejects_broken_links_and_non_executable_targets() {
++    let dir = TempDir::new().unwrap_or_else(|error| panic!("{error}"));
++    let lookup = ExecLookup {
++        cwd: None,
++        search_path: None,
++    };
++    for target in ["missing.exe", "script.cmd", "directory.exe"] {
++        let target_path = dir.path().join(target);
++        if target == "script.cmd" {
++            std::fs::write(&target_path, b"echo fixture").unwrap_or_else(|error| panic!("{error}"));
++        } else if target == "directory.exe" {
++            std::fs::create_dir(&target_path).unwrap_or_else(|error| panic!("{error}"));
++        }
++        let alias = dir.path().join(format!("alias-{target}.exe"));
++        if target == "directory.exe" {
++            std::os::windows::fs::symlink_dir(&target_path, &alias)
++                .unwrap_or_else(|error| panic!("create fixture directory symlink: {error}"));
++        } else {
++            std::os::windows::fs::symlink_file(&target_path, &alias)
++                .unwrap_or_else(|error| panic!("create fixture symlink: {error}"));
++        }
++        assert_eq!(resolve_program(&alias.to_string_lossy(), lookup), None);
++    }
++}
++
+ /// A folder of stand-in programs (`#!/bin/sh` scripts) and a PATH over it,
+ /// so matching resolves programs without depending on the host's layout.
+ #[cfg(unix)]

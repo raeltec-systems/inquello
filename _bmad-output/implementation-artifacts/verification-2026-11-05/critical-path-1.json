@@ -1,0 +1,3207 @@
+{
+  "phase": "D:\\Inquello\\tmp\\inquello-seeded-smoke-yEag7U/visual",
+  "origin": 1793896709169,
+  "start": 1793896794740,
+  "queue": {
+    "count": 507,
+    "total": 39271,
+    "p50": 66,
+    "p95": 146,
+    "max": 1459
+  },
+  "service": {
+    "count": 507,
+    "total": 19833,
+    "p50": 33,
+    "p95": 57,
+    "max": 1348
+  },
+  "access": [
+    {
+      "queue": 41,
+      "service": 48,
+      "at": 1
+    },
+    {
+      "queue": 66,
+      "service": 51,
+      "at": 53
+    },
+    {
+      "queue": 104,
+      "service": 30,
+      "at": 82
+    },
+    {
+      "queue": 76,
+      "service": 27,
+      "at": 109
+    },
+    {
+      "queue": 96,
+      "service": 29,
+      "at": 138
+    },
+    {
+      "queue": 105,
+      "service": 30,
+      "at": 168
+    },
+    {
+      "queue": 124,
+      "service": 29,
+      "at": 197
+    },
+    {
+      "queue": 86,
+      "service": 30,
+      "at": 227
+    },
+    {
+      "queue": 94,
+      "service": 40,
+      "at": 267
+    },
+    {
+      "queue": 101,
+      "service": 40,
+      "at": 307
+    },
+    {
+      "queue": 112,
+      "service": 34,
+      "at": 342
+    },
+    {
+      "queue": 94,
+      "service": 38,
+      "at": 380
+    },
+    {
+      "queue": 129,
+      "service": 32,
+      "at": 411
+    },
+    {
+      "queue": 114,
+      "service": 25,
+      "at": 436
+    },
+    {
+      "queue": 73,
+      "service": 30,
+      "at": 466
+    },
+    {
+      "queue": 95,
+      "service": 34,
+      "at": 500
+    },
+    {
+      "queue": 93,
+      "service": 30,
+      "at": 530
+    },
+    {
+      "queue": 112,
+      "service": 35,
+      "at": 566
+    },
+    {
+      "queue": 125,
+      "service": 30,
+      "at": 596
+    },
+    {
+      "queue": 91,
+      "service": 28,
+      "at": 624
+    },
+    {
+      "queue": 109,
+      "service": 29,
+      "at": 653
+    },
+    {
+      "queue": 98,
+      "service": 33,
+      "at": 686
+    },
+    {
+      "queue": 97,
+      "service": 36,
+      "at": 722
+    },
+    {
+      "queue": 101,
+      "service": 32,
+      "at": 755
+    },
+    {
+      "queue": 104,
+      "service": 33,
+      "at": 787
+    },
+    {
+      "queue": 84,
+      "service": 38,
+      "at": 826
+    },
+    {
+      "queue": 111,
+      "service": 33,
+      "at": 859
+    },
+    {
+      "queue": 102,
+      "service": 35,
+      "at": 894
+    },
+    {
+      "queue": 111,
+      "service": 30,
+      "at": 924
+    },
+    {
+      "queue": 99,
+      "service": 30,
+      "at": 954
+    },
+    {
+      "queue": 92,
+      "service": 29,
+      "at": 983
+    },
+    {
+      "queue": 104,
+      "service": 30,
+      "at": 1014
+    },
+    {
+      "queue": 113,
+      "service": 29,
+      "at": 1043
+    },
+    {
+      "queue": 85,
+      "service": 32,
+      "at": 1075
+    },
+    {
+      "queue": 89,
+      "service": 29,
+      "at": 1104
+    },
+    {
+      "queue": 96,
+      "service": 34,
+      "at": 1138
+    },
+    {
+      "queue": 94,
+      "service": 35,
+      "at": 1174
+    },
+    {
+      "queue": 83,
+      "service": 34,
+      "at": 1208
+    },
+    {
+      "queue": 108,
+      "service": 32,
+      "at": 1240
+    },
+    {
+      "queue": 111,
+      "service": 32,
+      "at": 1273
+    },
+    {
+      "queue": 107,
+      "service": 32,
+      "at": 1305
+    },
+    {
+      "queue": 101,
+      "service": 34,
+      "at": 1338
+    },
+    {
+      "queue": 100,
+      "service": 31,
+      "at": 1369
+    },
+    {
+      "queue": 69,
+      "service": 34,
+      "at": 1403
+    },
+    {
+      "queue": 69,
+      "service": 39,
+      "at": 1443
+    },
+    {
+      "queue": 77,
+      "service": 40,
+      "at": 1482
+    },
+    {
+      "queue": 87,
+      "service": 37,
+      "at": 1519
+    },
+    {
+      "queue": 67,
+      "service": 41,
+      "at": 1561
+    },
+    {
+      "queue": 87,
+      "service": 32,
+      "at": 1593
+    },
+    {
+      "queue": 104,
+      "service": 31,
+      "at": 1624
+    },
+    {
+      "queue": 68,
+      "service": 31,
+      "at": 1655
+    },
+    {
+      "queue": 64,
+      "service": 37,
+      "at": 1693
+    },
+    {
+      "queue": 44,
+      "service": 33,
+      "at": 1726
+    },
+    {
+      "queue": 17,
+      "service": 67,
+      "at": 1793
+    },
+    {
+      "queue": 68,
+      "service": 71,
+      "at": 1864
+    },
+    {
+      "queue": 100,
+      "service": 47,
+      "at": 1911
+    },
+    {
+      "queue": 84,
+      "service": 39,
+      "at": 1951
+    },
+    {
+      "queue": 43,
+      "service": 36,
+      "at": 1986
+    },
+    {
+      "queue": 44,
+      "service": 27,
+      "at": 2014
+    },
+    {
+      "queue": 57,
+      "service": 28,
+      "at": 2042
+    },
+    {
+      "queue": 52,
+      "service": 31,
+      "at": 2073
+    },
+    {
+      "queue": 74,
+      "service": 34,
+      "at": 2108
+    },
+    {
+      "queue": 68,
+      "service": 151,
+      "at": 2259
+    },
+    {
+      "queue": 167,
+      "service": 28,
+      "at": 2287
+    },
+    {
+      "queue": 186,
+      "service": 28,
+      "at": 2315
+    },
+    {
+      "queue": 57,
+      "service": 26,
+      "at": 2341
+    },
+    {
+      "queue": 82,
+      "service": 27,
+      "at": 2368
+    },
+    {
+      "queue": 108,
+      "service": 27,
+      "at": 2396
+    },
+    {
+      "queue": 81,
+      "service": 29,
+      "at": 2424
+    },
+    {
+      "queue": 83,
+      "service": 32,
+      "at": 2457
+    },
+    {
+      "queue": 114,
+      "service": 28,
+      "at": 2485
+    },
+    {
+      "queue": 112,
+      "service": 30,
+      "at": 2515
+    },
+    {
+      "queue": 93,
+      "service": 35,
+      "at": 2550
+    },
+    {
+      "queue": 97,
+      "service": 35,
+      "at": 2585
+    },
+    {
+      "queue": 72,
+      "service": 32,
+      "at": 2617
+    },
+    {
+      "queue": 73,
+      "service": 38,
+      "at": 2655
+    },
+    {
+      "queue": 81,
+      "service": 32,
+      "at": 2687
+    },
+    {
+      "queue": 109,
+      "service": 26,
+      "at": 2713
+    },
+    {
+      "queue": 99,
+      "service": 30,
+      "at": 2743
+    },
+    {
+      "queue": 99,
+      "service": 27,
+      "at": 2770
+    },
+    {
+      "queue": 91,
+      "service": 27,
+      "at": 2797
+    },
+    {
+      "queue": 60,
+      "service": 29,
+      "at": 2826
+    },
+    {
+      "queue": 78,
+      "service": 37,
+      "at": 2863
+    },
+    {
+      "queue": 36,
+      "service": 30,
+      "at": 2893
+    },
+    {
+      "queue": 42,
+      "service": 31,
+      "at": 2924
+    },
+    {
+      "queue": 71,
+      "service": 28,
+      "at": 2952
+    },
+    {
+      "queue": 63,
+      "service": 28,
+      "at": 2981
+    },
+    {
+      "queue": 61,
+      "service": 29,
+      "at": 3010
+    },
+    {
+      "queue": 31,
+      "service": 28,
+      "at": 3038
+    },
+    {
+      "queue": 34,
+      "service": 29,
+      "at": 3067
+    },
+    {
+      "queue": 34,
+      "service": 27,
+      "at": 3095
+    },
+    {
+      "queue": 29,
+      "service": 26,
+      "at": 3121
+    },
+    {
+      "queue": 28,
+      "service": 28,
+      "at": 3149
+    },
+    {
+      "queue": 28,
+      "service": 27,
+      "at": 3176
+    },
+    {
+      "queue": 29,
+      "service": 31,
+      "at": 3207
+    },
+    {
+      "queue": 35,
+      "service": 35,
+      "at": 3243
+    },
+    {
+      "queue": 63,
+      "service": 32,
+      "at": 3275
+    },
+    {
+      "queue": 40,
+      "service": 31,
+      "at": 3306
+    },
+    {
+      "queue": 4,
+      "service": 30,
+      "at": 3336
+    },
+    {
+      "queue": 0,
+      "service": 35,
+      "at": 3397
+    },
+    {
+      "queue": 0,
+      "service": 48,
+      "at": 3453
+    },
+    {
+      "queue": 0,
+      "service": 40,
+      "at": 3493
+    },
+    {
+      "queue": 27,
+      "service": 39,
+      "at": 3533
+    },
+    {
+      "queue": 52,
+      "service": 35,
+      "at": 3567
+    },
+    {
+      "queue": 22,
+      "service": 43,
+      "at": 3610
+    },
+    {
+      "queue": 27,
+      "service": 33,
+      "at": 3644
+    },
+    {
+      "queue": 46,
+      "service": 36,
+      "at": 3680
+    },
+    {
+      "queue": 43,
+      "service": 26,
+      "at": 3705
+    },
+    {
+      "queue": 29,
+      "service": 36,
+      "at": 3741
+    },
+    {
+      "queue": 57,
+      "service": 32,
+      "at": 3773
+    },
+    {
+      "queue": 40,
+      "service": 44,
+      "at": 3817
+    },
+    {
+      "queue": 47,
+      "service": 36,
+      "at": 3853
+    },
+    {
+      "queue": 44,
+      "service": 47,
+      "at": 3900
+    },
+    {
+      "queue": 54,
+      "service": 49,
+      "at": 3950
+    },
+    {
+      "queue": 59,
+      "service": 41,
+      "at": 3991
+    },
+    {
+      "queue": 51,
+      "service": 32,
+      "at": 4024
+    },
+    {
+      "queue": 69,
+      "service": 37,
+      "at": 4061
+    },
+    {
+      "queue": 63,
+      "service": 44,
+      "at": 4105
+    },
+    {
+      "queue": 74,
+      "service": 33,
+      "at": 4139
+    },
+    {
+      "queue": 39,
+      "service": 44,
+      "at": 4183
+    },
+    {
+      "queue": 51,
+      "service": 36,
+      "at": 4219
+    },
+    {
+      "queue": 50,
+      "service": 45,
+      "at": 4264
+    },
+    {
+      "queue": 47,
+      "service": 37,
+      "at": 4301
+    },
+    {
+      "queue": 52,
+      "service": 33,
+      "at": 4334
+    },
+    {
+      "queue": 30,
+      "service": 36,
+      "at": 4370
+    },
+    {
+      "queue": 25,
+      "service": 27,
+      "at": 4397
+    },
+    {
+      "queue": 30,
+      "service": 35,
+      "at": 4432
+    },
+    {
+      "queue": 35,
+      "service": 28,
+      "at": 4460
+    },
+    {
+      "queue": 35,
+      "service": 32,
+      "at": 4492
+    },
+    {
+      "queue": 31,
+      "service": 42,
+      "at": 4534
+    },
+    {
+      "queue": 52,
+      "service": 28,
+      "at": 4562
+    },
+    {
+      "queue": 36,
+      "service": 31,
+      "at": 4593
+    },
+    {
+      "queue": 0,
+      "service": 30,
+      "at": 4624
+    },
+    {
+      "queue": 3,
+      "service": 27,
+      "at": 4651
+    },
+    {
+      "queue": 21,
+      "service": 31,
+      "at": 4681
+    },
+    {
+      "queue": 0,
+      "service": 29,
+      "at": 4711
+    },
+    {
+      "queue": 0,
+      "service": 26,
+      "at": 4753
+    },
+    {
+      "queue": 18,
+      "service": 29,
+      "at": 4782
+    },
+    {
+      "queue": 1,
+      "service": 32,
+      "at": 4813
+    },
+    {
+      "queue": 0,
+      "service": 32,
+      "at": 4891
+    },
+    {
+      "queue": 0,
+      "service": 34,
+      "at": 4980
+    },
+    {
+      "queue": 22,
+      "service": 31,
+      "at": 5012
+    },
+    {
+      "queue": 50,
+      "service": 35,
+      "at": 5047
+    },
+    {
+      "queue": 8,
+      "service": 35,
+      "at": 5082
+    },
+    {
+      "queue": 19,
+      "service": 31,
+      "at": 5113
+    },
+    {
+      "queue": 29,
+      "service": 31,
+      "at": 5145
+    },
+    {
+      "queue": 30,
+      "service": 35,
+      "at": 5180
+    },
+    {
+      "queue": 33,
+      "service": 43,
+      "at": 5223
+    },
+    {
+      "queue": 23,
+      "service": 35,
+      "at": 5259
+    },
+    {
+      "queue": 49,
+      "service": 57,
+      "at": 5316
+    },
+    {
+      "queue": 102,
+      "service": 42,
+      "at": 5357
+    },
+    {
+      "queue": 107,
+      "service": 45,
+      "at": 5402
+    },
+    {
+      "queue": 107,
+      "service": 44,
+      "at": 5447
+    },
+    {
+      "queue": 84,
+      "service": 68,
+      "at": 5551
+    },
+    {
+      "queue": 112,
+      "service": 62,
+      "at": 5612
+    },
+    {
+      "queue": 128,
+      "service": 84,
+      "at": 5697
+    },
+    {
+      "queue": 139,
+      "service": 92,
+      "at": 5789
+    },
+    {
+      "queue": 168,
+      "service": 69,
+      "at": 5858
+    },
+    {
+      "queue": 32,
+      "service": 50,
+      "at": 5908
+    },
+    {
+      "queue": 15,
+      "service": 37,
+      "at": 5945
+    },
+    {
+      "queue": 5,
+      "service": 51,
+      "at": 5997
+    },
+    {
+      "queue": 15,
+      "service": 58,
+      "at": 6055
+    },
+    {
+      "queue": 13,
+      "service": 78,
+      "at": 6133
+    },
+    {
+      "queue": 33,
+      "service": 50,
+      "at": 6183
+    },
+    {
+      "queue": 16,
+      "service": 57,
+      "at": 6240
+    },
+    {
+      "queue": 23,
+      "service": 37,
+      "at": 6277
+    },
+    {
+      "queue": 0,
+      "service": 50,
+      "at": 6329
+    },
+    {
+      "queue": 0,
+      "service": 48,
+      "at": 6407
+    },
+    {
+      "queue": 0,
+      "service": 44,
+      "at": 6490
+    },
+    {
+      "queue": 30,
+      "service": 57,
+      "at": 6547
+    },
+    {
+      "queue": 7,
+      "service": 36,
+      "at": 6582
+    },
+    {
+      "queue": 0,
+      "service": 40,
+      "at": 6644
+    },
+    {
+      "queue": 35,
+      "service": 41,
+      "at": 6685
+    },
+    {
+      "queue": 6,
+      "service": 41,
+      "at": 6726
+    },
+    {
+      "queue": 0,
+      "service": 46,
+      "at": 6775
+    },
+    {
+      "queue": 14,
+      "service": 58,
+      "at": 6834
+    },
+    {
+      "queue": 17,
+      "service": 63,
+      "at": 6897
+    },
+    {
+      "queue": 18,
+      "service": 48,
+      "at": 6945
+    },
+    {
+      "queue": 40,
+      "service": 54,
+      "at": 6999
+    },
+    {
+      "queue": 48,
+      "service": 51,
+      "at": 7049
+    },
+    {
+      "queue": 17,
+      "service": 48,
+      "at": 7097
+    },
+    {
+      "queue": 12,
+      "service": 43,
+      "at": 7141
+    },
+    {
+      "queue": 9,
+      "service": 36,
+      "at": 7177
+    },
+    {
+      "queue": 1,
+      "service": 44,
+      "at": 7221
+    },
+    {
+      "queue": 7,
+      "service": 55,
+      "at": 7276
+    },
+    {
+      "queue": 6,
+      "service": 56,
+      "at": 7332
+    },
+    {
+      "queue": 9,
+      "service": 39,
+      "at": 7371
+    },
+    {
+      "queue": 8,
+      "service": 30,
+      "at": 7402
+    },
+    {
+      "queue": 0,
+      "service": 41,
+      "at": 7480
+    },
+    {
+      "queue": 0,
+      "service": 27,
+      "at": 7528
+    },
+    {
+      "queue": 0,
+      "service": 61,
+      "at": 7725
+    },
+    {
+      "queue": 0,
+      "service": 45,
+      "at": 7812
+    },
+    {
+      "queue": 0,
+      "service": 39,
+      "at": 7876
+    },
+    {
+      "queue": 0,
+      "service": 34,
+      "at": 7935
+    },
+    {
+      "queue": 0,
+      "service": 31,
+      "at": 7974
+    },
+    {
+      "queue": 23,
+      "service": 35,
+      "at": 8009
+    },
+    {
+      "queue": 47,
+      "service": 38,
+      "at": 8047
+    },
+    {
+      "queue": 45,
+      "service": 55,
+      "at": 8102
+    },
+    {
+      "queue": 40,
+      "service": 51,
+      "at": 8153
+    },
+    {
+      "queue": 45,
+      "service": 51,
+      "at": 8204
+    },
+    {
+      "queue": 59,
+      "service": 59,
+      "at": 8264
+    },
+    {
+      "queue": 70,
+      "service": 59,
+      "at": 8323
+    },
+    {
+      "queue": 85,
+      "service": 44,
+      "at": 8367
+    },
+    {
+      "queue": 94,
+      "service": 71,
+      "at": 8439
+    },
+    {
+      "queue": 75,
+      "service": 40,
+      "at": 8479
+    },
+    {
+      "queue": 65,
+      "service": 47,
+      "at": 8527
+    },
+    {
+      "queue": 23,
+      "service": 33,
+      "at": 8560
+    },
+    {
+      "queue": 48,
+      "service": 37,
+      "at": 8597
+    },
+    {
+      "queue": 32,
+      "service": 29,
+      "at": 8625
+    },
+    {
+      "queue": 31,
+      "service": 37,
+      "at": 8662
+    },
+    {
+      "queue": 60,
+      "service": 55,
+      "at": 8717
+    },
+    {
+      "queue": 86,
+      "service": 45,
+      "at": 8762
+    },
+    {
+      "queue": 23,
+      "service": 49,
+      "at": 8811
+    },
+    {
+      "queue": 54,
+      "service": 32,
+      "at": 8842
+    },
+    {
+      "queue": 49,
+      "service": 35,
+      "at": 8878
+    },
+    {
+      "queue": 38,
+      "service": 37,
+      "at": 8915
+    },
+    {
+      "queue": 44,
+      "service": 40,
+      "at": 8955
+    },
+    {
+      "queue": 47,
+      "service": 52,
+      "at": 9007
+    },
+    {
+      "queue": 61,
+      "service": 36,
+      "at": 9044
+    },
+    {
+      "queue": 48,
+      "service": 33,
+      "at": 9076
+    },
+    {
+      "queue": 28,
+      "service": 40,
+      "at": 9116
+    },
+    {
+      "queue": 43,
+      "service": 30,
+      "at": 9147
+    },
+    {
+      "queue": 42,
+      "service": 37,
+      "at": 9184
+    },
+    {
+      "queue": 40,
+      "service": 36,
+      "at": 9220
+    },
+    {
+      "queue": 49,
+      "service": 34,
+      "at": 9254
+    },
+    {
+      "queue": 28,
+      "service": 30,
+      "at": 9284
+    },
+    {
+      "queue": 0,
+      "service": 44,
+      "at": 9336
+    },
+    {
+      "queue": 17,
+      "service": 35,
+      "at": 9372
+    },
+    {
+      "queue": 27,
+      "service": 43,
+      "at": 9415
+    },
+    {
+      "queue": 0,
+      "service": 81,
+      "at": 9528
+    },
+    {
+      "queue": 66,
+      "service": 74,
+      "at": 9602
+    },
+    {
+      "queue": 121,
+      "service": 45,
+      "at": 9647
+    },
+    {
+      "queue": 81,
+      "service": 47,
+      "at": 9694
+    },
+    {
+      "queue": 80,
+      "service": 46,
+      "at": 9740
+    },
+    {
+      "queue": 125,
+      "service": 36,
+      "at": 9776
+    },
+    {
+      "queue": 120,
+      "service": 55,
+      "at": 9831
+    },
+    {
+      "queue": 131,
+      "service": 46,
+      "at": 9877
+    },
+    {
+      "queue": 174,
+      "service": 37,
+      "at": 9914
+    },
+    {
+      "queue": 205,
+      "service": 27,
+      "at": 9941
+    },
+    {
+      "queue": 231,
+      "service": 27,
+      "at": 9969
+    },
+    {
+      "queue": 186,
+      "service": 25,
+      "at": 9994
+    },
+    {
+      "queue": 169,
+      "service": 28,
+      "at": 10022
+    },
+    {
+      "queue": 160,
+      "service": 27,
+      "at": 10049
+    },
+    {
+      "queue": 130,
+      "service": 32,
+      "at": 10081
+    },
+    {
+      "queue": 140,
+      "service": 33,
+      "at": 10114
+    },
+    {
+      "queue": 146,
+      "service": 39,
+      "at": 10153
+    },
+    {
+      "queue": 184,
+      "service": 33,
+      "at": 10186
+    },
+    {
+      "queue": 113,
+      "service": 30,
+      "at": 10217
+    },
+    {
+      "queue": 106,
+      "service": 28,
+      "at": 10244
+    },
+    {
+      "queue": 98,
+      "service": 28,
+      "at": 10273
+    },
+    {
+      "queue": 91,
+      "service": 33,
+      "at": 10306
+    },
+    {
+      "queue": 63,
+      "service": 29,
+      "at": 10336
+    },
+    {
+      "queue": 64,
+      "service": 30,
+      "at": 10365
+    },
+    {
+      "queue": 66,
+      "service": 27,
+      "at": 10392
+    },
+    {
+      "queue": 59,
+      "service": 30,
+      "at": 10422
+    },
+    {
+      "queue": 81,
+      "service": 24,
+      "at": 10446
+    },
+    {
+      "queue": 55,
+      "service": 26,
+      "at": 10472
+    },
+    {
+      "queue": 54,
+      "service": 28,
+      "at": 10501
+    },
+    {
+      "queue": 74,
+      "service": 27,
+      "at": 10528
+    },
+    {
+      "queue": 56,
+      "service": 28,
+      "at": 10556
+    },
+    {
+      "queue": 57,
+      "service": 31,
+      "at": 10587
+    },
+    {
+      "queue": 62,
+      "service": 30,
+      "at": 10617
+    },
+    {
+      "queue": 63,
+      "service": 28,
+      "at": 10645
+    },
+    {
+      "queue": 61,
+      "service": 30,
+      "at": 10675
+    },
+    {
+      "queue": 60,
+      "service": 37,
+      "at": 10713
+    },
+    {
+      "queue": 69,
+      "service": 55,
+      "at": 10767
+    },
+    {
+      "queue": 119,
+      "service": 26,
+      "at": 10793
+    },
+    {
+      "queue": 122,
+      "service": 29,
+      "at": 10823
+    },
+    {
+      "queue": 113,
+      "service": 26,
+      "at": 10849
+    },
+    {
+      "queue": 92,
+      "service": 28,
+      "at": 10877
+    },
+    {
+      "queue": 117,
+      "service": 30,
+      "at": 10907
+    },
+    {
+      "queue": 87,
+      "service": 35,
+      "at": 10942
+    },
+    {
+      "queue": 91,
+      "service": 34,
+      "at": 10975
+    },
+    {
+      "queue": 104,
+      "service": 31,
+      "at": 11006
+    },
+    {
+      "queue": 93,
+      "service": 30,
+      "at": 11036
+    },
+    {
+      "queue": 68,
+      "service": 30,
+      "at": 11066
+    },
+    {
+      "queue": 97,
+      "service": 27,
+      "at": 11093
+    },
+    {
+      "queue": 94,
+      "service": 28,
+      "at": 11121
+    },
+    {
+      "queue": 82,
+      "service": 28,
+      "at": 11149
+    },
+    {
+      "queue": 86,
+      "service": 32,
+      "at": 11181
+    },
+    {
+      "queue": 66,
+      "service": 31,
+      "at": 11211
+    },
+    {
+      "queue": 35,
+      "service": 32,
+      "at": 11243
+    },
+    {
+      "queue": 7,
+      "service": 29,
+      "at": 11272
+    },
+    {
+      "queue": 33,
+      "service": 38,
+      "at": 11310
+    },
+    {
+      "queue": 12,
+      "service": 26,
+      "at": 11336
+    },
+    {
+      "queue": 19,
+      "service": 31,
+      "at": 11367
+    },
+    {
+      "queue": 5,
+      "service": 26,
+      "at": 11393
+    },
+    {
+      "queue": 1,
+      "service": 31,
+      "at": 11424
+    },
+    {
+      "queue": 4,
+      "service": 28,
+      "at": 11452
+    },
+    {
+      "queue": 0,
+      "service": 33,
+      "at": 11487
+    },
+    {
+      "queue": 7,
+      "service": 29,
+      "at": 11516
+    },
+    {
+      "queue": 24,
+      "service": 33,
+      "at": 11549
+    },
+    {
+      "queue": 57,
+      "service": 34,
+      "at": 11584
+    },
+    {
+      "queue": 39,
+      "service": 36,
+      "at": 11620
+    },
+    {
+      "queue": 69,
+      "service": 32,
+      "at": 11652
+    },
+    {
+      "queue": 40,
+      "service": 25,
+      "at": 11677
+    },
+    {
+      "queue": 32,
+      "service": 30,
+      "at": 11707
+    },
+    {
+      "queue": 62,
+      "service": 31,
+      "at": 11738
+    },
+    {
+      "queue": 84,
+      "service": 34,
+      "at": 11772
+    },
+    {
+      "queue": 60,
+      "service": 35,
+      "at": 11807
+    },
+    {
+      "queue": 72,
+      "service": 29,
+      "at": 11836
+    },
+    {
+      "queue": 36,
+      "service": 29,
+      "at": 11866
+    },
+    {
+      "queue": 35,
+      "service": 28,
+      "at": 11894
+    },
+    {
+      "queue": 29,
+      "service": 31,
+      "at": 11925
+    },
+    {
+      "queue": 35,
+      "service": 30,
+      "at": 11955
+    },
+    {
+      "queue": 38,
+      "service": 40,
+      "at": 11995
+    },
+    {
+      "queue": 43,
+      "service": 30,
+      "at": 12025
+    },
+    {
+      "queue": 68,
+      "service": 33,
+      "at": 12058
+    },
+    {
+      "queue": 70,
+      "service": 34,
+      "at": 12092
+    },
+    {
+      "queue": 86,
+      "service": 34,
+      "at": 12127
+    },
+    {
+      "queue": 45,
+      "service": 36,
+      "at": 12162
+    },
+    {
+      "queue": 15,
+      "service": 30,
+      "at": 12193
+    },
+    {
+      "queue": 42,
+      "service": 44,
+      "at": 12237
+    },
+    {
+      "queue": 41,
+      "service": 34,
+      "at": 12271
+    },
+    {
+      "queue": 73,
+      "service": 34,
+      "at": 12305
+    },
+    {
+      "queue": 82,
+      "service": 32,
+      "at": 12338
+    },
+    {
+      "queue": 103,
+      "service": 34,
+      "at": 12372
+    },
+    {
+      "queue": 98,
+      "service": 50,
+      "at": 12422
+    },
+    {
+      "queue": 87,
+      "service": 28,
+      "at": 12450
+    },
+    {
+      "queue": 84,
+      "service": 31,
+      "at": 12481
+    },
+    {
+      "queue": 55,
+      "service": 29,
+      "at": 12510
+    },
+    {
+      "queue": 80,
+      "service": 31,
+      "at": 12541
+    },
+    {
+      "queue": 62,
+      "service": 30,
+      "at": 12571
+    },
+    {
+      "queue": 61,
+      "service": 29,
+      "at": 12599
+    },
+    {
+      "queue": 60,
+      "service": 35,
+      "at": 12635
+    },
+    {
+      "queue": 46,
+      "service": 31,
+      "at": 12665
+    },
+    {
+      "queue": 62,
+      "service": 35,
+      "at": 12700
+    },
+    {
+      "queue": 86,
+      "service": 34,
+      "at": 12734
+    },
+    {
+      "queue": 82,
+      "service": 27,
+      "at": 12761
+    },
+    {
+      "queue": 99,
+      "service": 30,
+      "at": 12792
+    },
+    {
+      "queue": 96,
+      "service": 33,
+      "at": 12825
+    },
+    {
+      "queue": 129,
+      "service": 37,
+      "at": 12862
+    },
+    {
+      "queue": 152,
+      "service": 35,
+      "at": 12898
+    },
+    {
+      "queue": 168,
+      "service": 35,
+      "at": 12933
+    },
+    {
+      "queue": 173,
+      "service": 32,
+      "at": 12965
+    },
+    {
+      "queue": 144,
+      "service": 28,
+      "at": 12993
+    },
+    {
+      "queue": 113,
+      "service": 28,
+      "at": 13022
+    },
+    {
+      "queue": 125,
+      "service": 35,
+      "at": 13056
+    },
+    {
+      "queue": 158,
+      "service": 32,
+      "at": 13088
+    },
+    {
+      "queue": 131,
+      "service": 29,
+      "at": 13117
+    },
+    {
+      "queue": 126,
+      "service": 29,
+      "at": 13146
+    },
+    {
+      "queue": 148,
+      "service": 30,
+      "at": 13177
+    },
+    {
+      "queue": 127,
+      "service": 28,
+      "at": 13204
+    },
+    {
+      "queue": 153,
+      "service": 30,
+      "at": 13235
+    },
+    {
+      "queue": 84,
+      "service": 28,
+      "at": 13263
+    },
+    {
+      "queue": 89,
+      "service": 30,
+      "at": 13293
+    },
+    {
+      "queue": 92,
+      "service": 32,
+      "at": 13325
+    },
+    {
+      "queue": 94,
+      "service": 34,
+      "at": 13359
+    },
+    {
+      "queue": 93,
+      "service": 42,
+      "at": 13401
+    },
+    {
+      "queue": 114,
+      "service": 36,
+      "at": 13437
+    },
+    {
+      "queue": 118,
+      "service": 28,
+      "at": 13465
+    },
+    {
+      "queue": 113,
+      "service": 30,
+      "at": 13495
+    },
+    {
+      "queue": 103,
+      "service": 32,
+      "at": 13527
+    },
+    {
+      "queue": 134,
+      "service": 1348,
+      "at": 14875
+    },
+    {
+      "queue": 1407,
+      "service": 54,
+      "at": 14929
+    },
+    {
+      "queue": 1437,
+      "service": 53,
+      "at": 14982
+    },
+    {
+      "queue": 1459,
+      "service": 37,
+      "at": 15020
+    },
+    {
+      "queue": 186,
+      "service": 29,
+      "at": 15049
+    },
+    {
+      "queue": 141,
+      "service": 32,
+      "at": 15081
+    },
+    {
+      "queue": 117,
+      "service": 29,
+      "at": 15110
+    },
+    {
+      "queue": 100,
+      "service": 34,
+      "at": 15144
+    },
+    {
+      "queue": 97,
+      "service": 32,
+      "at": 15175
+    },
+    {
+      "queue": 70,
+      "service": 32,
+      "at": 15207
+    },
+    {
+      "queue": 100,
+      "service": 27,
+      "at": 15234
+    },
+    {
+      "queue": 89,
+      "service": 29,
+      "at": 15264
+    },
+    {
+      "queue": 76,
+      "service": 37,
+      "at": 15301
+    },
+    {
+      "queue": 40,
+      "service": 44,
+      "at": 15345
+    },
+    {
+      "queue": 55,
+      "service": 31,
+      "at": 15376
+    },
+    {
+      "queue": 21,
+      "service": 47,
+      "at": 15423
+    },
+    {
+      "queue": 50,
+      "service": 39,
+      "at": 15461
+    },
+    {
+      "queue": 47,
+      "service": 40,
+      "at": 15501
+    },
+    {
+      "queue": 48,
+      "service": 48,
+      "at": 15549
+    },
+    {
+      "queue": 84,
+      "service": 47,
+      "at": 15596
+    },
+    {
+      "queue": 101,
+      "service": 46,
+      "at": 15643
+    },
+    {
+      "queue": 75,
+      "service": 38,
+      "at": 15681
+    },
+    {
+      "queue": 73,
+      "service": 41,
+      "at": 15722
+    },
+    {
+      "queue": 92,
+      "service": 49,
+      "at": 15772
+    },
+    {
+      "queue": 99,
+      "service": 46,
+      "at": 15818
+    },
+    {
+      "queue": 104,
+      "service": 38,
+      "at": 15856
+    },
+    {
+      "queue": 92,
+      "service": 41,
+      "at": 15897
+    },
+    {
+      "queue": 71,
+      "service": 31,
+      "at": 15928
+    },
+    {
+      "queue": 100,
+      "service": 31,
+      "at": 15959
+    },
+    {
+      "queue": 71,
+      "service": 30,
+      "at": 15989
+    },
+    {
+      "queue": 65,
+      "service": 26,
+      "at": 16016
+    },
+    {
+      "queue": 61,
+      "service": 28,
+      "at": 16043
+    },
+    {
+      "queue": 60,
+      "service": 30,
+      "at": 16073
+    },
+    {
+      "queue": 59,
+      "service": 28,
+      "at": 16101
+    },
+    {
+      "queue": 56,
+      "service": 30,
+      "at": 16131
+    },
+    {
+      "queue": 60,
+      "service": 28,
+      "at": 16159
+    },
+    {
+      "queue": 80,
+      "service": 33,
+      "at": 16192
+    },
+    {
+      "queue": 90,
+      "service": 36,
+      "at": 16228
+    },
+    {
+      "queue": 123,
+      "service": 33,
+      "at": 16261
+    },
+    {
+      "queue": 125,
+      "service": 29,
+      "at": 16290
+    },
+    {
+      "queue": 101,
+      "service": 37,
+      "at": 16327
+    },
+    {
+      "queue": 92,
+      "service": 40,
+      "at": 16367
+    },
+    {
+      "queue": 78,
+      "service": 32,
+      "at": 16399
+    },
+    {
+      "queue": 81,
+      "service": 42,
+      "at": 16441
+    },
+    {
+      "queue": 84,
+      "service": 34,
+      "at": 16475
+    },
+    {
+      "queue": 50,
+      "service": 37,
+      "at": 16512
+    },
+    {
+      "queue": 83,
+      "service": 87,
+      "at": 16599
+    },
+    {
+      "queue": 132,
+      "service": 33,
+      "at": 16633
+    },
+    {
+      "queue": 130,
+      "service": 30,
+      "at": 16663
+    },
+    {
+      "queue": 62,
+      "service": 35,
+      "at": 16697
+    },
+    {
+      "queue": 66,
+      "service": 34,
+      "at": 16731
+    },
+    {
+      "queue": 68,
+      "service": 38,
+      "at": 16770
+    },
+    {
+      "queue": 75,
+      "service": 48,
+      "at": 16817
+    },
+    {
+      "queue": 84,
+      "service": 46,
+      "at": 16864
+    },
+    {
+      "queue": 98,
+      "service": 40,
+      "at": 16904
+    },
+    {
+      "queue": 102,
+      "service": 46,
+      "at": 16950
+    },
+    {
+      "queue": 88,
+      "service": 44,
+      "at": 16994
+    },
+    {
+      "queue": 38,
+      "service": 46,
+      "at": 17039
+    },
+    {
+      "queue": 13,
+      "service": 54,
+      "at": 17093
+    },
+    {
+      "queue": 66,
+      "service": 59,
+      "at": 17153
+    },
+    {
+      "queue": 75,
+      "service": 38,
+      "at": 17191
+    },
+    {
+      "queue": 55,
+      "service": 26,
+      "at": 17217
+    },
+    {
+      "queue": 34,
+      "service": 30,
+      "at": 17248
+    },
+    {
+      "queue": 37,
+      "service": 29,
+      "at": 17277
+    },
+    {
+      "queue": 56,
+      "service": 26,
+      "at": 17303
+    },
+    {
+      "queue": 57,
+      "service": 29,
+      "at": 17332
+    },
+    {
+      "queue": 54,
+      "service": 30,
+      "at": 17362
+    },
+    {
+      "queue": 3,
+      "service": 31,
+      "at": 17393
+    },
+    {
+      "queue": 34,
+      "service": 40,
+      "at": 17433
+    },
+    {
+      "queue": 66,
+      "service": 30,
+      "at": 17464
+    },
+    {
+      "queue": 36,
+      "service": 34,
+      "at": 17497
+    },
+    {
+      "queue": 10,
+      "service": 30,
+      "at": 17528
+    },
+    {
+      "queue": 40,
+      "service": 32,
+      "at": 17560
+    },
+    {
+      "queue": 35,
+      "service": 29,
+      "at": 17589
+    },
+    {
+      "queue": 12,
+      "service": 28,
+      "at": 17617
+    },
+    {
+      "queue": 35,
+      "service": 33,
+      "at": 17650
+    },
+    {
+      "queue": 33,
+      "service": 27,
+      "at": 17677
+    },
+    {
+      "queue": 34,
+      "service": 37,
+      "at": 17714
+    },
+    {
+      "queue": 57,
+      "service": 38,
+      "at": 17752
+    },
+    {
+      "queue": 23,
+      "service": 45,
+      "at": 17797
+    },
+    {
+      "queue": 59,
+      "service": 38,
+      "at": 17835
+    },
+    {
+      "queue": 90,
+      "service": 28,
+      "at": 17863
+    },
+    {
+      "queue": 81,
+      "service": 43,
+      "at": 17906
+    },
+    {
+      "queue": 78,
+      "service": 46,
+      "at": 17952
+    },
+    {
+      "queue": 124,
+      "service": 47,
+      "at": 17999
+    },
+    {
+      "queue": 117,
+      "service": 40,
+      "at": 18039
+    },
+    {
+      "queue": 147,
+      "service": 33,
+      "at": 18073
+    },
+    {
+      "queue": 123,
+      "service": 37,
+      "at": 18110
+    },
+    {
+      "queue": 122,
+      "service": 31,
+      "at": 18141
+    },
+    {
+      "queue": 70,
+      "service": 37,
+      "at": 18178
+    },
+    {
+      "queue": 102,
+      "service": 50,
+      "at": 18228
+    },
+    {
+      "queue": 112,
+      "service": 38,
+      "at": 18267
+    },
+    {
+      "queue": 97,
+      "service": 44,
+      "at": 18311
+    },
+    {
+      "queue": 103,
+      "service": 39,
+      "at": 18351
+    },
+    {
+      "queue": 90,
+      "service": 31,
+      "at": 18381
+    },
+    {
+      "queue": 78,
+      "service": 34,
+      "at": 18415
+    },
+    {
+      "queue": 83,
+      "service": 44,
+      "at": 18459
+    },
+    {
+      "queue": 119,
+      "service": 41,
+      "at": 18500
+    },
+    {
+      "queue": 122,
+      "service": 34,
+      "at": 18534
+    },
+    {
+      "queue": 124,
+      "service": 28,
+      "at": 18562
+    },
+    {
+      "queue": 26,
+      "service": 32,
+      "at": 18594
+    },
+    {
+      "queue": 55,
+      "service": 28,
+      "at": 18622
+    },
+    {
+      "queue": 26,
+      "service": 36,
+      "at": 18658
+    },
+    {
+      "queue": 29,
+      "service": 31,
+      "at": 18689
+    },
+    {
+      "queue": 39,
+      "service": 34,
+      "at": 18723
+    },
+    {
+      "queue": 41,
+      "service": 27,
+      "at": 18750
+    },
+    {
+      "queue": 41,
+      "service": 34,
+      "at": 18784
+    },
+    {
+      "queue": 51,
+      "service": 26,
+      "at": 18810
+    },
+    {
+      "queue": 54,
+      "service": 39,
+      "at": 18849
+    },
+    {
+      "queue": 66,
+      "service": 48,
+      "at": 18897
+    },
+    {
+      "queue": 113,
+      "service": 34,
+      "at": 18932
+    },
+    {
+      "queue": 64,
+      "service": 30,
+      "at": 18962
+    },
+    {
+      "queue": 81,
+      "service": 30,
+      "at": 18992
+    },
+    {
+      "queue": 66,
+      "service": 34,
+      "at": 19027
+    },
+    {
+      "queue": 81,
+      "service": 51,
+      "at": 19078
+    },
+    {
+      "queue": 89,
+      "service": 44,
+      "at": 19122
+    },
+    {
+      "queue": 94,
+      "service": 42,
+      "at": 19164
+    },
+    {
+      "queue": 96,
+      "service": 30,
+      "at": 19194
+    },
+    {
+      "queue": 83,
+      "service": 30,
+      "at": 19224
+    },
+    {
+      "queue": 66,
+      "service": 27,
+      "at": 19251
+    },
+    {
+      "queue": 32,
+      "service": 26,
+      "at": 19278
+    },
+    {
+      "queue": 30,
+      "service": 39,
+      "at": 19316
+    },
+    {
+      "queue": 41,
+      "service": 32,
+      "at": 19348
+    },
+    {
+      "queue": 44,
+      "service": 35,
+      "at": 19383
+    },
+    {
+      "queue": 53,
+      "service": 31,
+      "at": 19415
+    },
+    {
+      "queue": 39,
+      "service": 43,
+      "at": 19458
+    },
+    {
+      "queue": 21,
+      "service": 48,
+      "at": 19506
+    },
+    {
+      "queue": 57,
+      "service": 41,
+      "at": 19547
+    },
+    {
+      "queue": 92,
+      "service": 31,
+      "at": 19577
+    },
+    {
+      "queue": 87,
+      "service": 27,
+      "at": 19605
+    },
+    {
+      "queue": 114,
+      "service": 32,
+      "at": 19637
+    },
+    {
+      "queue": 140,
+      "service": 29,
+      "at": 19666
+    },
+    {
+      "queue": 128,
+      "service": 28,
+      "at": 19694
+    },
+    {
+      "queue": 117,
+      "service": 35,
+      "at": 19729
+    },
+    {
+      "queue": 104,
+      "service": 30,
+      "at": 19759
+    },
+    {
+      "queue": 130,
+      "service": 29,
+      "at": 19787
+    },
+    {
+      "queue": 64,
+      "service": 29,
+      "at": 19816
+    },
+    {
+      "queue": 81,
+      "service": 29,
+      "at": 19846
+    },
+    {
+      "queue": 60,
+      "service": 29,
+      "at": 19875
+    },
+    {
+      "queue": 61,
+      "service": 29,
+      "at": 19904
+    },
+    {
+      "queue": 55,
+      "service": 31,
+      "at": 19935
+    },
+    {
+      "queue": 63,
+      "service": 28,
+      "at": 19963
+    },
+    {
+      "queue": 60,
+      "service": 28,
+      "at": 19991
+    },
+    {
+      "queue": 59,
+      "service": 30,
+      "at": 20020
+    },
+    {
+      "queue": 80,
+      "service": 30,
+      "at": 20050
+    },
+    {
+      "queue": 34,
+      "service": 34,
+      "at": 20084
+    },
+    {
+      "queue": 57,
+      "service": 36,
+      "at": 20120
+    },
+    {
+      "queue": 74,
+      "service": 65,
+      "at": 20185
+    },
+    {
+      "queue": 105,
+      "service": 68,
+      "at": 20253
+    },
+    {
+      "queue": 164,
+      "service": 46,
+      "at": 20299
+    },
+    {
+      "queue": 115,
+      "service": 46,
+      "at": 20346
+    },
+    {
+      "queue": 153,
+      "service": 36,
+      "at": 20382
+    },
+    {
+      "queue": 189,
+      "service": 31,
+      "at": 20413
+    },
+    {
+      "queue": 219,
+      "service": 34,
+      "at": 20447
+    }
+  ],
+  "timeline": [
+    {
+      "ms": 0,
+      "stage": "before-second-send"
+    },
+    {
+      "ms": 9,
+      "stage": "main input"
+    },
+    {
+      "ms": 10,
+      "stage": "after-second-send"
+    },
+    {
+      "ms": 18,
+      "stage": "progress activity begin elapsed_ms=0"
+    },
+    {
+      "ms": 437,
+      "stage": "progress activity native-begin elapsed_ms=802"
+    },
+    {
+      "ms": 501,
+      "stage": "progress history native-begin elapsed_ms=866"
+    },
+    {
+      "ms": 679,
+      "stage": "progress activity begin elapsed_ms=0"
+    },
+    {
+      "ms": 859,
+      "stage": "progress activity native-begin elapsed_ms=841"
+    },
+    {
+      "ms": 1100,
+      "stage": "progress activity native-end elapsed_ms=1465"
+    },
+    {
+      "ms": 1100,
+      "stage": "progress activity parsed-completed-items0 elapsed_ms=1465"
+    },
+    {
+      "ms": 1129,
+      "stage": "progress history native-end elapsed_ms=1495"
+    },
+    {
+      "ms": 1130,
+      "stage": "progress history parsed-completed-items2 elapsed_ms=1495"
+    },
+    {
+      "ms": 1241,
+      "stage": "progress activity publish elapsed_ms=1606"
+    },
+    {
+      "ms": 1275,
+      "stage": "progress activity begin elapsed_ms=0"
+    },
+    {
+      "ms": 1473,
+      "stage": "progress activity native-end elapsed_ms=1455"
+    },
+    {
+      "ms": 1474,
+      "stage": "progress activity parsed-completed-items0 elapsed_ms=1455"
+    },
+    {
+      "ms": 1483,
+      "stage": "progress activity native-begin elapsed_ms=804"
+    },
+    {
+      "ms": 1594,
+      "stage": "progress activity publish elapsed_ms=1576"
+    },
+    {
+      "ms": 1922,
+      "stage": "progress activity begin elapsed_ms=0"
+    },
+    {
+      "ms": 1987,
+      "stage": "progress activity native-begin elapsed_ms=712"
+    },
+    {
+      "ms": 2040,
+      "stage": "progress activity native-end elapsed_ms=1361"
+    },
+    {
+      "ms": 2040,
+      "stage": "progress activity parsed-completed-items0 elapsed_ms=1361"
+    },
+    {
+      "ms": 2259,
+      "stage": "progress activity publish elapsed_ms=1581"
+    },
+    {
+      "ms": 2259,
+      "stage": "main snapshot"
+    },
+    {
+      "ms": 2368,
+      "stage": "main native-request"
+    },
+    {
+      "ms": 2544,
+      "stage": "native lifecycle begin elapsed_ms=0"
+    },
+    {
+      "ms": 2544,
+      "stage": "native lifecycle start-lock elapsed_ms=0"
+    },
+    {
+      "ms": 2644,
+      "stage": "progress activity native-end elapsed_ms=1370"
+    },
+    {
+      "ms": 2644,
+      "stage": "progress activity parsed-completed-items0 elapsed_ms=1370"
+    },
+    {
+      "ms": 2744,
+      "stage": "progress activity native-begin elapsed_ms=822"
+    },
+    {
+      "ms": 2771,
+      "stage": "progress activity publish elapsed_ms=1496"
+    },
+    {
+      "ms": 2898,
+      "stage": "native lifecycle initial-authority elapsed_ms=354"
+    },
+    {
+      "ms": 2921,
+      "stage": "native lifecycle retained-context elapsed_ms=377"
+    },
+    {
+      "ms": 3172,
+      "stage": "progress activity native-end elapsed_ms=1250"
+    },
+    {
+      "ms": 3172,
+      "stage": "progress activity parsed-completed-items0 elapsed_ms=1250"
+    },
+    {
+      "ms": 3243,
+      "stage": "progress activity publish elapsed_ms=1321"
+    },
+    {
+      "ms": 3405,
+      "stage": "native lifecycle reserved elapsed_ms=861"
+    },
+    {
+      "ms": 3422,
+      "stage": "progress history begin elapsed_ms=0"
+    },
+    {
+      "ms": 3423,
+      "stage": "progress activity begin elapsed_ms=0"
+    },
+    {
+      "ms": 3951,
+      "stage": "progress history native-begin elapsed_ms=529"
+    },
+    {
+      "ms": 3992,
+      "stage": "progress activity native-begin elapsed_ms=569"
+    },
+    {
+      "ms": 4034,
+      "stage": "native lifecycle claimed elapsed_ms=1490"
+    },
+    {
+      "ms": 4375,
+      "stage": "native lifecycle dispatch-authority elapsed_ms=1831"
+    },
+    {
+      "ms": 4375,
+      "stage": "native lifecycle begin elapsed_ms=0"
+    },
+    {
+      "ms": 4400,
+      "stage": "native lifecycle resume-candidate elapsed_ms=24"
+    },
+    {
+      "ms": 4461,
+      "stage": "progress activity native-end elapsed_ms=1038"
+    },
+    {
+      "ms": 4461,
+      "stage": "progress activity parsed-completed-items0 elapsed_ms=1038"
+    },
+    {
+      "ms": 4535,
+      "stage": "progress activity publish elapsed_ms=1112"
+    },
+    {
+      "ms": 4629,
+      "stage": "native lifecycle resume-authority elapsed_ms=253"
+    },
+    {
+      "ms": 4711,
+      "stage": "native lifecycle guard-recheck elapsed_ms=335"
+    },
+    {
+      "ms": 4712,
+      "stage": "native lifecycle resume-thread-begin elapsed_ms=337"
+    },
+    {
+      "ms": 4712,
+      "stage": "native reopen begin elapsed_ms=0"
+    },
+    {
+      "ms": 4730,
+      "stage": "native reopen retained-check elapsed_ms=17"
+    },
+    {
+      "ms": 4735,
+      "stage": "progress history native-end elapsed_ms=1313"
+    },
+    {
+      "ms": 4735,
+      "stage": "progress history parsed-dispatching-items2 elapsed_ms=1313"
+    },
+    {
+      "ms": 4782,
+      "stage": "progress history publish elapsed_ms=1360"
+    },
+    {
+      "ms": 4851,
+      "stage": "native reopen pre-shutdown-authority elapsed_ms=138"
+    },
+    {
+      "ms": 4922,
+      "stage": "progress history begin elapsed_ms=0"
+    },
+    {
+      "ms": 4923,
+      "stage": "progress activity begin elapsed_ms=0"
+    },
+    {
+      "ms": 4924,
+      "stage": "native listener Discriminant(60) elapsed_ms=0"
+    },
+    {
+      "ms": 4924,
+      "stage": "native reopen shutdown elapsed_ms=211"
+    },
+    {
+      "ms": 4965,
+      "stage": "native reopen retained-history elapsed_ms=252"
+    },
+    {
+      "ms": 5180,
+      "stage": "native reopen post-shutdown-authority elapsed_ms=468"
+    },
+    {
+      "ms": 5180,
+      "stage": "native reopen open-begin elapsed_ms=0"
+    },
+    {
+      "ms": 5203,
+      "stage": "native reopen config-loaded elapsed_ms=22"
+    },
+    {
+      "ms": 5204,
+      "stage": "native reopen retirement-begin elapsed_ms=23"
+    },
+    {
+      "ms": 5491,
+      "stage": "native reopen retirement-authority elapsed_ms=310"
+    },
+    {
+      "ms": 5552,
+      "stage": "progress history native-begin elapsed_ms=629"
+    },
+    {
+      "ms": 5613,
+      "stage": "progress activity native-begin elapsed_ms=690"
+    },
+    {
+      "ms": 6206,
+      "stage": "native reopen guest-prepared elapsed_ms=1025"
+    },
+    {
+      "ms": 6217,
+      "stage": "progress activity native-end elapsed_ms=1294"
+    },
+    {
+      "ms": 6217,
+      "stage": "progress activity parsed-completed-items0 elapsed_ms=1294"
+    },
+    {
+      "ms": 6277,
+      "stage": "progress activity publish elapsed_ms=1355"
+    },
+    {
+      "ms": 6359,
+      "stage": "progress history native-end elapsed_ms=1436"
+    },
+    {
+      "ms": 6359,
+      "stage": "progress history parsed-dispatching-items2 elapsed_ms=1436"
+    },
+    {
+      "ms": 6407,
+      "stage": "progress history publish elapsed_ms=1485"
+    },
+    {
+      "ms": 6422,
+      "stage": "progress history begin elapsed_ms=0"
+    },
+    {
+      "ms": 6423,
+      "stage": "progress activity begin elapsed_ms=0"
+    },
+    {
+      "ms": 6897,
+      "stage": "progress activity native-begin elapsed_ms=475"
+    },
+    {
+      "ms": 6945,
+      "stage": "progress history native-begin elapsed_ms=523"
+    },
+    {
+      "ms": 7322,
+      "stage": "progress activity native-end elapsed_ms=900"
+    },
+    {
+      "ms": 7322,
+      "stage": "progress activity parsed-completed-items0 elapsed_ms=900"
+    },
+    {
+      "ms": 7372,
+      "stage": "progress activity publish elapsed_ms=949"
+    },
+    {
+      "ms": 7501,
+      "stage": "progress history native-end elapsed_ms=1079"
+    },
+    {
+      "ms": 7501,
+      "stage": "progress history parsed-dispatching-items2 elapsed_ms=1079"
+    },
+    {
+      "ms": 7528,
+      "stage": "progress history publish elapsed_ms=1106"
+    },
+    {
+      "ms": 7923,
+      "stage": "progress history begin elapsed_ms=0"
+    },
+    {
+      "ms": 7923,
+      "stage": "progress activity begin elapsed_ms=0"
+    },
+    {
+      "ms": 8255,
+      "stage": "native reopen guest-connected elapsed_ms=3074"
+    },
+    {
+      "ms": 8255,
+      "stage": "native reopen guest-registered elapsed_ms=3074"
+    },
+    {
+      "ms": 8597,
+      "stage": "progress history native-begin elapsed_ms=675"
+    },
+    {
+      "ms": 8626,
+      "stage": "progress activity native-begin elapsed_ms=704"
+    },
+    {
+      "ms": 9144,
+      "stage": "progress activity native-end elapsed_ms=1221"
+    },
+    {
+      "ms": 9144,
+      "stage": "progress activity parsed-completed-items0 elapsed_ms=1221"
+    },
+    {
+      "ms": 9221,
+      "stage": "progress activity publish elapsed_ms=1298"
+    },
+    {
+      "ms": 9319,
+      "stage": "progress history native-end elapsed_ms=1397"
+    },
+    {
+      "ms": 9320,
+      "stage": "progress history parsed-dispatching-items2 elapsed_ms=1397"
+    },
+    {
+      "ms": 9372,
+      "stage": "progress history publish elapsed_ms=1450"
+    },
+    {
+      "ms": 9423,
+      "stage": "progress history begin elapsed_ms=0"
+    },
+    {
+      "ms": 9425,
+      "stage": "progress activity begin elapsed_ms=0"
+    },
+    {
+      "ms": 10336,
+      "stage": "progress history native-begin elapsed_ms=913"
+    },
+    {
+      "ms": 10422,
+      "stage": "progress activity native-begin elapsed_ms=997"
+    },
+    {
+      "ms": 10758,
+      "stage": "native reopen thread-started elapsed_ms=5577"
+    },
+    {
+      "ms": 10759,
+      "stage": "native reopen listener-ready elapsed_ms=5578"
+    },
+    {
+      "ms": 10759,
+      "stage": "native lifecycle resume-thread-end elapsed_ms=6384"
+    },
+    {
+      "ms": 10907,
+      "stage": "native lifecycle pre-turn-authority elapsed_ms=6532"
+    },
+    {
+      "ms": 10936,
+      "stage": "native listener Discriminant(51) elapsed_ms=177"
+    },
+    {
+      "ms": 10937,
+      "stage": "native listener Discriminant(30) elapsed_ms=0"
+    },
+    {
+      "ms": 10999,
+      "stage": "progress activity native-end elapsed_ms=1573"
+    },
+    {
+      "ms": 10999,
+      "stage": "progress activity parsed-completed-items0 elapsed_ms=1574"
+    },
+    {
+      "ms": 11122,
+      "stage": "progress activity publish elapsed_ms=1696"
+    },
+    {
+      "ms": 11177,
+      "stage": "progress history native-end elapsed_ms=1753"
+    },
+    {
+      "ms": 11177,
+      "stage": "progress history parsed-dispatching-items2 elapsed_ms=1754"
+    },
+    {
+      "ms": 11244,
+      "stage": "progress history publish elapsed_ms=1820"
+    },
+    {
+      "ms": 11300,
+      "stage": "native listener Discriminant(16) elapsed_ms=0"
+    },
+    {
+      "ms": 11647,
+      "stage": "native lifecycle turn-admitted elapsed_ms=7271"
+    },
+    {
+      "ms": 11652,
+      "stage": "native lifecycle dispatch-ended elapsed_ms=9108"
+    },
+    {
+      "ms": 11766,
+      "stage": "native listener Discriminant(1) elapsed_ms=119"
+    },
+    {
+      "ms": 11890,
+      "stage": "main native-response"
+    },
+    {
+      "ms": 11961,
+      "stage": "progress history begin elapsed_ms=0"
+    },
+    {
+      "ms": 12208,
+      "stage": "progress activity begin elapsed_ms=0"
+    },
+    {
+      "ms": 12301,
+      "stage": "progress event=start"
+    },
+    {
+      "ms": 12304,
+      "stage": "native listener Discriminant(15) elapsed_ms=107"
+    },
+    {
+      "ms": 12600,
+      "stage": "progress history native-begin elapsed_ms=639"
+    },
+    {
+      "ms": 12994,
+      "stage": "progress activity native-begin elapsed_ms=786"
+    },
+    {
+      "ms": 15046,
+      "stage": "progress activity native-end elapsed_ms=2838"
+    },
+    {
+      "ms": 15046,
+      "stage": "progress activity parsed-completed-items0 elapsed_ms=2838"
+    },
+    {
+      "ms": 15176,
+      "stage": "progress activity publish elapsed_ms=2968"
+    },
+    {
+      "ms": 15290,
+      "stage": "progress history native-end elapsed_ms=3329"
+    },
+    {
+      "ms": 15290,
+      "stage": "progress history parsed-running-items2 elapsed_ms=3329"
+    },
+    {
+      "ms": 15376,
+      "stage": "progress history publish elapsed_ms=3416"
+    },
+    {
+      "ms": 15378,
+      "stage": "progress history begin elapsed_ms=0"
+    },
+    {
+      "ms": 15422,
+      "stage": "progress activity begin elapsed_ms=0"
+    },
+    {
+      "ms": 16101,
+      "stage": "progress history native-begin elapsed_ms=723"
+    },
+    {
+      "ms": 16132,
+      "stage": "progress activity native-begin elapsed_ms=710"
+    },
+    {
+      "ms": 16802,
+      "stage": "progress activity native-end elapsed_ms=1380"
+    },
+    {
+      "ms": 16802,
+      "stage": "progress activity parsed-completed-items0 elapsed_ms=1380"
+    },
+    {
+      "ms": 16950,
+      "stage": "progress activity publish elapsed_ms=1528"
+    },
+    {
+      "ms": 17077,
+      "stage": "progress history native-end elapsed_ms=1699"
+    },
+    {
+      "ms": 17077,
+      "stage": "progress history parsed-running-items2 elapsed_ms=1699"
+    },
+    {
+      "ms": 17191,
+      "stage": "progress history publish elapsed_ms=1813"
+    },
+    {
+      "ms": 17462,
+      "stage": "progress history begin elapsed_ms=0"
+    },
+    {
+      "ms": 17463,
+      "stage": "native listener Discriminant(66) elapsed_ms=102"
+    },
+    {
+      "ms": 17713,
+      "stage": "progress activity begin elapsed_ms=0"
+    },
+    {
+      "ms": 18036,
+      "stage": "native listener Discriminant(67) elapsed_ms=206"
+    },
+    {
+      "ms": 18073,
+      "stage": "progress history native-begin elapsed_ms=612"
+    },
+    {
+      "ms": 18528,
+      "stage": "native listener Discriminant(20) elapsed_ms=0"
+    },
+    {
+      "ms": 18535,
+      "stage": "progress activity native-begin elapsed_ms=822"
+    },
+    {
+      "ms": 18866,
+      "stage": "fixture A2 received"
+    },
+    {
+      "ms": 18866,
+      "stage": "fixture A2 responded"
+    },
+    {
+      "ms": 19028,
+      "stage": "progress activity native-end elapsed_ms=1315"
+    },
+    {
+      "ms": 19028,
+      "stage": "progress activity parsed-completed-items0 elapsed_ms=1315"
+    },
+    {
+      "ms": 19164,
+      "stage": "progress activity publish elapsed_ms=1452"
+    },
+    {
+      "ms": 19219,
+      "stage": "progress history native-end elapsed_ms=1758"
+    },
+    {
+      "ms": 19219,
+      "stage": "progress history parsed-running-items3 elapsed_ms=1758"
+    },
+    {
+      "ms": 19278,
+      "stage": "progress history publish elapsed_ms=1816"
+    },
+    {
+      "ms": 19279,
+      "stage": "progress history begin elapsed_ms=0"
+    },
+    {
+      "ms": 19416,
+      "stage": "progress activity begin elapsed_ms=0"
+    },
+    {
+      "ms": 19665,
+      "stage": "native listener Discriminant(66) elapsed_ms=173"
+    },
+    {
+      "ms": 19935,
+      "stage": "progress history native-begin elapsed_ms=656"
+    },
+    {
+      "ms": 20085,
+      "stage": "progress activity native-begin elapsed_ms=668"
+    },
+    {
+      "ms": 20096,
+      "stage": "second-answer-wait-ended",
+      "visible": false
+    }
+  ]
+}

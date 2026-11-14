@@ -1,0 +1,143 @@
+Smoke logs: D:\Inquello\tmp\inquello-seeded-smoke-PK6ZV6
+2026-11-07T21:05:43.675753Z  INFO inquello_service::test_provider: synthetic OIDC provider listening issuer="https://127.0.0.1:61316"
+2026-11-07T21:05:43.977262Z  INFO inquello_service::server: inquello service listening local_addr=127.0.0.1:61319 https=true
+2026-11-07T21:05:44.088045Z  INFO sqlx::postgres::notice: relation "_sqlx_migrations" already exists, skipping
+2026-11-07T21:05:44.125530Z  INFO inquello_service::admin: workspace created by operator workspace_id=8afb8fc3-2b4e-4ce5-8f4e-f5a51f3738ad receipt_id=bcb7aa4d-a369-4da9-9cfa-d0cfded23e48
+2026-11-07T21:05:55.611336Z  INFO inquello_service::login: login transaction created login_transaction_id=6d86d8f3-a515-4ac8-a593-1ddc4f0d8d90
+2026-11-07T21:05:55.617279Z  INFO inquello_service::test_provider: authorization code issued for the synthetic subject
+2026-11-07T21:05:55.627807Z  INFO inquello_service::test_provider: ID token issued for the synthetic subject
+2026-11-07T21:05:55.671780Z  INFO inquello_service::login: session created principal_id=f1c90726-51af-4e4c-8c0f-c7a54e501ce6 session_id=2292b4ed-e99c-4c0e-bc6c-6aa6a3fbce50
+2026-11-07T21:05:58.640954Z  INFO inquello_service::sessions: refresh family revoked principal_id=f1c90726-51af-4e4c-8c0f-c7a54e501ce6 family_id=7cf7a1fc-4f47-4041-94ea-881fb8db5eed reason="logout"
+2026-11-07T21:05:58.650820Z  INFO inquello_service::commands: command applied principal_id=f1c90726-51af-4e4c-8c0f-c7a54e501ce6 operation_id=logout-ddfd8446-abed-413e-9ce7-30e02c317648 receipt_id=a75b9211-7cd4-4afc-b222-0c41d4dfcb0a
+2026-11-07T21:05:58.745056Z  INFO inquello_service::login: login transaction created login_transaction_id=707a126c-ecfc-4a14-a046-8ca9de3b2d60
+2026-11-07T21:05:58.749907Z  INFO inquello_service::test_provider: authorization code issued for the synthetic subject
+2026-11-07T21:05:58.756611Z  INFO inquello_service::test_provider: ID token issued for the synthetic subject
+2026-11-07T21:05:58.789443Z  INFO inquello_service::login: session created principal_id=f1c90726-51af-4e4c-8c0f-c7a54e501ce6 session_id=a4a9f162-4685-4988-b5fb-c4d2bc5af6fe
+2026-11-07T21:05:59.600942Z  INFO inquello_service::workspaces: invite accepted principal_id=f1c90726-51af-4e4c-8c0f-c7a54e501ce6 workspace_id=8afb8fc3-2b4e-4ce5-8f4e-f5a51f3738ad
+2026-11-07T21:06:07.915896Z  INFO inquello_service::sessions: refresh family revoked principal_id=f1c90726-51af-4e4c-8c0f-c7a54e501ce6 family_id=c2bb1887-ad37-41cf-b2bc-d43e7e2e48ef reason="logout"
+2026-11-07T21:06:07.924967Z  INFO inquello_service::commands: command applied principal_id=f1c90726-51af-4e4c-8c0f-c7a54e501ce6 operation_id=logout-f0917385-e7e8-44a1-a7ce-b453e8c5a0df receipt_id=d85a7464-8e8f-47a9-8672-217efabf8020
+2026-11-07T21:06:07.958576Z  INFO inquello_service::login: login transaction created login_transaction_id=678dd345-1042-48ac-b07e-cd5c7e155fce
+2026-11-07T21:06:07.963459Z  INFO inquello_service::test_provider: authorization code issued for the synthetic subject
+2026-11-07T21:06:07.970146Z  INFO inquello_service::test_provider: ID token issued for the synthetic subject
+2026-11-07T21:06:08.004453Z  INFO inquello_service::login: session created principal_id=f1c90726-51af-4e4c-8c0f-c7a54e501ce6 session_id=08db3117-6f89-428b-9a9e-7ea094a14a63
+2026-11-07T21:06:16.119745Z  INFO inquello_service::sessions: refresh family revoked principal_id=f1c90726-51af-4e4c-8c0f-c7a54e501ce6 family_id=9643fac7-c495-43da-8e2a-1bf9c6852cb5 reason="logout"
+2026-11-07T21:06:16.130229Z  INFO inquello_service::commands: command applied principal_id=f1c90726-51af-4e4c-8c0f-c7a54e501ce6 operation_id=logout-2970fe46-c713-4000-9d0d-16c4f06859ba receipt_id=e54fc2f4-149d-4eea-a48c-5b8ef399f729
+2026-11-07T21:06:17.495520Z  INFO inquello_service::login: login transaction created login_transaction_id=3a72aede-145a-4d0f-ae81-c3e1f816e742
+2026-11-07T21:06:17.500499Z  INFO inquello_service::test_provider: authorization code issued for the synthetic subject
+2026-11-07T21:06:17.507967Z  INFO inquello_service::test_provider: ID token issued for the synthetic subject
+2026-11-07T21:06:17.538565Z  INFO inquello_service::login: session created principal_id=f1c90726-51af-4e4c-8c0f-c7a54e501ce6 session_id=0b5e1a53-4198-447c-b83d-43e1904d9e3e
+2026-11-07T21:06:18.709385Z  INFO inquello_service::workspace_commands: workspace command applied principal_id=f1c90726-51af-4e4c-8c0f-c7a54e501ce6 workspace_id=8afb8fc3-2b4e-4ce5-8f4e-f5a51f3738ad operation_id=6930a9b4-a3b2-45a0-9c1e-89471638e093 receipt_id=72ae9716-ece2-4f8b-95c4-f843c4426e22 command="create_engagement"
+2026-11-07T21:06:28.660219Z  INFO inquello_service::sessions: refresh family revoked principal_id=f1c90726-51af-4e4c-8c0f-c7a54e501ce6 family_id=8f8bd5e5-7e0c-40a1-9cd7-a0ebd39a5007 reason="logout"
+2026-11-07T21:06:28.666672Z  INFO inquello_service::commands: command applied principal_id=f1c90726-51af-4e4c-8c0f-c7a54e501ce6 operation_id=logout-dde92717-7ad2-48c8-b387-d396771337fd receipt_id=db74381a-e46e-461d-aeb8-b7ad85f44109
+2026-11-07T21:06:28.689384Z  INFO inquello_service::login: login transaction created login_transaction_id=418fcdd0-42b9-4fee-9c10-560a10dcaa4a
+2026-11-07T21:06:28.695220Z  INFO inquello_service::test_provider: authorization code issued for the synthetic subject
+2026-11-07T21:06:28.701957Z  INFO inquello_service::test_provider: ID token issued for the synthetic subject
+2026-11-07T21:06:28.726262Z  INFO inquello_service::login: session created principal_id=f1c90726-51af-4e4c-8c0f-c7a54e501ce6 session_id=145e8d2e-3a58-4fda-8c5a-c87469224bd8
+2026-11-07T21:06:37.392344Z  INFO inquello_service::sessions: refresh family revoked principal_id=f1c90726-51af-4e4c-8c0f-c7a54e501ce6 family_id=650dc616-5050-4944-b17d-d9bec1df8558 reason="logout"
+2026-11-07T21:06:37.401611Z  INFO inquello_service::commands: command applied principal_id=f1c90726-51af-4e4c-8c0f-c7a54e501ce6 operation_id=logout-3d7cc444-abb9-45af-8e45-d72025aa740a receipt_id=a7b58f92-99c9-4482-8ac0-81d5990e6906
+2026-11-07T21:06:37.422590Z  INFO inquello_service::login: login transaction created login_transaction_id=1854fa6d-c9f3-402a-bbbd-4a91ad3d8635
+2026-11-07T21:06:37.427201Z  INFO inquello_service::test_provider: authorization code issued for the synthetic subject
+2026-11-07T21:06:37.434627Z  INFO inquello_service::test_provider: ID token issued for the synthetic subject
+2026-11-07T21:06:37.465086Z  INFO inquello_service::login: session created principal_id=f1c90726-51af-4e4c-8c0f-c7a54e501ce6 session_id=69b888da-2b54-4fbc-85a8-5159d18ad45d
+2026-11-07T21:06:44.485310Z  INFO inquello_service::sessions: refresh family revoked principal_id=f1c90726-51af-4e4c-8c0f-c7a54e501ce6 family_id=81b94b84-0fbf-47e9-8b9e-c21262e871ab reason="logout"
+2026-11-07T21:06:44.494354Z  INFO inquello_service::commands: command applied principal_id=f1c90726-51af-4e4c-8c0f-c7a54e501ce6 operation_id=logout-b4dd08bb-26b5-4022-b9a1-07d270ea82b0 receipt_id=e1d1c84f-913c-49ae-a55a-03f529b9deec
+2026-11-07T21:06:44.526673Z  INFO inquello_service::login: login transaction created login_transaction_id=1814431b-55a1-4e4c-b173-4a98c123c172
+2026-11-07T21:06:44.531518Z  INFO inquello_service::test_provider: authorization code issued for the synthetic subject
+2026-11-07T21:06:44.538297Z  INFO inquello_service::test_provider: ID token issued for the synthetic subject
+2026-11-07T21:06:44.562252Z  INFO inquello_service::login: session created principal_id=f1c90726-51af-4e4c-8c0f-c7a54e501ce6 session_id=7444ce94-0db3-4863-a529-981c82d4ef7e
+2026-11-07T21:06:55.567475Z  INFO inquello_service::sessions: refresh family revoked principal_id=f1c90726-51af-4e4c-8c0f-c7a54e501ce6 family_id=2f0b27e8-2a01-4601-8a6b-62ce4a0ab73e reason="logout"
+2026-11-07T21:06:55.572737Z  INFO inquello_service::commands: command applied principal_id=f1c90726-51af-4e4c-8c0f-c7a54e501ce6 operation_id=logout-425705a6-5a08-425e-8ee2-9fce7e5ee0bb receipt_id=89debad5-152c-4ff9-b03b-ba859b64348d
+2026-11-07T21:06:55.710713Z  INFO inquello_service::login: login transaction created login_transaction_id=fc55980a-2e0e-4ca6-b3eb-be2e8c62e0ba
+2026-11-07T21:06:55.715760Z  INFO inquello_service::test_provider: authorization code issued for the synthetic subject
+2026-11-07T21:06:55.723344Z  INFO inquello_service::test_provider: ID token issued for the synthetic subject
+2026-11-07T21:06:55.750219Z  INFO inquello_service::login: session created principal_id=f1c90726-51af-4e4c-8c0f-c7a54e501ce6 session_id=3ced51ed-2f0d-48cc-a77f-cef4bb7ebc87
+2026-11-07T21:07:00.330798Z  INFO inquello_service::sessions: refresh family revoked principal_id=f1c90726-51af-4e4c-8c0f-c7a54e501ce6 family_id=eec039e4-39e6-4e29-991a-7d97e2ea6e40 reason="logout"
+2026-11-07T21:07:00.341014Z  INFO inquello_service::commands: command applied principal_id=f1c90726-51af-4e4c-8c0f-c7a54e501ce6 operation_id=logout-2690b320-e5a9-42ae-b812-927ccc20fab1 receipt_id=b0e4a434-bb1d-400c-ab95-4fbcad369b89
+2026-11-07T21:07:00.401894Z  INFO inquello_service::login: login transaction created login_transaction_id=2a9ace06-bfb3-4f81-9e31-28bb61482cee
+2026-11-07T21:07:00.408964Z  INFO inquello_service::test_provider: authorization code issued for the synthetic subject
+2026-11-07T21:07:00.416046Z  INFO inquello_service::test_provider: ID token issued for the synthetic subject
+2026-11-07T21:07:00.461234Z  INFO inquello_service::login: session created principal_id=f1c90726-51af-4e4c-8c0f-c7a54e501ce6 session_id=36fbaee2-dcd8-49a1-aae0-825f34a2b32f
+2026-11-07T21:07:05.249002Z  INFO inquello_service::sessions: refresh family revoked principal_id=f1c90726-51af-4e4c-8c0f-c7a54e501ce6 family_id=de93ec5e-db4b-4139-8d29-0e26fa43341d reason="logout"
+2026-11-07T21:07:05.256942Z  INFO inquello_service::commands: command applied principal_id=f1c90726-51af-4e4c-8c0f-c7a54e501ce6 operation_id=logout-5db94f9b-ce4f-4266-9fe8-638bb6ee6444 receipt_id=a8618003-4b61-426b-af43-b089151454ca
+2026-11-07T21:07:05.281321Z  INFO inquello_service::login: login transaction created login_transaction_id=707fe5d5-21a9-4667-9670-e770d6ef166d
+2026-11-07T21:07:05.287820Z  INFO inquello_service::test_provider: authorization code issued for the synthetic subject
+2026-11-07T21:07:05.295027Z  INFO inquello_service::test_provider: ID token issued for the synthetic subject
+2026-11-07T21:07:05.329596Z  INFO inquello_service::login: session created principal_id=f1c90726-51af-4e4c-8c0f-c7a54e501ce6 session_id=4f53f297-5952-4a70-925b-62de38958513
+2026-11-07T21:07:32.858840Z  INFO inquello_service::sessions: refresh family revoked principal_id=f1c90726-51af-4e4c-8c0f-c7a54e501ce6 family_id=dac3f104-3c8a-4755-91b0-ff0ad02a51a7 reason="logout"
+2026-11-07T21:07:32.873367Z  INFO inquello_service::commands: command applied principal_id=f1c90726-51af-4e4c-8c0f-c7a54e501ce6 operation_id=logout-77e9520d-cd9b-4e40-a2bc-7aa27f001466 receipt_id=2694acea-ed75-4b04-944f-9fca57a4fd38
+2026-11-07T21:07:32.907294Z  INFO inquello_service::login: login transaction created login_transaction_id=3ec1e6c2-34d7-435a-a20b-888066e47e63
+2026-11-07T21:07:32.911938Z  INFO inquello_service::test_provider: authorization code issued for the synthetic subject
+2026-11-07T21:07:32.918755Z  INFO inquello_service::test_provider: ID token issued for the synthetic subject
+2026-11-07T21:07:32.942164Z  INFO inquello_service::login: session created principal_id=f1c90726-51af-4e4c-8c0f-c7a54e501ce6 session_id=549c753d-eb21-4654-bf4f-9d1241721533
+2026-11-07T21:08:56.169875Z  INFO inquello_service::sessions: refresh family revoked principal_id=f1c90726-51af-4e4c-8c0f-c7a54e501ce6 family_id=573c25a8-1c34-40d4-8b0b-a117af39525d reason="logout"
+2026-11-07T21:08:56.176355Z  INFO inquello_service::commands: command applied principal_id=f1c90726-51af-4e4c-8c0f-c7a54e501ce6 operation_id=logout-39cec341-4dea-4655-ac71-53bd18aec13c receipt_id=62edd793-91e8-4cf4-b730-be84e6ffb344
+2026-11-07T21:08:56.205034Z  INFO inquello_service::login: login transaction created login_transaction_id=3a24681a-87b4-4b7b-b29e-d180dc075538
+2026-11-07T21:08:56.209507Z  INFO inquello_service::test_provider: authorization code issued for the synthetic subject
+2026-11-07T21:08:56.215656Z  INFO inquello_service::test_provider: ID token issued for the synthetic subject
+2026-11-07T21:08:56.241691Z  INFO inquello_service::login: session created principal_id=f1c90726-51af-4e4c-8c0f-c7a54e501ce6 session_id=f9d556c4-5682-4b95-8ae7-5dce024cdf17
+2026-11-07T21:09:46.616513Z  INFO inquello_service::sessions: refresh family revoked principal_id=f1c90726-51af-4e4c-8c0f-c7a54e501ce6 family_id=436cf4a4-50aa-4829-b1b4-ae498707659b reason="logout"
+2026-11-07T21:09:46.624120Z  INFO inquello_service::commands: command applied principal_id=f1c90726-51af-4e4c-8c0f-c7a54e501ce6 operation_id=logout-74135c06-a28a-4c78-80e8-10d26066da07 receipt_id=f211f7e2-e597-4abd-9fad-3fbdb8348030
+2026-11-07T21:09:46.644112Z  INFO inquello_service::login: login transaction created login_transaction_id=60f059b0-e4d8-4464-876c-b71dab908a53
+2026-11-07T21:09:46.648503Z  INFO inquello_service::test_provider: authorization code issued for the synthetic subject
+2026-11-07T21:09:46.654850Z  INFO inquello_service::test_provider: ID token issued for the synthetic subject
+2026-11-07T21:09:46.677225Z  INFO inquello_service::login: session created principal_id=f1c90726-51af-4e4c-8c0f-c7a54e501ce6 session_id=71d5d811-519e-4954-8a0b-5076ae1026d8
+2026-11-07T21:09:50.399167Z  INFO inquello_service::sessions: refresh family revoked principal_id=f1c90726-51af-4e4c-8c0f-c7a54e501ce6 family_id=668f3be8-9b07-41d9-b8bf-97ee8ea3bca1 reason="logout"
+2026-11-07T21:09:50.405762Z  INFO inquello_service::commands: command applied principal_id=f1c90726-51af-4e4c-8c0f-c7a54e501ce6 operation_id=logout-a8b76afa-bb90-436f-9493-7a56bab81053 receipt_id=315ff65a-cd32-413d-b72e-14becf76a0c6
+2026-11-07T21:09:50.431254Z  INFO inquello_service::login: login transaction created login_transaction_id=7155eb57-6d8a-4d42-a0e2-5f65ff3081f4
+2026-11-07T21:09:50.435601Z  INFO inquello_service::test_provider: authorization code issued for the synthetic subject
+2026-11-07T21:09:50.441515Z  INFO inquello_service::test_provider: ID token issued for the synthetic subject
+2026-11-07T21:09:50.464828Z  INFO inquello_service::login: session created principal_id=f1c90726-51af-4e4c-8c0f-c7a54e501ce6 session_id=aa16603e-0fa8-4ff9-a7a1-379924daa341
+2026-11-07T21:09:54.680380Z  INFO inquello_service::sessions: refresh family revoked principal_id=f1c90726-51af-4e4c-8c0f-c7a54e501ce6 family_id=25da6e6a-665a-461b-a67d-772c8d9f3779 reason="logout"
+2026-11-07T21:09:54.686770Z  INFO inquello_service::commands: command applied principal_id=f1c90726-51af-4e4c-8c0f-c7a54e501ce6 operation_id=logout-a506bcd2-74c3-49f2-b753-bafb830b75d7 receipt_id=b03f7e4e-ba41-4372-9fd1-eab094e3ac92
+2026-11-07T21:09:54.718651Z  INFO inquello_service::login: login transaction created login_transaction_id=43864878-c4a4-4113-9234-4984d46d043a
+2026-11-07T21:09:54.722767Z  INFO inquello_service::test_provider: authorization code issued for the synthetic subject
+2026-11-07T21:09:54.728373Z  INFO inquello_service::test_provider: ID token issued for the synthetic subject
+2026-11-07T21:09:54.748879Z  INFO inquello_service::login: session created principal_id=f1c90726-51af-4e4c-8c0f-c7a54e501ce6 session_id=905e3049-7280-4510-a1f6-ceb21427667e
+2026-11-07T21:10:36.165451Z  INFO inquello_service::sessions: refresh family revoked principal_id=f1c90726-51af-4e4c-8c0f-c7a54e501ce6 family_id=cac6b7e6-d95d-4e2e-bc2c-3ca26ad954f8 reason="logout"
+2026-11-07T21:10:36.173212Z  INFO inquello_service::commands: command applied principal_id=f1c90726-51af-4e4c-8c0f-c7a54e501ce6 operation_id=logout-c9f98538-4209-4cdc-82be-ed7f135c1a5f receipt_id=cb1a0a28-7b4a-4f68-b2c6-9f462164c093
+{"phase":"normal","exitCode":0,"required":16,"missingOrFailed":[],"zeroFixtureCalls":true}
+2026-11-07T21:10:36.337857Z  INFO inquello_dev_topology: dev topology stopping
+{"phase":"normal","phaseResult":{"ok":true,"missing":[],"events":["renderer-privileges","design","identity","data","providers","organise","states","shell-layout","composer","start-surface","policy","tool-bounds","permissions","capabilities","routes","environments"],"cleanupErrors":[]}}
+2026-11-07T21:10:36.851943Z  INFO inquello_service::test_provider: synthetic OIDC provider listening issuer="https://127.0.0.1:63526"
+2026-11-07T21:10:37.089362Z  INFO inquello_service::server: inquello service listening local_addr=127.0.0.1:63529 https=true
+2026-11-07T21:10:37.207530Z  INFO sqlx::postgres::notice: relation "_sqlx_migrations" already exists, skipping
+2026-11-07T21:10:37.241773Z  INFO inquello_service::admin: workspace created by operator workspace_id=05b71658-46f1-458f-ae31-af87ac7c02ed receipt_id=d1114810-00fa-4994-baff-b461fa39d333
+2026-11-07T21:10:51.350856Z  INFO inquello_service::login: login transaction created login_transaction_id=70caaac5-8558-4aaf-8650-618adbc5de69
+2026-11-07T21:10:51.361574Z  INFO inquello_service::test_provider: authorization code issued for the synthetic subject
+2026-11-07T21:10:51.376284Z  INFO inquello_service::test_provider: ID token issued for the synthetic subject
+2026-11-07T21:10:51.439853Z  INFO inquello_service::login: session created principal_id=368dd44a-7152-4260-a8c8-87c5ec8600b3 session_id=57d06dfd-4179-478e-b77b-77cb3a428206
+2026-11-07T21:10:52.251761Z  INFO inquello_service::workspaces: invite accepted principal_id=368dd44a-7152-4260-a8c8-87c5ec8600b3 workspace_id=05b71658-46f1-458f-ae31-af87ac7c02ed
+2026-11-07T21:11:49.337231Z  INFO inquello_service::sessions: refresh family revoked principal_id=368dd44a-7152-4260-a8c8-87c5ec8600b3 family_id=d4df8755-0028-44e8-bb77-d59af15d7155 reason="logout"
+2026-11-07T21:11:49.345901Z  INFO inquello_service::commands: command applied principal_id=368dd44a-7152-4260-a8c8-87c5ec8600b3 operation_id=logout-22b0f9f9-a29b-4b91-8596-318edec7bf8e receipt_id=73a071af-5dbf-4972-b8c5-12effb5482dd
+{"phase":"quota","exitCode":0,"required":1,"missingOrFailed":[],"zeroFixtureCalls":true}
+2026-11-07T21:11:49.513745Z  INFO inquello_dev_topology: dev topology stopping
+{"phase":"quota","phaseResult":{"ok":true,"missing":[],"events":["quota"],"cleanupErrors":[]}}
+2026-11-07T21:11:50.008535Z  INFO inquello_service::test_provider: synthetic OIDC provider listening issuer="https://127.0.0.1:62715"
+2026-11-07T21:11:50.244293Z  INFO inquello_service::server: inquello service listening local_addr=127.0.0.1:62718 https=true
+2026-11-07T21:11:50.344158Z  INFO sqlx::postgres::notice: relation "_sqlx_migrations" already exists, skipping
+2026-11-07T21:11:50.370829Z  INFO inquello_service::admin: workspace created by operator workspace_id=711e979e-54db-4011-b7dd-d44a3922594a receipt_id=d9ad5783-dd2e-4e3b-92a2-b9956f337580
+2026-11-07T21:11:55.987726Z  INFO inquello_service::login: login transaction created login_transaction_id=90e07177-c874-4396-9855-b8a771b99530
+2026-11-07T21:11:55.993912Z  INFO inquello_service::test_provider: authorization code issued for the synthetic subject
+2026-11-07T21:11:56.004347Z  INFO inquello_service::test_provider: ID token issued for the synthetic subject
+2026-11-07T21:11:56.047406Z  INFO inquello_service::login: session created principal_id=0956a305-1548-4d92-a290-3db8d0934e97 session_id=eb2d0682-c2ef-4bbd-b24e-d7b7e23d098a
+2026-11-07T21:11:56.897336Z  INFO inquello_service::workspaces: invite accepted principal_id=0956a305-1548-4d92-a290-3db8d0934e97 workspace_id=711e979e-54db-4011-b7dd-d44a3922594a
+2026-11-07T21:13:36.761457Z  INFO inquello_service::sessions: refresh family revoked principal_id=0956a305-1548-4d92-a290-3db8d0934e97 family_id=645edbfe-8f2a-40b8-be2b-02f23b43a2d5 reason="logout"
+2026-11-07T21:13:36.771320Z  INFO inquello_service::commands: command applied principal_id=0956a305-1548-4d92-a290-3db8d0934e97 operation_id=logout-3bd333ab-63e7-4f40-8921-25dadbb2530c receipt_id=4376eaaf-e138-4b2d-b180-5c588f994cc8
+{"phase":"visual","exitCode":0,"required":1,"missingOrFailed":[],"zeroFixtureCalls":true,"localSyntheticCalls":5,"invalidFixtureCalls":0}
+2026-11-07T21:13:36.974883Z  INFO inquello_dev_topology: dev topology stopping
+{"phase":"visual","phaseResult":{"ok":true,"missing":[],"events":["visual-reader-jump","visual-conversation"],"cleanupErrors":[]}}
+2026-11-07T21:13:37.374203Z  INFO inquello_service::test_provider: synthetic OIDC provider listening issuer="https://127.0.0.1:49951"
+2026-11-07T21:13:37.618136Z  INFO inquello_service::server: inquello service listening local_addr=127.0.0.1:49954 https=true
+2026-11-07T21:13:37.719388Z  INFO sqlx::postgres::notice: relation "_sqlx_migrations" already exists, skipping
+2026-11-07T21:13:37.745934Z  INFO inquello_service::admin: workspace created by operator workspace_id=6d700844-f66d-4a9c-87d6-75f82aae1ffd receipt_id=22fa53f2-c758-4a66-a44d-cb0bca0b6856
+2026-11-07T21:13:43.516227Z  INFO inquello_service::login: login transaction created login_transaction_id=8eeab0e8-d41a-4818-92ee-ec6e62d815b0
+2026-11-07T21:13:43.523828Z  INFO inquello_service::test_provider: authorization code issued for the synthetic subject
+2026-11-07T21:13:43.537623Z  INFO inquello_service::test_provider: ID token issued for the synthetic subject
+2026-11-07T21:13:43.576455Z  INFO inquello_service::login: session created principal_id=4492cb8a-3743-4283-8a92-f1f6717336cf session_id=306b6243-9dd2-44fb-b49e-c1f09b4c206f
+2026-11-07T21:13:44.394510Z  INFO inquello_service::workspaces: invite accepted principal_id=4492cb8a-3743-4283-8a92-f1f6717336cf workspace_id=6d700844-f66d-4a9c-87d6-75f82aae1ffd
+2026-11-07T21:14:05.255446Z  INFO inquello_service::sessions: refresh family revoked principal_id=4492cb8a-3743-4283-8a92-f1f6717336cf family_id=93a7b5ed-e703-4892-95bc-429d6a43f3e0 reason="logout"
+2026-11-07T21:14:05.265692Z  INFO inquello_service::commands: command applied principal_id=4492cb8a-3743-4283-8a92-f1f6717336cf operation_id=logout-3f208032-a34a-453a-bf09-9ea5234d1200 receipt_id=1545e5d4-5f5d-4004-83bf-4e5140dcdc82
+{"phase":"tools","exitCode":0,"required":1,"missingOrFailed":[],"zeroFixtureCalls":true}
+2026-11-07T21:14:05.403101Z  INFO inquello_dev_topology: dev topology stopping
+{"phase":"tools","phaseResult":{"ok":true,"missing":[],"events":["tools-management"],"cleanupErrors":[]}}
+{"ok":true,"required":19,"missingOrFailed":[],"phases":{"normal":{"ok":true,"missing":[],"events":["renderer-privileges","design","identity","data","providers","organise","states","shell-layout","composer","start-surface","policy","tool-bounds","permissions","capabilities","routes","environments"],"cleanupErrors":[]},"quota":{"ok":true,"missing":[],"events":["quota"],"cleanupErrors":[]},"visual":{"ok":true,"missing":[],"events":["visual-reader-jump","visual-conversation"],"cleanupErrors":[]},"tools":{"ok":true,"missing":[],"events":["tools-management"],"cleanupErrors":[]}}}

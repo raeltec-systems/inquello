@@ -1,0 +1,20 @@
+
+> inquello-desktop@0.0.0 test D:\Projects\inquello\desktop
+> vitest run --configLoader runner "test/usage-observation.test.ts" "test/usage-units.test.ts" "test/usage-shell.test.tsx" "test/environments-units.test.ts" "--maxWorkers=1"
+
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.5 [39m[90mD:/Projects/inquello/desktop[39m
+
+ [32m✓[39m test/usage-observation.test.ts [2m([22m[2m20 tests[22m[2m)[22m[33m 326[2mms[22m[39m
+ [32m✓[39m test/usage-shell.test.tsx [2m([22m[2m15 tests[22m[2m)[22m[33m 997[2mms[22m[39m
+ [32m✓[39m test/environments-units.test.ts [2m([22m[2m18 tests[22m[2m)[22m[32m 246[2mms[22m[39m
+ [32m✓[39m test/usage-units.test.ts [2m([22m[2m15 tests[22m[2m)[22m[32m 241[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m4 passed[39m[22m[90m (4)[39m
+[2m      Tests [22m [1m[32m68 passed[39m[22m[90m (68)[39m
+[2m   Start at [22m 17:51:07
+[2m   Duration [22m 9.11s[2m (environment 52%, tests 22%, import 19%, transform 6%)[22m
+
+[2m    Isolate [22m [33m4 workers spawned[39m[2m · ~1.28s startup each (spawn + environment, per file)[22m
+[2m            [22m [2mat least ~3.84s faster with [22m[33misolate: false[39m[2m — reuses workers across files instead of one per file[22m
+

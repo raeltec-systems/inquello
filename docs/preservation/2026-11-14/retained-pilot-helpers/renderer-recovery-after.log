@@ -1,0 +1,473 @@
+
+ RUN  v5.0.5 D:/Projects/inquello/desktop
+
+ ❯ test/navigation-recovery-shell.test.tsx (9 tests | 2 failed) 1142ms
+   ❯ explicit recovery from a partial tree with no open Task (5)
+     × suppresses repeated activation while the same explicit check is pending 117ms
+     × discards late partial-tree recovery after current workspace changes 92ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/navigation-recovery-shell.test.tsx > explicit recovery from a partial tree with no open Task > suppresses repeated activation while the same explicit check is pending
+TestingLibraryElementError: Unable to find an accessible element with the role "button" and name "Checking Workspace access"
+
+Here are the accessible roles:
+
+  navigation:
+
+  Name "Workspace navigation":
+  <nav
+    aria-label="Workspace navigation"
+    class="iq-sidebar iq-sidebar--sidebar"
+    data-nav-presentation="sidebar"
+    data-shared-service="available"
+    data-sidebar="true"
+    data-sidebar-state="ready"
+  />
+
+  --------------------------------------------------
+  button:
+
+  Name "Close navigation":
+  <button
+    aria-expanded="true"
+    aria-label="Close navigation"
+    class="iq-rail-logo"
+    data-action="expand-nav"
+    type="button"
+  />
+
+  Name "Engagements":
+  <button
+    aria-label="Engagements"
+    class="iq-icon-button iq-icon-button--ghost"
+    data-rail-workspace="22222222-2222-4222-8222-222222222222"
+    type="button"
+  />
+
+  Name "Inbox · attention unavailable":
+  <button
+    aria-label="Inbox · attention unavailable"
+    class="iq-icon-button iq-icon-button--ghost"
+    type="button"
+  />
+
+  Name "Tasks":
+  <button
+    aria-current="true"
+    aria-label="Tasks"
+    class="iq-icon-button iq-icon-button--active"
+    data-rail-surface="tasks"
+    type="button"
+  />
+
+  Name "Organization and team":
+  <button
+    aria-expanded="false"
+    aria-haspopup="menu"
+    aria-label="Organization and team"
+    class="iq-button iq-button--ghost iq-button--md iq-menu-trigger"
+    id="_r_u_trigger"
+    type="button"
+  />
+
+  Name "Search saved work":
+  <button
+    aria-label="Search saved work"
+    class="iq-icon-button iq-icon-button--ghost"
+    type="button"
+  />
+
+  Name "Collapse navigation":
+  <button
+    aria-expanded="true"
+    aria-label="Collapse navigation"
+    class="iq-icon-button iq-icon-button--ghost"
+    data-action="collapse-nav"
+    type="button"
+  />
+
+  Name "New chat":
+  <button
+    class="iq-button iq-button--primary iq-button--sm"
+    data-action="new-thread"
+    type="button"
+  />
+
+  Name "New Engagement":
+  <button
+    aria-describedby="_r_16_"
+    aria-disabled="true"
+    class="iq-button iq-button--quiet iq-button--sm"
+    data-action="new-engagement"
+    type="button"
+  />
+
+  Name "Refresh workspace":
+  <button
+    aria-busy="true"
+    aria-describedby="_r_17_"
+    class="iq-button iq-button--secondary iq-button--sm"
+    type="button"
+  />
+
+  Name "Choose model":
+  <button
+    aria-expanded="false"
+    aria-haspopup="menu"
+    aria-label="Choose model"
+    class="iq-button iq-button--quiet iq-button--md iq-menu-trigger"
+    id="_r_1b_trigger"
+    type="button"
+  />
+
+  Name "Send":
+  <button
+    aria-describedby="_r_1c_"
+    aria-disabled="true"
+    aria-label="Send"
+    class="iq-icon-button iq-icon-button--send iq-icon-button--round"
+    data-composer-send="true"
+    type="button"
+  />
+
+  --------------------------------------------------
+  img:
+
+  Name "Account":
+  <span
+    aria-label="Account"
+    class="iq-avatar iq-avatar--person iq-avatar--24 iq-avatar--blue"
+    role="img"
+  />
+
+  --------------------------------------------------
+  region:
+
+  Name "Engagements":
+  <section
+    aria-labelledby="_r_v_engagements"
+    class="iq-sidebar-section"
+  />
+
+  Name "Chats":
+  <section
+    aria-labelledby="_r_v_recents"
+    class="iq-sidebar-section"
+    data-recent-chats="true"
+  />
+
+  Name "Start a private Task":
+  <section
+    aria-label="Start a private Task"
+    class="iq-start"
+    data-start-view="true"
+  />
+
+  --------------------------------------------------
+  heading:
+
+  Name "Engagements":
+  <h2
+    class="iq-sidebar-heading"
+    id="_r_v_engagements"
+  />
+
+  Name "Chats":
+  <h2
+    class="iq-sidebar-heading"
+    id="_r_v_recents"
+  />
+
+  Name "What should we work on?":
+  <h1 />
+
+  --------------------------------------------------
+  list:
+
+  Name "":
+  <ul
+    class="iq-sidebar-list"
+  />
+
+  Name "":
+  <ul
+    class="iq-sidebar-list"
+  />
+
+  --------------------------------------------------
+  separator:
+
+  Name "Sidebar width":
+  <div
+    aria-label="Sidebar width"
+    aria-orientation="vertical"
+    aria-valuemax="424"
+    aria-valuemin="280"
+    aria-valuenow="320"
+    aria-valuetext="320 pixels. Arrow keys resize; Enter resets."
+    class="iq-sidebar-resize"
+    role="separator"
+    tabindex="0"
+  />
+
+  --------------------------------------------------
+  banner:
+
+  Name "":
+  <header
+    class="iq-header"
+    data-header="true"
+    data-header-empty="true"
+  />
+
+  --------------------------------------------------
+  main:
+
+  Name "Conversation":
+  <main
+    aria-label="Conversation"
+    class="iq-thread"
+    data-thread="true"
+    tabindex="0"
+  />
+
+  --------------------------------------------------
+  status:
+
+  Name "":
+  <p
+    role="status"
+  />
+
+  Name "":
+  <span
+    class="iq-model-notice"
+    role="status"
+  />
+
+  Name "":
+  <p
+    role="status"
+  />
+
+  Name "":
+  <div
+    aria-atomic="true"
+    aria-live="polite"
+    class="iq-visually-hidden"
+    data-announce-count="0"
+    data-shell-announcer="true"
+    role="status"
+  />
+
+  --------------------------------------------------
+  paragraph:
+
+  Name "":
+  <p />
+
+  --------------------------------------------------
+  textbox:
+
+  Name "New message":
+  <textarea
+    class="iq-composer-input"
+    data-composer-input="true"
+    id="_r_1a_"
+    placeholder="Message Inquello"
+    rows="1"
+    spellcheck="true"
+    style="height: 24px; overflow-y: hidden;"
+  />
+
+  --------------------------------------------------
+
+Ignored nodes: comments, script, style
+<body>
+  <div>
+    <div
+      class="iq-shell iq-shell--full iq-shell--nav-sidebar"
+      data-artifact-fits="true"
+      data-artifact-open="false"
+      data-layout-mode="full"
+      data-nav-presentation="sidebar"
+      data-shell="true"
+      data-work-view="conversation"
+      style="--iq-thread-min-width: 480px; --sidebar-width: 320px;"
+    >
+      <nav
+        aria-label="Workspace navigation"
+        class="iq-sidebar iq-sidebar--sidebar"
+        data-nav-presentation="sidebar"
+        data-shared-service="available"
+        data-sidebar="true"
+        data-sidebar-state="ready"
+      >
+        <div
+          class="iq-rail"
+          data-rail="true"
+        >
+          <span
+            class="iq-rail-item"
+          >
+            <button
+              aria-expanded="true"
+              aria-label="Close navigation"
+              class="iq-rail-logo"
+              data-action="expand-nav"
+              type="button"
+            >
+              <img
+                alt=""
+                aria-hidden="true"
+                src="/src/renderer/design/assets/logo/inquello-symbol.svg"
+              />
+            </button>
+            <span
+              aria-hidden="true"
+              class="iq-rail-tip"
+            >
+              Close navigation
+            </span>
+          </span>
+          <span
+            class="iq-rail-item"
+          >
+            <span
+              class="iq-action"
+            >
+              <button
+                aria-label="Engagements"
+                class="iq-icon-button iq-icon-button--ghost"
+                data-rail-workspace="22222222-2222-4222-8222-222222222222"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  fill="none"
+                  focusable="false"
+                  height="16"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.75"
+                  style="display: block; flex: 0 0 auto;"
+                  viewBox="0 0 24 24"
+                  width="16"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
+                  />
+                </svg>
+              </button>
+            </span>
+            <span
+              aria-hidden="true"
+              class="iq-rail-tip"
+            >
+              Engagements
+            </span>
+          </span>
+          <span
+            class="iq-rail-item"
+          >
+            <span
+              class="iq-rail-count"
+            >
+              <span
+                class="iq-action"
+              >
+                <button
+                  aria-label="Inbox · attention unavailable"
+                  class="iq-icon-button iq-icon-button--ghost"
+                  type="button"
+                >
+                  <svg
+                    aria-hidden="true"
+                    fill="none"
+                    focusable="false"
+                    height="16"
+                    stroke="currentColor"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="1.75"
+                    style="display: block; flex: 0 0 auto;"
+                    viewBox="0 0 24 24"
+                    width="16"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <polyline
+                      points="22 12 16 12 14 15 10 15 8 12 2 12"
+                    />
+                    <path
+                      d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+                    />
+                  </svg>
+                </button>
+              </span>
+              <span
+                aria-hidden="true"
+                class="iq-inbox-unavailable"
+              >
+                !
+              </span>
+            </span>
+            <span
+              aria-hidden="true"
+              class="iq-rail-tip"
+            >
+              Inbox · attention unavailable
+            </span>
+          </span>
+          <span
+            class="iq-rail-item"
+          >
+            <span
+              class="iq-rail-count"
+            >
+              <span
+                class="iq-action"
+              >
+                <button
+                  aria-current="true"
+                  aria-label="Tasks"
+                  class="iq-icon-button iq-icon-button--active"
+                  data-rail-surface="tasks"
+                  t...
+ ❯ Object.getElementError node_modules/.pnpm/@testing-library+dom@10.4.2/node_modules/@testing-library/dom/dist/config.js:37:19
+ ❯ node_modules/.pnpm/@testing-library+dom@10.4.2/node_modules/@testing-library/dom/dist/query-helpers.js:76:38
+ ❯ node_modules/.pnpm/@testing-library+dom@10.4.2/node_modules/@testing-library/dom/dist/query-helpers.js:52:17
+ ❯ node_modules/.pnpm/@testing-library+dom@10.4.2/node_modules/@testing-library/dom/dist/query-helpers.js:95:19
+ ❯ test/navigation-recovery-shell.test.tsx:47:17
+     45|   let resolve!:(value:unknown)=>void;h.recoverNavigation.mockImplement…
+     46|   await user.dblClick(button);expect(h.recoverNavigation).toHaveBeenCa…
+     47|   expect(screen.getByRole('button',{name:'Checking Workspace access'})…
+       |                 ^
+     48|   await act(async()=>{h.state.recovered=true;resolve({ok:true,value:{a…
+     49|   await screen.findByRole('link',{name:'Freshly permitted saved chat'}…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  test/navigation-recovery-shell.test.tsx > explicit recovery from a partial tree with no open Task > discards late partial-tree recovery after current workspace changes
+AssertionError: expected "vi.fn()" to be called 1 times, but got 2 times
+ ❯ test/navigation-recovery-shell.test.tsx:58:21
+     56|   await waitFor(()=>expect(screen.queryByRole('button',{name:'Checking…
+     57|   const reads=h.getTree.mock.calls.length;await act(async()=>resolve({…
+     58|   expect(h.getTree).toHaveBeenCalledTimes(reads);expect(screen.queryBy…
+       |                     ^
+     59|   expect(document.body.textContent).not.toContain('WITHHELD PRIVATE TI…
+     60|  });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed | 6 passed (7)
+      Tests  2 failed | 88 passed (90)
+   Start at  21:13:31
+   Duration  21.72s (tests 49%, environment 29%, import 17%, transform 5%)
+
+    Isolate  7 workers spawned · ~1.01s startup each (spawn + environment, per file)
+             at least ~6.05s faster with isolate: false — reuses workers across files instead of one per file
+

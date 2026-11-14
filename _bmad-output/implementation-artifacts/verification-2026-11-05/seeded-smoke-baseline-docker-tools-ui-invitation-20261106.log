@@ -1,0 +1,16 @@
+Smoke logs: D:\Inquello\tmp\inquello-seeded-smoke-PcoRQa
+2026-11-06T17:24:26.163181Z  INFO inquello_service::test_provider: synthetic OIDC provider listening issuer="https://127.0.0.1:53063"
+2026-11-06T17:24:26.394689Z  INFO inquello_service::server: inquello service listening local_addr=127.0.0.1:53066 https=true
+2026-11-06T17:24:26.487428Z  INFO sqlx::postgres::notice: relation "_sqlx_migrations" already exists, skipping
+2026-11-06T17:24:26.511473Z  INFO inquello_service::admin: workspace created by operator workspace_id=5839484b-05ff-4cb3-8bd9-01a80f5659bf receipt_id=f0a13237-16bd-40bb-b42b-eed05e26f41a
+2026-11-06T17:24:33.883749Z  INFO inquello_service::login: login transaction created login_transaction_id=8bae81de-e0e9-4558-8fc3-82dc04e9ac01
+2026-11-06T17:24:33.891964Z  INFO inquello_service::test_provider: authorization code issued for the synthetic subject
+2026-11-06T17:24:33.903218Z  INFO inquello_service::test_provider: ID token issued for the synthetic subject
+2026-11-06T17:24:33.947230Z  INFO inquello_service::login: session created principal_id=71a1dab0-758e-4998-8ae0-6e7810692e9c session_id=54c93303-df44-4c33-80e2-66364ef1f2dd
+2026-11-06T17:24:34.782362Z  INFO inquello_service::workspaces: invite accepted principal_id=71a1dab0-758e-4998-8ae0-6e7810692e9c workspace_id=5839484b-05ff-4cb3-8bd9-01a80f5659bf
+2026-11-06T17:24:48.420302Z  INFO inquello_service::sessions: refresh family revoked principal_id=71a1dab0-758e-4998-8ae0-6e7810692e9c family_id=39ce081b-e3f9-417e-8706-815dfa07b46d reason="logout"
+2026-11-06T17:24:48.428926Z  INFO inquello_service::commands: command applied principal_id=71a1dab0-758e-4998-8ae0-6e7810692e9c operation_id=logout-808d3721-2835-4446-b71a-6874f9b094d8 receipt_id=737b53e8-9840-4d2c-bc5d-73af217d10e3
+{"phase":"tools","exitCode":0,"required":1,"missingOrFailed":[],"zeroFixtureCalls":true}
+2026-11-06T17:24:48.551985Z  INFO inquello_dev_topology: dev topology stopping
+{"phase":"tools","phaseResult":{"ok":true,"missing":[],"events":["tools-management"],"cleanupErrors":[]}}
+{"ok":true,"isolatedPhase":"tools","required":1,"missingOrFailed":[],"cleanupErrors":[]}

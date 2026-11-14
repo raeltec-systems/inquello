@@ -1,0 +1,663 @@
+
+> inquello-desktop@0.0.0 test D:\Projects\inquello\desktop
+> vitest run --configLoader runner "--" "--maxWorkers=1"
+
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.5 [39m[90mD:/Projects/inquello/desktop[39m
+
+2026-11-05T14:31:15.576802Z  WARN sqlx::query: slow statement: execution time exceeded alert threshold summary="CREATE DATABASE \"inquello_dev_d6856e1d92084a82bb9a8ecc14a66726\"" db.statement="" rows_affected=0 rows_returned=0 elapsed=2.6050983s elapsed_secs=2.6050983 slow_threshold=1s
+2026-11-05T14:31:15.730030Z  INFO inquello_service::test_provider: synthetic OIDC provider listening issuer="https://127.0.0.1:59246"
+2026-11-05T14:31:16.292274Z  INFO inquello_service::server: inquello service listening local_addr=127.0.0.1:59250 https=true
+2026-11-05T14:31:16.585517Z  INFO sqlx::postgres::notice: relation "_sqlx_migrations" already exists, skipping
+2026-11-05T14:31:16.630325Z  INFO inquello_service::admin: workspace created by operator workspace_id=b0a3f216-ab7f-4ca2-ade8-4091a5aa6b93 receipt_id=2145b62c-9279-47de-aa45-8b16388923a5
+2026-11-05T14:31:24.210155Z  INFO inquello_service::login: login transaction created login_transaction_id=6a07fd3f-6fe2-48d4-8cf6-2ffa29b418b3
+2026-11-05T14:31:24.228476Z  INFO inquello_service::test_provider: authorization code issued for the synthetic subject
+2026-11-05T14:31:24.258085Z  INFO inquello_service::test_provider: ID token issued for the synthetic subject
+2026-11-05T14:31:24.314552Z  INFO inquello_service::login: session created principal_id=1b6710ef-3730-4122-bf1d-a1ec945b3d60 session_id=d75351c5-9cc8-4817-a6ec-7b89e02969fa
+2026-11-05T14:31:25.341005Z  INFO inquello_service::workspaces: invite accepted principal_id=1b6710ef-3730-4122-bf1d-a1ec945b3d60 workspace_id=b0a3f216-ab7f-4ca2-ade8-4091a5aa6b93
+2026-11-05T14:39:54.889390Z  INFO inquello_dev_topology: dev topology stopping
+ [31m❯[39m test/tool-bounds-integration.test.ts [2m([22m[2m6 tests[22m[2m | [22m[31m4 failed[39m[2m)[22m[33m 527932[2mms[22m[39m
+   [31m❯[39m bounded tool reads, writes and network against the real runtime and local sandbox [2m(6)[22m
+[31m     [31m×[31m serializes concurrent Task sandbox inspection with real tool execution[39m[33m 120010[2mms[22m[39m
+[31m     [31m×[31m keeps a standard Task inside its folder, read-only system locations and no destinations[39m[33m 180003[2mms[22m[39m
+[31m     [31m×[31m reaches only the listed destinations through the proxy[39m[33m 120004[2mms[22m[39m
+     [33m[2m✓[22m[39m makes the Task folder read only under a read_only ceiling[33m 62806[2mms[22m[39m
+[31m     [31m×[31m states the true reach of a permitted Full access mode and runs it without the sandbox[39m[33m 6979[2mms[22m[39m
+     [33m[2m✓[22m[39m refuses to run, and says so, when the local sandbox cannot be applied[33m 19556[2mms[22m[39m
+2026-11-05T14:40:00.755635Z  INFO inquello_service::test_provider: synthetic OIDC provider listening issuer="https://127.0.0.1:58697"
+2026-11-05T14:40:01.207025Z  INFO inquello_service::server: inquello service listening local_addr=127.0.0.1:58700 https=true
+2026-11-05T14:40:01.367350Z  INFO sqlx::postgres::notice: relation "_sqlx_migrations" already exists, skipping
+2026-11-05T14:40:01.392979Z  INFO inquello_service::admin: workspace created by operator workspace_id=075c58bd-f5bc-4360-8212-c8ddd36fdbda receipt_id=f6fd2a93-053e-4034-9654-fa5f3a3693df
+2026-11-05T14:40:03.432459Z  INFO inquello_service::login: login transaction created login_transaction_id=48ac60fc-ecc8-4eab-91a5-1cf7b7357afa
+2026-11-05T14:40:03.443404Z  INFO inquello_service::test_provider: authorization code issued for the synthetic subject
+2026-11-05T14:40:03.460850Z  INFO inquello_service::test_provider: ID token issued for the synthetic subject
+2026-11-05T14:40:03.508884Z  INFO inquello_service::login: session created principal_id=004d39d9-d530-4346-85ae-2bf3329dea49 session_id=82c853cb-2e60-40cd-9965-0f312018fbd7
+2026-11-05T14:40:04.284707Z  INFO inquello_service::workspaces: invite accepted principal_id=004d39d9-d530-4346-85ae-2bf3329dea49 workspace_id=075c58bd-f5bc-4360-8212-c8ddd36fdbda
+2026-11-05T14:43:00.514943Z  INFO inquello_dev_topology: dev topology stopping
+ [31m❯[39m test/permissions-integration.test.ts [2m([22m[2m6 tests[22m[2m | [22m[31m1 failed[39m[2m)[22m[33m 184467[2mms[22m[39m
+   [31m❯[39m permission to act against the real runtime, its exec-policy matching and the local sandbox [2m(6)[22m
+     [33m[2m✓[22m[39m asks before a prompt-rule command; Deny runs nothing, Run runs it once inside the sandbox[33m 60803[2mms[22m[39m
+     [33m[2m✓[22m[39m refuses a forbidden command without a card, naming the rule and its source[33m 16246[2mms[22m[39m
+[31m     [31m×[31m applies a rule to the resolved program: other paths, the bare name and a symlink alias; no allow through a link or for an unresolved program[39m[33m 20063[2mms[22m[39m
+     [33m[2m✓[22m[39m lets the person's forbid win over a Workspace allow, refuses a person's allow, and records Deny and forbid[33m 38099[2mms[22m[39m
+     [33m[2m✓[22m[39m keeps the automatic reviewer off by default and not available without a processing route[33m 18580[2mms[22m[39m
+     [33m[2m✓[22m[39m declines a request no one decides in time and runs nothing[33m 22376[2mms[22m[39m
+ [32m✓[39m test/wsl-backend-integration.test.ts [2m([22m[2m2 tests[22m[2m)[22m[33m 51793[2mms[22m[39m
+   [32m✓[39m real WSL execution boundary [2m(2)[22m
+     [33m[2m✓[22m[39m enforces filesystem/network/descendant/transfer isolation through the real stdio executor[33m 27162[2mms[22m[39m
+     [33m[2m✓[22m[39m round-trips current Linux/Windows files and resumes an interrupted publication without allowing execution[33m 21153[2mms[22m[39m
+ [32m✓[39m test/identity-session.test.ts [2m([22m[2m35 tests[22m[2m)[22m[33m 63006[2mms[22m[39m
+   [32m✓[39m sign-in [2m(2)[22m
+     [33m[2m✓[22m[39m signs in through the browser, loopback, token exchange and bootstrap[33m 1527[2mms[22m[39m
+     [33m[2m✓[22m[39m a second sign-in while one is running is refused, and a signed-in session stays[33m 1473[2mms[22m[39m
+   [32m✓[39m wrong state [2m(2)[22m
+     [33m[2m✓[22m[39m rejects a mismatched state, stays signing-in until the timeout, then signs out[33m 777[2mms[22m[39m
+     [33m[2m✓[22m[39m an issuer error on the callback ends the sign-in without a token exchange[33m 711[2mms[22m[39m
+   [32m✓[39m PKCE mismatch [2m(1)[22m
+     [33m[2m✓[22m[39m the issuer rejects the verifier; signed out with a reason and no secret[33m 710[2mms[22m[39m
+   [32m✓[39m untrusted certificate [2m(1)[22m
+     [33m[2m✓[22m[39m a failed TLS connection makes the shared service unavailable and sign-in fail[33m 750[2mms[22m[39m
+   [32m✓[39m OS store [2m(2)[22m
+     [33m[2m✓[22m[39m persists an encrypted session that survives a restart[33m 1433[2mms[22m[39m
+     [33m[2m✓[22m[39m a session for another service or issuer is discarded on load[33m 1424[2mms[22m[39m
+   [32m✓[39m refresh [2m(5)[22m
+     [33m[2m✓[22m[39m rotation replaces both credentials, and concurrent refreshes are serialized[33m 3608[2mms[22m[39m
+     [33m[2m✓[22m[39m refreshes before a protected request when the access credential is about to expire[33m 2270[2mms[22m[39m
+     [33m[2m✓[22m[39m a reuse rejection discards the family, revokes it and requires sign-in[33m 1395[2mms[22m[39m
+     [33m[2m✓[22m[39m a lost refresh response discards the family and revokes it with the old credential[33m 1432[2mms[22m[39m
+     [33m[2m✓[22m[39m a refresh the service could not attempt keeps the family[33m 1422[2mms[22m[39m
+   [32m✓[39m service down [2m(2)[22m
+     [33m[2m✓[22m[39m shows the shared service unavailable while private work stays local[33m 1361[2mms[22m[39m
+     [33m[2m✓[22m[39m a revoked session on the service signs the desktop out[33m 1483[2mms[22m[39m
+   [32m✓[39m logout [2m(4)[22m
+     [33m[2m✓[22m[39m sends one SC-2 logout envelope and clears the credentials[33m 2937[2mms[22m[39m
+     [33m[2m✓[22m[39m self-logout lost: the retry reuses the operation ID and unauthenticated means logged out[33m 2793[2mms[22m[39m
+     [33m[2m✓[22m[39m a pending logout is retried by the next status check[33m 2740[2mms[22m[39m
+     [33m[2m✓[22m[39m a stale epoch is rejected without a mutation and a new operation is prepared once[33m 5112[2mms[22m[39m
+   [32m✓[39m logout when the refresh cannot be attempted (review R02) [2m(3)[22m
+     [33m[2m✓[22m[39m a first unauthorized attempt with an unavailable refresh stays pending with its operation ID, then the retry confirms it[33m 4846[2mms[22m[39m
+     [33m[2m✓[22m[39m an expired access credential with an unavailable refresh while preparing is not reported as signed out[33m 3770[2mms[22m[39m
+     [33m[2m✓[22m[39m local data deletion then says revocation was not confirmed[33m 3550[2mms[22m[39m
+   [32m✓[39m local removal during a sign-in (review R04) [2m(3)[22m
+     [33m[2m✓[22m[39m local removal: the late result is never installed or saved, and its server session is revoked[33m 1457[2mms[22m[39m
+     [33m[2m✓[22m[39m sign-out: the late result is never installed or saved, and its server session is revoked[33m 1369[2mms[22m[39m
+     [33m[2m✓[22m[39m a new sign-in started after the removal wins over the old one finishing late[33m 1488[2mms[22m[39m
+   [32m✓[39m vault save failure (review R05) [2m(2)[22m
+     [33m[2m✓[22m[39m a failed save after rotation removes the stale record, says memory-only, and a restart retries nothing stale[33m 2580[2mms[22m[39m
+     [33m[2m✓[22m[39m a failed save of a pending logout leaves nothing a restart could resurrect, and the retry still finishes[33m 2667[2mms[22m[39m
+   [32m✓[39m bootstrap response lost [2m(1)[22m
+     [33m[2m✓[22m[39m abandons the transaction (revoking the session it created) and asks for a new sign-in[33m 1475[2mms[22m[39m
+   [32m✓[39m renderer probe [2m(1)[22m
+     [33m[2m✓[22m[39m status and results carry no credential, proof, code or token[33m 2898[2mms[22m[39m
+   [32m✓[39m local data deletion support (Story 1.12) [2m(1)[22m
+     [33m[2m✓[22m[39m forgetLocally drops the session from memory and the vault without contacting the service[33m 1523[2mms[22m[39m
+ [32m✓[39m test/wsl-data-integration.test.ts [2m([22m[2m2 tests[22m[2m)[22m[33m 52096[2mms[22m[39m
+   [32m✓[39m real WSL Task data governance [2m(2)[22m
+     [33m[2m✓[22m[39m stages current guest bytes, preserves the Windows source, refuses conflicting recovery, and erases the owned scope[33m 34030[2mms[22m[39m
+     [33m[2m✓[22m[39m rejects unsafe publication without replacing guest bytes or deleting the host source[33m 13953[2mms[22m[39m
+2026-11-05T14:45:53.552094Z  INFO inquello_service::test_provider: synthetic OIDC provider listening issuer="https://127.0.0.1:54812"
+inquello-dev-topology: the shared service did not start: database migration failed: while executing migration 2: error returned from database: could not extend file "base/1189274/2658": No space left on device at line 641
+2026-11-05T14:45:54.179689Z  WARN sqlx_core::pool::connection: error occurred while testing the connection on-release error=error communicating with database: An existing connection was forcibly closed by the remote host. (os error 10054)
+ [31m❯[39m test/policy-integration.test.ts [2m([22m[2m2 tests[22m[2m | [22m[33m2 skipped[39m[2m)[22m[33m 1341[2mms[22m[39m
+   [31m❯[39m the effective policy against the real runtime and a permissive seeded Workspace [2m(2)[22m
+     [2m[90m↓[39m[22m shows the seeded Workspace policy in S07 with its revision, no device requirements and the contract
+     [2m[90m↓[39m[22m turns Full access on for one Task only after its confirmation, and derives the thread settings from it
+ [32m✓[39m test/policy-units.test.ts [2m([22m[2m43 tests[22m[2m)[22m[33m 31536[2mms[22m[39m
+   [32m✓[39m the policy service [2m(6)[22m
+     [33m[2m✓[22m[39m derives thread settings only from the effective policy and the broad mode[33m 1072[2mms[22m[39m
+   [32m✓[39m runTool revalidates authority after permission [2m(9)[22m
+     [33m[2m✓[22m[39m refetches unchanged policy and executes the exact authorized command once[33m 2216[2mms[22m[39m
+     [33m[2m✓[22m[39m runs nothing when forbid changes during the wait[33m 2303[2mms[22m[39m
+     [33m[2m✓[22m[39m runs nothing when read-only changes during the wait[33m 2245[2mms[22m[39m
+     [33m[2m✓[22m[39m runs nothing when epoch changes during the wait[33m 2145[2mms[22m[39m
+     [33m[2m✓[22m[39m runs nothing when wider-profile changes during the wait[33m 2160[2mms[22m[39m
+     [33m[2m✓[22m[39m runs nothing when membership removed before approval[33m 1134[2mms[22m[39m
+     [33m[2m✓[22m[39m runs nothing when service unavailable before approval[33m 1099[2mms[22m[39m
+     [33m[2m✓[22m[39m does not transfer approval to a new principal[33m 1177[2mms[22m[39m
+     [33m[2m✓[22m[39m does not transfer approval to a new runtime[33m 1046[2mms[22m[39m
+   [32m✓[39m local environment inspection and actual tool preflight [2m(8)[22m
+     [33m[2m✓[22m[39m dispatches neither probe nor tool if runtime changes during policy read[33m 1247[2mms[22m[39m
+     [33m[2m✓[22m[39m rechecks readiness after permission without dispatching the authorized command[33m 1080[2mms[22m[39m
+   [32m✓[39m environment private boundaries and permitted Full access [2m(2)[22m
+     [33m[2m✓[22m[39m retains explicitly permitted Full access without requiring a sandbox probe[33m 2163[2mms[22m[39m
+   [32m✓[39m post-dispatch uncertainty preserves effects and private outputs [2m(6)[22m
+     [33m[2m✓[22m[39m reports uncertain success-replaced after effects (authorized retry: false)[33m 1110[2mms[22m[39m
+     [33m[2m✓[22m[39m reports uncertain rejected-disconnected after effects (authorized retry: false)[33m 1153[2mms[22m[39m
+     [33m[2m✓[22m[39m reports uncertain owner-changed after effects (authorized retry: false)[33m 1140[2mms[22m[39m
+     [33m[2m✓[22m[39m reports uncertain success-replaced after effects (authorized retry: true)[33m 2291[2mms[22m[39m
+     [33m[2m✓[22m[39m reports uncertain rejected-disconnected after effects (authorized retry: true)[33m 2215[2mms[22m[39m
+     [33m[2m✓[22m[39m reports uncertain owner-changed after effects (authorized retry: true)[33m 2160[2mms[22m[39m
+ [32m✓[39m test/providers-units.test.ts [2m([22m[2m105 tests[22m[2m)[22m[33m 32942[2mms[22m[39m
+   [32m✓[39m Claude key vault [2m(5)[22m
+     [33m[2m✓[22m[39m writes an encrypted 0600 file in a 0700 directory when OS-backed (matrix: Store Claude key)[33m 1583[2mms[22m[39m
+     [33m[2m✓[22m[39m treats the file as the truth: a removed file is a removed key, an unreadable one is discarded[33m 746[2mms[22m[39m
+   [32m✓[39m provider service: Claude route [2m(8)[22m
+     [33m[2m✓[22m[39m stores a valid key as stored-unverified and never returns it[33m 808[2mms[22m[39m
+     [33m[2m✓[22m[39m refuses an invalid key and stores nothing, keeping a key already stored (matrix: Store Claude key, invalid)[33m 720[2mms[22m[39m
+     [33m[2m✓[22m[39m a verified check gives true (matrix: Verify OK, rejected, offline)[33m 1550[2mms[22m[39m
+     [33m[2m✓[22m[39m a rejected check gives false (matrix: Verify OK, rejected, offline)[33m 1441[2mms[22m[39m
+     [33m[2m✓[22m[39m a unreachable check gives false (matrix: Verify OK, rejected, offline)[33m 1517[2mms[22m[39m
+     [33m[2m✓[22m[39m does not check without a key, and does not relabel a key replaced during the check[33m 1444[2mms[22m[39m
+     [33m[2m✓[22m[39m removes the key and its file (matrix: Remove Claude key)[33m 736[2mms[22m[39m
+     [33m[2m✓[22m[39m refuses a check when the dev config is invalid[33m 773[2mms[22m[39m
+   [32m✓[39m free Claude key check (fake HTTPS endpoint, test CA) [2m(9)[22m
+     [33m[2m✓[22m[39m gives unreachable on a timeout, without retrying (matrix: Verify offline)[33m 625[2mms[22m[39m
+     [33m[2m✓[22m[39m gives unreachable when nothing listens, and when the certificate is not from the configured CA[33m 357[2mms[22m[39m
+     [33m[2m✓[22m[39m runs through the provider service with the dev config, and the rejected key stays stored[33m 2377[2mms[22m[39m
+   [32m✓[39m runtime config.toml [2m(1)[22m
+     [33m[2m✓[22m[39m initializes keyring credential defaults with 0600 permissions[33m 1189[2mms[22m[39m
+   [32m✓[39m runtime-managed configuration restart persistence [2m(2)[22m
+     [33m[2m✓[22m[39m preserves MCP/plugin/app/skill changes and enforces owned values through CLI overrides[33m 1450[2mms[22m[39m
+     [33m[2m✓[22m[39m refuses a symlink rather than following an external config[33m 368[2mms[22m[39m
+   [32m✓[39m data policy: provider categories [2m(4)[22m
+     [33m[2m✓[22m[39m classifies the vault and config files, blocks on auth.json, and never lists the keyring entry as a file[33m 781[2mms[22m[39m
+   [32m✓[39m a known rejection survives an offline check (review R06) [2m(3)[22m
+     [33m[2m✓[22m[39m os-backed: rejected then unreachable stays rejected and unauthorized; verified then unreachable stays authorized[33m 3035[2mms[22m[39m
+     [33m[2m✓[22m[39m replacing a rejected key gives a new unverified key, and an offline check of it stays authorized[33m 3172[2mms[22m[39m
+   [32m✓[39m Local data deletion of the Claude API key (review R03) [2m(5)[22m
+     [33m[2m✓[22m[39m os-backed: removes the key, and no later check uses it[33m 739[2mms[22m[39m
+     [33m[2m✓[22m[39m os-backed: a check in flight cannot bring the key back[33m 1474[2mms[22m[39m
+   [32m✓[39m Story 1.22 private route credential lifecycle [2m(3)[22m
+     [33m[2m✓[22m[39m invalidates the old route before replacing or removing a Claude key[33m 1496[2mms[22m[39m
+     [33m[2m✓[22m[39m hands a key only to the private callback, not its return or provider state[33m 710[2mms[22m[39m
+     [33m[2m✓[22m[39m blocks replacement if cancellation cannot establish safe invalidation[33m 703[2mms[22m[39m
+   [32m✓[39m Story 1.22 credential invalidation races [2m(5)[22m
+     [33m[2m✓[22m[39m replace cannot restore a gnome_libsecret key deleted during invalidation[33m 746[2mms[22m[39m
+     [33m[2m✓[22m[39m rejected verification cannot restore a gnome_libsecret key deleted during invalidation[33m 824[2mms[22m[39m
+     [33m[2m✓[22m[39m handoff checks vault identity, not generation alone[33m 838[2mms[22m[39m
+inquello-dev-topology: could not create the run database
+ [31m❯[39m test/capabilities-integration.test.ts [2m([22m[2m4 tests[22m[2m | [22m[33m4 skipped[39m[2m)[22m[33m 577[2mms[22m[39m
+   [31m❯[39m capabilities against the real runtime and seeded Workspace [2m(4)[22m
+     [2m[90m↓[39m[22m lists the actual runtime inventory and refuses plugin install by policy
+     [2m[90m↓[39m[22m adds a fixture HTTP MCP, disables/enables it and removes it through runtime config
+     [2m[90m↓[39m[22m preserves managed MCP state across restart while enforcing owned credential settings
+     [2m[90m↓[39m[22m provider sign-in/out changes no Workspace, membership, Engagement, review or policy
+inquello-dev-topology: could not create the run database
+ [31m❯[39m test/identity-integration.test.ts [2m([22m[2m5 tests[22m[2m | [22m[33m5 skipped[39m[2m)[22m[33m 542[2mms[22m[39m
+   [31m❯[39m identity against the dev topology [2m(5)[22m
+     [2m[90m↓[39m[22m signs in over HTTPS, refreshes with rotation and logs out
+     [2m[90m↓[39m[22m a reused refresh credential revokes the family and the desktop must sign in again
+     [2m[90m↓[39m[22m the issuer rejects a wrong PKCE verifier, and a code works at most once
+     [2m[90m↓[39m[22m a certificate from another CA is refused, so the shared service is unavailable
+     [2m[90m↓[39m[22m service down: still signed in, shared service unavailable, private work local
+ [32m✓[39m test/tasks-lifecycle-shell.test.tsx [2m([22m[2m38 tests[22m[2m)[22m[33m 7570[2mms[22m[39m
+   [33m[2m✓[22m[39m shows stopping until confirmation and preserves three completed and two pending steps[33m 385[2mms[22m[39m
+   [33m[2m✓[22m[39m background question labels update without stealing focus and clear on invalidation[33m 329[2mms[22m[39m
+   [33m[2m✓[22m[39m lost acknowledgement is resolved by progress without another click or duplicate dispatch[33m 376[2mms[22m[39m
+   [33m[2m✓[22m[39m settles the submitted draft after navigation from trusted Task operation state[33m 339[2mms[22m[39m
+   [33m[2m✓[22m[39m presents observed interrupted terminal receipts instead of stale reconciliation copy[33m 345[2mms[22m[39m
+   [33m[2m✓[22m[39m presents observed completed terminal receipts instead of stale reconciliation copy[33m 351[2mms[22m[39m
+   [33m[2m✓[22m[39m presents observed rejected terminal receipts instead of stale reconciliation copy[33m 362[2mms[22m[39m
+   [33m[2m✓[22m[39m presents observed unresolved terminal receipts instead of stale reconciliation copy[33m 348[2mms[22m[39m
+   [33m[2m✓[22m[39m retries rejected settlement without reapplying the draft change, including remount[33m 724[2mms[22m[39m
+   [33m[2m✓[22m[39m reserves selected observation capacity while navigation requests are stalled[33m 357[2mms[22m[39m
+   [33m[2m✓[22m[39m retrieves bounded replacement pages with exact history reasons and resets on revision change[33m 412[2mms[22m[39m
+   [33m[2m✓[22m[39m promotes the same stalled navigation Task into reserved full-read capacity without losing its request fence[33m 344[2mms[22m[39m
+   [33m[2m✓[22m[39m clears private full-read content immediately while the fallback authority read is stalled[33m 326[2mms[22m[39m
+   [33m[2m✓[22m[39m retains the focused Stop while interruption is pending even if completion arrives first[33m 358[2mms[22m[39m
+   [33m[2m✓[22m[39m offers deliberate resend after a running-to-completed race without replaying the preserved draft[33m 370[2mms[22m[39m
+   [33m[2m✓[22m[39m blocks Send during a held model choice while leaving independently authorized Stop available[33m 456[2mms[22m[39m
+ [32m✓[39m test/organise-shell.test.tsx [2m([22m[2m20 tests[22m[2m)[22m[33m 10603[2mms[22m[39m
+   [32m✓[39m Shell [2m(8)[22m
+     [33m[2m✓[22m[39m creates an Engagement and folder, then opens Start without an empty Task[33m 1343[2mms[22m[39m
+     [33m[2m✓[22m[39m shows a stale rename as a conflict and keeps the typed draft[33m 470[2mms[22m[39m
+     [33m[2m✓[22m[39m moves a Task through the Move menu and keeps its identity[33m 326[2mms[22m[39m
+   [33m[2m✓[22m[39m keeps background acceptance without taking over unrelated navigation[33m 840[2mms[22m[39m
+   [33m[2m✓[22m[39m preserves newer shared no-Task draft when an older Start is accepted after navigation[33m 1051[2mms[22m[39m
+   [33m[2m✓[22m[39m removes cached private request and selection when Workspace membership disappears[33m 750[2mms[22m[39m
+   [33m[2m✓[22m[39m discovers the exact retained operation and answers a mediated question while Start ack is held, exactly once[33m 1513[2mms[22m[39m
+   [33m[2m✓[22m[39m keeps held-ack discovery background-only and ignores the later Start reply[33m 985[2mms[22m[39m
+   [33m[2m✓[22m[39m suppresses delayed discovery and Start acknowledgement after Workspace revocation[33m 861[2mms[22m[39m
+   [33m[2m✓[22m[39m initial authorized home uses one real StartView without creating or preflighting work; refresh keeps its draft[33m 482[2mms[22m[39m
+   [33m[2m✓[22m[39m real initial draft survives the actual Settings route without remount or dispatch[33m 519[2mms[22m[39m
+   [33m[2m✓[22m[39m keeps open conversation options and rename draft through the same-owner identity poll[33m 529[2mms[22m[39m
+[90mstderr[2m | test/tasks-progress-shell.test.tsx[2m > [22m[2mannounces newly observed terminal items once and coalesces output bursts
+[22m[39mYou seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+[90mstderr[2m | test/tasks-progress-shell.test.tsx[2m > [22m[2mannounces newly observed terminal items once and coalesces output bursts
+[22m[39mYou seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+[90mstderr[2m | test/tasks-progress-shell.test.tsx[2m > [22m[2mannounces newly observed terminal items once and coalesces output bursts
+[22m[39mYou seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+[90mstderr[2m | test/tasks-progress-shell.test.tsx[2m > [22m[2mannounces newly observed terminal items once and coalesces output bursts
+[22m[39mYou seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+[90mstderr[2m | test/tasks-progress-shell.test.tsx[2m > [22m[2mannounces newly observed terminal items once and coalesces output bursts
+[22m[39mYou seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+[90mstderr[2m | test/tasks-progress-shell.test.tsx[2m > [22m[2mannounces newly observed terminal items once and coalesces output bursts
+[22m[39mYou seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+[90mstderr[2m | test/tasks-progress-shell.test.tsx[2m > [22m[2mannounces newly observed terminal items once and coalesces output bursts
+[22m[39mYou seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+[90mstderr[2m | test/tasks-progress-shell.test.tsx[2m > [22m[2mannounces newly observed terminal items once and coalesces output bursts
+[22m[39mYou seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+[90mstderr[2m | test/tasks-progress-shell.test.tsx[2m > [22m[2mannounces newly observed terminal items once and coalesces output bursts
+[22m[39mYou seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+[90mstderr[2m | test/tasks-progress-shell.test.tsx[2m > [22m[2mannounces newly observed terminal items once and coalesces output bursts
+[22m[39mYou seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+[90mstderr[2m | test/tasks-progress-shell.test.tsx[2m > [22m[2mannounces newly observed terminal items once and coalesces output bursts
+[22m[39mYou seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+[90mstderr[2m | test/tasks-progress-shell.test.tsx[2m > [22m[2mannounces newly observed terminal items once and coalesces output bursts
+[22m[39mYou seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+[90mstderr[2m | test/tasks-progress-shell.test.tsx[2m > [22m[2mannounces newly observed terminal items once and coalesces output bursts
+[22m[39mYou seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+[90mstderr[2m | test/tasks-progress-shell.test.tsx[2m > [22m[2mannounces newly observed terminal items once and coalesces output bursts
+[22m[39mYou seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+[90mstderr[2m | test/tasks-progress-shell.test.tsx[2m > [22m[2mannounces newly observed terminal items once and coalesces output bursts
+[22m[39mYou seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+[90mstderr[2m | test/tasks-progress-shell.test.tsx[2m > [22m[2mannounces newly observed terminal items once and coalesces output bursts
+[22m[39mYou seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+[90mstderr[2m | test/tasks-progress-shell.test.tsx[2m > [22m[2mannounces newly observed terminal items once and coalesces output bursts
+[22m[39mYou seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+[90mstderr[2m | test/tasks-progress-shell.test.tsx[2m > [22m[2mannounces newly observed terminal items once and coalesces output bursts
+[22m[39mYou seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+[90mstderr[2m | test/tasks-progress-shell.test.tsx[2m > [22m[2mannounces newly observed terminal items once and coalesces output bursts
+[22m[39mYou seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+[90mstderr[2m | test/tasks-progress-shell.test.tsx[2m > [22m[2mannounces newly observed terminal items once and coalesces output bursts
+[22m[39mYou seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+[90mstderr[2m | test/tasks-progress-shell.test.tsx[2m > [22m[2mannounces newly observed terminal items once and coalesces output bursts
+[22m[39mYou seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+[90mstderr[2m | test/tasks-progress-shell.test.tsx[2m > [22m[2mannounces newly observed terminal items once and coalesces output bursts
+[22m[39mYou seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+[90mstderr[2m | test/tasks-progress-shell.test.tsx[2m > [22m[2mannounces newly observed terminal items once and coalesces output bursts
+[22m[39mYou seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+[90mstderr[2m | test/tasks-progress-shell.test.tsx[2m > [22m[2mannounces newly observed terminal items once and coalesces output bursts
+[22m[39mYou seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+[90mstderr[2m | test/tasks-progress-shell.test.tsx[2m > [22m[2mannounces newly observed terminal items once and coalesces output bursts
+[22m[39mYou seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+[90mstderr[2m | test/tasks-progress-shell.test.tsx[2m > [22m[2mannounces newly observed terminal items once and coalesces output bursts
+[22m[39mYou seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+[90mstderr[2m | test/tasks-progress-shell.test.tsx[2m > [22m[2mannounces newly observed terminal items once and coalesces output bursts
+[22m[39mYou seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+[90mstderr[2m | test/tasks-progress-shell.test.tsx[2m > [22m[2mannounces newly observed terminal items once and coalesces output bursts
+[22m[39mYou seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+[90mstderr[2m | test/tasks-progress-shell.test.tsx[2m > [22m[2mannounces newly observed terminal items once and coalesces output bursts
+[22m[39mYou seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+[90mstderr[2m | test/tasks-progress-shell.test.tsx[2m > [22m[2mannounces newly observed terminal items once and coalesces output bursts
+[22m[39mYou seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+[90mstderr[2m | test/tasks-progress-shell.test.tsx[2m > [22m[2mannounces newly observed terminal items once and coalesces output bursts
+[22m[39mYou seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one. 
+
+ [32m✓[39m test/tasks-progress-shell.test.tsx [2m([22m[2m48 tests[22m[2m)[22m[33m 5448[2mms[22m[39m
+   [32m✓[39m Story 1.26 live work [2m(16)[22m
+     [33m[2m✓[22m[39m keeps stable activity rows, focus and scroll across progress[33m 465[2mms[22m[39m
+     [33m[2m✓[22m[39m announces distinct item transitions even with the same kind and status[33m 579[2mms[22m[39m
+   [33m[2m✓[22m[39m does not resurrect a consumed scoped question from a read captured before answer[33m 617[2mms[22m[39m
+   [33m[2m✓[22m[39m announces newly observed terminal items once and coalesces output bursts[33m 581[2mms[22m[39m
+   [33m[2m✓[22m[39m ignores a pre-answer hydration rejection after the answer was consumed[33m 315[2mms[22m[39m
+   [33m[2m✓[22m[39m does not infer a refusal reason from failure prose and preserves keyboard focus during source updates[33m 408[2mms[22m[39m
+   [33m[2m✓[22m[39m renders the native retained refusal projection without treating printed claims as enforcement and keeps focus[33m 331[2mms[22m[39m
+   [33m[2m✓[22m[39m focuses the same current Inbox question on each explicit visit, never on a background refresh[33m 317[2mms[22m[39m
+   [33m[2m✓[22m[39m shows an accepted message only until the first authoritative observation, without text-based deduplication[33m 303[2mms[22m[39m
+ [32m✓[39m test/tool-bounds-units.test.ts [2m([22m[2m12 tests[22m[2m)[22m[33m 6203[2mms[22m[39m
+   [32m✓[39m the Task folder [2m(2)[22m
+     [33m[2m✓[22m[39m is created private on first use, inside the data area, and named after the Task[33m 3822[2mms[22m[39m
+     [33m[2m✓[22m[39m is governed by the task-folders category: classified, exported and removed by delete[33m 2331[2mms[22m[39m
+ [32m✓[39m test/runtime.test.ts [2m([22m[2m19 tests[22m[2m)[22m[33m 5018[2mms[22m[39m
+   [32m✓[39m request before ready [2m(1)[22m
+     [33m[2m✓[22m[39m rejects locally while starting or initializing and never forwards it[33m 406[2mms[22m[39m
+   [32m✓[39m slow writer [2m(1)[22m
+     [33m[2m✓[22m[39m waits for drain behind a bounded queue and rejects requests when it is full[33m 1626[2mms[22m[39m
+   [32m✓[39m unexpected exit [2m(4)[22m
+     [33m[2m✓[22m[39m rejects pending requests and reports exit code and recent stderr, without restarting[33m 457[2mms[22m[39m
+   [32m✓[39m graceful stop [2m(4)[22m
+     [33m[2m✓[22m[39m kills the child after the grace period when it ignores EOF[33m 623[2mms[22m[39m
+   [32m✓[39m stderr noise [2m(1)[22m
+     [33m[2m✓[22m[39m captures stderr to a bounded buffer and a log file and never parses it[33m 317[2mms[22m[39m
+2026-11-05T14:48:00.119886Z  INFO inquello_service::test_provider: synthetic OIDC provider listening issuer="https://127.0.0.1:50650"
+2026-11-05T14:48:00.696535Z  INFO inquello_service::server: inquello service listening local_addr=127.0.0.1:50653 https=true
+2026-11-05T14:48:00.853091Z  INFO sqlx::postgres::notice: relation "_sqlx_migrations" already exists, skipping
+2026-11-05T14:48:00.880942Z  INFO inquello_service::admin: workspace created by operator workspace_id=632e922f-6f07-4687-844e-f557bc0567a0 receipt_id=2553139c-ece8-4726-a565-66e4dc7ae8b4
+2026-11-05T14:48:02.250428Z  INFO inquello_service::login: login transaction created login_transaction_id=0d1c5db2-ffc3-45e7-a29a-d041d647547b
+2026-11-05T14:48:02.260001Z  INFO inquello_service::test_provider: authorization code issued for the synthetic subject
+2026-11-05T14:48:02.277307Z  INFO inquello_service::test_provider: ID token issued for the synthetic subject
+2026-11-05T14:48:02.318358Z  INFO inquello_service::login: session created principal_id=873e5883-1d01-4deb-85c8-5c6dbcc408d6 session_id=49b92a9c-f823-4bee-840c-211bb4cd0f4c
+2026-11-05T14:48:03.114555Z  INFO inquello_service::workspaces: invite accepted principal_id=873e5883-1d01-4deb-85c8-5c6dbcc408d6 workspace_id=632e922f-6f07-4687-844e-f557bc0567a0
+2026-11-05T14:48:03.231112Z  INFO inquello_service::workspace_commands: workspace command applied principal_id=873e5883-1d01-4deb-85c8-5c6dbcc408d6 workspace_id=632e922f-6f07-4687-844e-f557bc0567a0 operation_id=aa2470d3-79c9-4e07-844c-ff2e64e23bb9 receipt_id=c9edb8f9-5de8-4f0e-82b5-78e073e91279 command="create_engagement"
+2026-11-05T14:48:03.639919Z  INFO inquello_service::workspace_commands: workspace command applied principal_id=873e5883-1d01-4deb-85c8-5c6dbcc408d6 workspace_id=632e922f-6f07-4687-844e-f557bc0567a0 operation_id=52c96eec-15ee-4062-9605-bfffbd7972e3 receipt_id=e02c3909-8f1b-4224-a50f-284f6b40aaf1 command="create_engagement"
+2026-11-05T14:48:04.463885Z  INFO inquello_service::workspace_commands: workspace command applied principal_id=873e5883-1d01-4deb-85c8-5c6dbcc408d6 workspace_id=632e922f-6f07-4687-844e-f557bc0567a0 operation_id=1e706fca-b10d-4558-9a1b-5075ced41125 receipt_id=741636d1-9089-4802-ba69-2517378811a1 command="create_engagement"
+2026-11-05T14:48:04.502821Z  INFO inquello_service::workspace_commands: workspace receipt replayed principal_id=873e5883-1d01-4deb-85c8-5c6dbcc408d6 workspace_id=632e922f-6f07-4687-844e-f557bc0567a0 operation_id=1e706fca-b10d-4558-9a1b-5075ced41125
+2026-11-05T14:48:04.613517Z  INFO inquello_service::workspace_commands: workspace receipt replayed principal_id=873e5883-1d01-4deb-85c8-5c6dbcc408d6 workspace_id=632e922f-6f07-4687-844e-f557bc0567a0 operation_id=1e706fca-b10d-4558-9a1b-5075ced41125
+2026-11-05T14:48:05.951344Z  INFO inquello_dev_topology: dev topology stopping
+ [32m✓[39m test/organise-integration.test.ts [2m([22m[2m7 tests[22m[2m)[22m[33m 7057[2mms[22m[39m
+   [32m✓[39m organise against the real runtime and the dev topology [2m(7)[22m
+     [33m[2m✓[22m[39m creates Engagements, folders and private drafts, preserving identity and references on move[33m 1264[2mms[22m[39m
+     [33m[2m✓[22m[39m never lists another principal's Tasks in the same Engagement[33m 344[2mms[22m[39m
+     [33m[2m✓[22m[39m records Task and run states separately and refuses review from a non-human writer (Story 1.15)[33m 694[2mms[22m[39m
+     [33m[2m✓[22m[39m with current authority unavailable, cached private work is inaccessible and Engagement creation is disabled[33m 470[2mms[22m[39m
+ [32m✓[39m test/provider-consent-store.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 5929[2mms[22m[39m
+   [33m[2m✓[22m[39m restarts with exact encrypted immutable envelope and separate principal/workspace/service scopes[33m 1242[2mms[22m[39m
+   [33m[2m✓[22m[39m rejects a transplanted journal and a mismatched workspace envelope[33m 1933[2mms[22m[39m
+   [33m[2m✓[22m[39m failed atomic replacement retains original pending bytes and removes only its temporary file[33m 1754[2mms[22m[39m
+   [33m[2m✓[22m[39m refuses plaintext-only storage and malformed ciphertext without discarding pending state[33m 996[2mms[22m[39m
+ [32m✓[39m test/data-integration.test.ts [2m([22m[2m4 tests[22m[2m)[22m[33m 6792[2mms[22m[39m
+   [32m✓[39m runtime home isolation (matrix: Isolation) [2m(1)[22m
+     [33m[2m✓[22m[39m uses <userData>/runtime-home and leaves a personal ~/.codex untouched[33m 713[2mms[22m[39m
+   [32m✓[39m a real runtime home [2m(2)[22m
+     [33m[2m✓[22m[39m holds only classified files after the handshake and a synthetic session[33m 625[2mms[22m[39m
+     [33m[2m✓[22m[39m round trip: export, delete all, reimport reproduces the included categories (matrix: Round trip)[33m 2053[2mms[22m[39m
+   [32m✓[39m populated working-store recovery (R2/R9) [2m(1)[22m
+     [33m[2m✓[22m[39m preserves Task identity, state history, receipts and output across export/delete/import/reopen[33m 3312[2mms[22m[39m
+ [32m✓[39m test/shell-layout.test.tsx [2m([22m[2m36 tests[22m[2m)[22m[33m 6829[2mms[22m[39m
+   [33m[2m✓[22m[39m completes pin and archive without waiting for an unrelated sandbox inspection[33m 758[2mms[22m[39m
+   [32m✓[39m Shell layout [2m(18)[22m
+     [33m[2m✓[22m[39m switching twice keeps the same draft and selected item, and focus stays on the switch[33m 678[2mms[22m[39m
+     [33m[2m✓[22m[39m Escape closes the topmost Menu, then the navigation overlay, returning focus each time; the Task is unaffected[33m 319[2mms[22m[39m
+     [33m[2m✓[22m[39m keyboard only: Tab moves navigation → main → artifact and review → Composer slot, with no trap[33m 918[2mms[22m[39m
+     [33m[2m✓[22m[39m resizing across every threshold keeps the open Task and the draft[33m 442[2mms[22m[39m
+     [33m[2m✓[22m[39m keeps each Task its own draft[33m 418[2mms[22m[39m
+   [32m✓[39m saved-work latest foreground destination [2m(3)[22m
+     [33m[2m✓[22m[39m blocks underlying global navigation while Search owns the modal[33m 510[2mms[22m[39m
+ [32m✓[39m test/composer.test.tsx [2m([22m[2m26 tests[22m[2m)[22m[33m 5783[2mms[22m[39m
+   [32m✓[39m Composer [2m(14)[22m
+     [33m[2m✓[22m[39m is labelled, last in the Shell and styled by the DESIGN Composer tokens[33m 386[2mms[22m[39m
+     [33m[2m✓[22m[39m Preserve: each Task keeps its own draft[33m 1010[2mms[22m[39m
+     [33m[2m✓[22m[39m keeps a separate draft while no Task is open[33m 321[2mms[22m[39m
+     [33m[2m✓[22m[39m Empty retained Task: Send is unavailable and says to type a request first[33m 338[2mms[22m[39m
+     [33m[2m✓[22m[39m Send focus: Tab reaches Send; activating it does nothing[33m 451[2mms[22m[39m
+     [33m[2m✓[22m[39m Escape in the Composer keeps the draft; Ctrl/Cmd+N there is not intercepted[33m 424[2mms[22m[39m
+     [33m[2m✓[22m[39m Task deleted: its draft is discarded[33m 469[2mms[22m[39m
+     [33m[2m✓[22m[39m a change of principal clears every draft[33m 424[2mms[22m[39m
+   [32m✓[39m App: drafts across Settings [2m(2)[22m
+     [33m[2m✓[22m[39m a visit to Settings keeps the drafts[33m 452[2mms[22m[39m
+     [33m[2m✓[22m[39m Sign-out clears every draft[33m 547[2mms[22m[39m
+ [32m✓[39m test/capabilities-shell.test.tsx [2m([22m[2m34 tests[22m[2m)[22m[33m 3613[2mms[22m[39m
+   [32m✓[39m S07 runtime inventory [2m(22)[22m
+     [33m[2m✓[22m[39m requires explicit outside-sandbox confirmation for stdio[33m 496[2mms[22m[39m
+     [33m[2m✓[22m[39m adds remote MCP through the validated operation[33m 405[2mms[22m[39m
+   [32m✓[39m inventory request scopes and queued invalidation [2m(9)[22m
+     [33m[2m✓[22m[39m clears plugin confirmation and all local form authority on Workspace change[33m 354[2mms[22m[39m
+   [33m[2m✓[22m[39m invalidates local confirmation when Program to run changes[33m 427[2mms[22m[39m
+   [33m[2m✓[22m[39m invalidates local confirmation when Program arguments (JSON array) changes[33m 389[2mms[22m[39m
+ [32m✓[39m test/identity-units.test.ts [2m([22m[2m47 tests[22m[2m)[22m[33m 3022[2mms[22m[39m
+   [32m✓[39m vault [2m(15)[22m
+     [33m[2m✓[22m[39m os-backed: writes an encrypted 0600 file in a 0700 directory and reads it back[33m 2648[2mms[22m[39m
+ [32m✓[39m test/onboarding-renderer.test.tsx [2m([22m[2m21 tests[22m[2m)[22m[33m 2586[2mms[22m[39m
+   [32m✓[39m ordinary onboarding controls [2m(10)[22m
+     [33m[2m✓[22m[39m requires deliberate creation confirmation and preserves input on cancel[33m 671[2mms[22m[39m
+ [32m✓[39m test/account-navigation-review.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 2562[2mms[22m[39m
+   [33m[2m✓[22m[39m preserves the same owner draft and mounted chat when sign out refused[33m 903[2mms[22m[39m
+   [33m[2m✓[22m[39m preserves the same owner draft and mounted chat when sign out throws[33m 709[2mms[22m[39m
+   [33m[2m✓[22m[39m choosing the current workspace preserves the mounted conversation draft and navigation[33m 699[2mms[22m[39m
+ [32m✓[39m test/data-operations.test.ts [2m([22m[2m49 tests[22m[2m | [22m[33m2 skipped[39m[2m)[22m[33m 2096[2mms[22m[39m
+ [32m✓[39m test/conversation-model-picker.test.tsx [2m([22m[2m14 tests[22m[2m)[22m[33m 973[2mms[22m[39m
+ [32m✓[39m test/environments-shell.test.tsx [2m([22m[2m13 tests[22m[2m)[22m[33m 836[2mms[22m[39m
+ [32m✓[39m test/data-import-boundaries.test.ts [2m([22m[2m24 tests[22m[2m | [22m[33m3 skipped[39m[2m)[22m[33m 579[2mms[22m[39m
+ [32m✓[39m test/authorization-negative-suite.test.ts [2m([22m[2m21 tests[22m[2m)[22m[33m 635[2mms[22m[39m
+ [32m✓[39m test/data-local-data.test.tsx [2m([22m[2m18 tests[22m[2m)[22m[33m 592[2mms[22m[39m
+ [32m✓[39m test/data-authority-fences.test.ts [2m([22m[2m15 tests[22m[2m)[22m[33m 327[2mms[22m[39m
+ [32m✓[39m test/message-markdown.test.tsx [2m([22m[2m22 tests[22m[2m)[22m[32m 288[2mms[22m[39m
+ [32m✓[39m test/environments-units.test.ts [2m([22m[2m18 tests[22m[2m)[22m[32m 243[2mms[22m[39m
+ [32m✓[39m test/dev-profile.test.ts [2m([22m[2m14 tests[22m[2m | [22m[33m1 skipped[39m[2m)[22m[33m 305[2mms[22m[39m
+ [32m✓[39m test/design.test.ts [2m([22m[2m94 tests[22m[2m)[22m[32m 158[2mms[22m[39m
+ [32m✓[39m test/data-policy.test.ts [2m([22m[2m29 tests[22m[2m)[22m[32m 52[2mms[22m[39m
+ [32m✓[39m test/conversation-grouping.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[32m 187[2mms[22m[39m
+ [32m✓[39m test/live-conversation.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[33m 2805[2mms[22m[39m
+   [32m✓[39m live message text for the open conversation [2m(3)[22m
+     [33m[2m✓[22m[39m refreshes a running open Task faster than the general invalidation cadence, through the same read[33m 537[2mms[22m[39m
+     [33m[2m✓[22m[39m does not use the fast lane once the open Task has ended[33m 670[2mms[22m[39m
+     [33m[2m✓[22m[39m bounds reads during a long delta burst and never announces streamed text[33m 1404[2mms[22m[39m
+ [32m✓[39m test/private-paths.test.ts [2m([22m[2m3 tests[22m[2m)[22m[33m 4345[2mms[22m[39m
+   [32m✓[39m private filesystem paths on the current operating system [2m(3)[22m
+     [33m[2m✓[22m[39m restricts directories and files with spaces and apostrophes, without changing a sibling[33m 2244[2mms[22m[39m
+     [33m[2m✓[22m[39m detects and removes a broad read grant from the named file[33m 2085[2mms[22m[39m
+ [32m✓[39m test/desktop-storage.test.ts [2m([22m[2m2 tests[22m[2m)[22m[33m 3722[2mms[22m[39m
+   [32m✓[39m desktop cache and temporary storage [2m(2)[22m
+     [33m[2m✓[22m[39m configures Electron and child temp paths with real private directories on D[33m 3714[2mms[22m[39m
+ [32m✓[39m test/tree-read-order-shell.test.tsx [2m([22m[2m3 tests[22m[2m)[22m[33m 2462[2mms[22m[39m
+   [33m[2m✓[22m[39m late pre-admission empty success cannot erase a newer admitted Task tree[33m 1055[2mms[22m[39m
+   [33m[2m✓[22m[39m late success cannot restore private work after the newer inventory refused access[33m 679[2mms[22m[39m
+   [33m[2m✓[22m[39m even an older authority refusal clears the newer tree rather than preserving unauthorized content[33m 726[2mms[22m[39m
+ [32m✓[39m test/providers-block.test.tsx [2m([22m[2m22 tests[22m[2m)[22m[33m 2017[2mms[22m[39m
+   [32m✓[39m Providers block [2m(6)[22m
+     [33m[2m✓[22m[39m hands the Claude key to main once, clears the field, and never shows the key again (matrix: Store Claude key)[33m 519[2mms[22m[39m
+     [33m[2m✓[22m[39m checks the key only when asked, and removes it[33m 480[2mms[22m[39m
+     [33m[2m✓[22m[39m connects Codex with an API key (field cleared) or ChatGPT, and disconnects (matrix: Codex API-key login, Codex logout)[33m 341[2mms[22m[39m
+ [32m✓[39m test/routes-integration.test.ts [2m([22m[2m7 tests[22m[2m)[22m[33m 3372[2mms[22m[39m
+ [32m✓[39m test/primitives.test.tsx [2m([22m[2m49 tests[22m[2m)[22m[33m 1628[2mms[22m[39m
+   [32m✓[39m specimen [2m(2)[22m
+     [33m[2m✓[22m[39m renders every hook and selector the rendered pairs read[33m 398[2mms[22m[39m
+ [32m✓[39m test/primitives-navigation.test.tsx [2m([22m[2m38 tests[22m[2m)[22m[33m 1562[2mms[22m[39m
+ [32m✓[39m test/sidebar-followup.test.tsx [2m([22m[2m8 tests[22m[2m)[22m[33m 1510[2mms[22m[39m
+   [33m[2m✓[22m[39m has one rail brand and simple footer; sign-out navigation and cancel preserve draft without auth action[33m 554[2mms[22m[39m
+   [33m[2m✓[22m[39m explicit sign-out confirmation uses existing identity action exactly once and invalidates owner draft[33m 356[2mms[22m[39m
+ [32m✓[39m test/integration.test.ts [2m([22m[2m3 tests[22m[2m)[22m[33m 1890[2mms[22m[39m
+   [32m✓[39m real app-server over stdio [2m(3)[22m
+     [33m[2m✓[22m[39m completes the handshake, passes the version check and exits 0 on stop[33m 611[2mms[22m[39m
+     [33m[2m✓[22m[39m still passes the version check when a host originator override has spaces[33m 611[2mms[22m[39m
+     [33m[2m✓[22m[39m identifies as inquello_desktop once runtimeChildEnv strips the override[33m 630[2mms[22m[39m
+ [32m✓[39m test/onboarding-main.test.ts [2m([22m[2m33 tests[22m[2m)[22m[33m 1120[2mms[22m[39m
+   [32m✓[39m encrypted principal-scoped onboarding store [2m(2)[22m
+     [33m[2m✓[22m[39m persists encrypted drafts and envelopes through restart without sharing another principal scope[33m 1073[2mms[22m[39m
+ [32m✓[39m test/tasks-start.test.tsx [2m([22m[2m15 tests[22m[2m)[22m[33m 1353[2mms[22m[39m
+ [32m✓[39m test/usage-surfaces.test.tsx [2m([22m[2m12 tests[22m[2m)[22m[33m 547[2mms[22m[39m
+ [32m✓[39m test/saved-work-shell.test.tsx [2m([22m[2m16 tests[22m[2m)[22m[33m 1212[2mms[22m[39m
+   [32m✓[39m S05 saved-work interactions [2m(5)[22m
+     [33m[2m✓[22m[39m searches archived conversation text and opens the exact inert old message without execution[33m 320[2mms[22m[39m
+ [32m✓[39m test/routes-shell.test.tsx [2m([22m[2m17 tests[22m[2m)[22m[33m 952[2mms[22m[39m
+ [32m✓[39m test/permissions-shell.test.tsx [2m([22m[2m13 tests[22m[2m)[22m[33m 767[2mms[22m[39m
+ [32m✓[39m test/usage-shell.test.tsx [2m([22m[2m15 tests[22m[2m)[22m[33m 822[2mms[22m[39m
+ [32m✓[39m test/navigation-recovery-shell.test.tsx [2m([22m[2m4 tests[22m[2m)[22m[33m 756[2mms[22m[39m
+   [32m✓[39m explicit Refresh workspace action [2m(3)[22m
+     [33m[2m✓[22m[39m does nothing automatically, then keyboard activation reauthorizes and reads without replaying mutations[33m 351[2mms[22m[39m
+ [32m✓[39m test/policy-shell.test.tsx [2m([22m[2m14 tests[22m[2m)[22m[33m 798[2mms[22m[39m
+ [32m✓[39m test/routes-units.test.ts [2m([22m[2m51 tests[22m[2m)[22m[33m 473[2mms[22m[39m
+ [32m✓[39m test/states-shell.test.tsx [2m([22m[2m10 tests[22m[2m)[22m[33m 658[2mms[22m[39m
+ [32m✓[39m test/tasks-lifecycle.test.ts [2m([22m[2m44 tests[22m[2m)[22m[33m 454[2mms[22m[39m
+ [32m✓[39m test/primitives-progress.test.tsx [2m([22m[2m37 tests[22m[2m)[22m[33m 437[2mms[22m[39m
+ [32m✓[39m test/tasks-progress.test.ts [2m([22m[2m50 tests[22m[2m)[22m[33m 319[2mms[22m[39m
+ [32m✓[39m test/turn-finished.test.tsx [2m([22m[2m12 tests[22m[2m)[22m[32m 189[2mms[22m[39m
+ [32m✓[39m test/identity-account.test.tsx [2m([22m[2m9 tests[22m[2m)[22m[33m 459[2mms[22m[39m
+ [32m✓[39m test/provider-consent-renderer.test.tsx [2m([22m[2m7 tests[22m[2m)[22m[33m 435[2mms[22m[39m
+ [32m✓[39m test/provider-consent-ui.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[33m 412[2mms[22m[39m
+ [32m✓[39m test/tasks-permission.test.ts [2m([22m[2m6 tests[22m[2m)[22m[33m 353[2mms[22m[39m
+ [32m✓[39m test/settings-route.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 1156[2mms[22m[39m
+   [33m[2m✓[22m[39m reconnect provider-claude-key mounts and focuses its actual provider control without actions[33m 778[2mms[22m[39m
+ [32m✓[39m test/shell-refinement.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 384[2mms[22m[39m
+ [32m✓[39m test/tasks-route-authority.test.ts [2m([22m[2m14 tests[22m[2m)[22m[32m 223[2mms[22m[39m
+ [32m✓[39m test/usage-units.test.ts [2m([22m[2m15 tests[22m[2m)[22m[32m 239[2mms[22m[39m
+ [32m✓[39m test/saved-work.test.ts [2m([22m[2m37 tests[22m[2m)[22m[32m 217[2mms[22m[39m
+ [32m✓[39m test/conversation-follow.test.tsx [2m([22m[2m14 tests[22m[2m)[22m[32m 256[2mms[22m[39m
+ [32m✓[39m test/conversation-management.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 364[2mms[22m[39m
+   [33m[2m✓[22m[39m preserves an ambiguous rename UUID and draft across closing and reopening the same authorized dialog[33m 333[2mms[22m[39m
+ [32m✓[39m test/routes-synthetic-fixture.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 174[2mms[22m[39m
+ [32m✓[39m test/tool-bounds-shell.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[32m 208[2mms[22m[39m
+ [32m✓[39m test/onboarding-route.test.tsx [2m([22m[2m1 test[22m[2m)[22m[32m 178[2mms[22m[39m
+ [32m✓[39m test/data-recovery.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 256[2mms[22m[39m
+ [32m✓[39m test/onboarding-smoke.test.ts [2m([22m[2m12 tests[22m[2m | [22m[33m1 skipped[39m[2m)[22m[32m 214[2mms[22m[39m
+ [32m✓[39m test/smoke-task-session.test.ts [2m([22m[2m39 tests[22m[2m)[22m[32m 245[2mms[22m[39m
+ [32m✓[39m test/transport-and-schema.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 225[2mms[22m[39m
+ [32m✓[39m test/composer-route-label.test.tsx [2m([22m[2m11 tests[22m[2m)[22m[32m 125[2mms[22m[39m
+ [32m✓[39m test/security.test.ts [2m([22m[2m160 tests[22m[2m)[22m[32m 144[2mms[22m[39m
+ [32m✓[39m test/auth0-pilot-runner.test.ts [2m([22m[2m14 tests[22m[2m)[22m[32m 124[2mms[22m[39m
+ [32m✓[39m test/permissions-units.test.ts [2m([22m[2m15 tests[22m[2m)[22m[33m 1653[2mms[22m[39m
+   [32m✓[39m the permission mediator [2m(8)[22m
+     [33m[2m✓[22m[39m never sends a pending read behind an in-flight automated review: it answers from the request it holds[33m 1516[2mms[22m[39m
+ [32m✓[39m test/organise-units.test.ts [2m([22m[2m40 tests[22m[2m)[22m[32m 80[2mms[22m[39m
+ [32m✓[39m test/tasks-service.test.ts [2m([22m[2m18 tests[22m[2m)[22m[32m 72[2mms[22m[39m
+ [32m✓[39m test/capabilities-units.test.ts [2m([22m[2m80 tests[22m[2m)[22m[32m 92[2mms[22m[39m
+ [32m✓[39m test/conversation-presentation.test.tsx [2m([22m[2m5 tests[22m[2m)[22m[32m 98[2mms[22m[39m
+ [32m✓[39m test/contrast.test.ts [2m([22m[2m15 tests[22m[2m)[22m[32m 62[2mms[22m[39m
+ [32m✓[39m test/navigation-recovery.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 65[2mms[22m[39m
+ [32m✓[39m test/model-authority-observation.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 64[2mms[22m[39m
+ [32m✓[39m test/onboarding-identity.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 72[2mms[22m[39m
+ [32m✓[39m test/framing.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 41[2mms[22m[39m
+ [32m✓[39m test/tasks-bootstrap.test.ts [2m([22m[2m10 tests[22m[2m)[22m[32m 31[2mms[22m[39m
+ [32m✓[39m test/rpc.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 19[2mms[22m[39m
+ [32m✓[39m test/identity-wire.test.ts [2m([22m[2m46 tests[22m[2m)[22m[32m 30[2mms[22m[39m
+ [32m✓[39m test/provider-consent.test.ts [2m([22m[2m22 tests[22m[2m)[22m[32m 26[2mms[22m[39m
+ [32m✓[39m test/data-inspector-gate.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 21[2mms[22m[39m
+ [32m✓[39m test/wsl-scope-discovery.test.ts [2m([22m[2m19 tests[22m[2m)[22m[32m 31[2mms[22m[39m
+ [32m✓[39m test/navigation-reopen-retry.test.ts [2m([22m[2m22 tests[22m[2m)[22m[32m 16[2mms[22m[39m
+ [32m✓[39m test/smoke-processes.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 13[2mms[22m[39m
+ [32m✓[39m test/states-units.test.ts [2m([22m[2m27 tests[22m[2m)[22m[32m 15[2mms[22m[39m
+ [32m✓[39m test/smoke-catalog.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 24[2mms[22m[39m
+ [32m✓[39m test/routes-rpc.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 10[2mms[22m[39m
+ [32m✓[39m test/runtime-lifecycle.test.ts [2m([22m[2m12 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m test/wsl-preflight.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 16[2mms[22m[39m
+ [32m✓[39m test/smoke-startup.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m test/data-identity-settings-transition.test.ts [2m([22m[2m4 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m test/smoke-phase.test.ts [2m([22m[2m5 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m test/tasks-lifecycle-progress.test.ts [2m([22m[2m6 tests[22m[2m)[22m[32m 12[2mms[22m[39m
+ [32m✓[39m test/version-and-binary.test.ts [2m([22m[2m8 tests[22m[2m)[22m[32m 9[2mms[22m[39m
+ [32m✓[39m test/capabilities-lifecycle.test.ts [2m([22m[2m7 tests[22m[2m)[22m[32m 8[2mms[22m[39m
+ [32m✓[39m test/tasks-lifecycle-native-selection.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 6[2mms[22m[39m
+ [32m✓[39m test/saved-work-native-selection.test.ts [2m([22m[2m2 tests[22m[2m)[22m[32m 7[2mms[22m[39m
+ [2m[90m↓[39m[22m test/data-inspector-lifecycle.test.ts [2m([22m[2m7 tests[22m[2m | [22m[33m7 skipped[39m[2m)[22m
+ [2m[90m↓[39m[22m test/epic1-permissions-runtime.witness.test.ts [2m([22m[2m1 test[22m[2m | [22m[33m1 skipped[39m[2m)[22m
+ [2m[90m↓[39m[22m test/epic1-quota-runtime.witness.test.ts [2m([22m[2m1 test[22m[2m | [22m[33m1 skipped[39m[2m)[22m
+ [2m[90m↓[39m[22m test/providers-integration.test.ts [2m([22m[2m5 tests[22m[2m | [22m[33m5 skipped[39m[2m)[22m
+
+[31m⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Suites 3 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m test/capabilities-integration.test.ts[2m > [22mcapabilities against the real runtime and seeded Workspace
+[31m[1mError[22m: the topology exited (1)[39m
+[36m [2m❯[22m ChildProcess.<anonymous> test/capabilities-integration.test.ts:[2m71:45[22m[39m
+    [90m 69|[39m       resolve(text);
+    [90m 70|[39m     });
+    [90m 71|[39m     topology!.once('exit', (code) => reject(new Error(`the topology ex…
+    [90m   |[39m                                             [31m^[39m
+    [90m 72|[39m   });
+    [90m 73|[39m   const file = path.join(dir, 'config.json');
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/8]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m test/identity-integration.test.ts[2m > [22midentity against the dev topology
+[31m[1mError[22m: the topology exited (1)[39m
+[36m [2m❯[22m ChildProcess.<anonymous> test/identity-integration.test.ts:[2m48:45[22m[39m
+    [90m 46|[39m       resolve(text);
+    [90m 47|[39m     });
+    [90m 48|[39m     topology!.once('exit', (code) => reject(new Error(`the topology ex…
+    [90m   |[39m                                             [31m^[39m
+    [90m 49|[39m   });
+    [90m 50|[39m   const file = path.join(tempDir('topology-config'), 'config.json');
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/8]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m test/policy-integration.test.ts[2m > [22mthe effective policy against the real runtime and a permissive seeded Workspace
+[31m[1mError[22m: the topology exited (1)[39m
+[36m [2m❯[22m ChildProcess.<anonymous> test/policy-integration.test.ts:[2m75:45[22m[39m
+    [90m 73|[39m       resolve(text);
+    [90m 74|[39m     });
+    [90m 75|[39m     topology!.once('exit', (code) => reject(new Error(`the topology ex…
+    [90m   |[39m                                             [31m^[39m
+    [90m 76|[39m   });
+    [90m 77|[39m   const file = path.join(dir, 'config.json');
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/8]⎯[22m[39m
+
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 5 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m test/permissions-integration.test.ts[2m > [22mpermission to act against the real runtime, its exec-policy matching and the local sandbox[2m > [22mapplies a rule to the resolved program: other paths, the bare name and a symlink alias; no allow through a link or for an unresolved program
+[31m[1mAssertionError[22m: expected { ok: true, …(1) } to match object { Object (ok, code) }
+(6 matching properties omitted from actual)[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[2m  {[22m
+[32m-   "code": "command-forbidden",[39m
+[32m-   "ok": false,[39m
+[31m+   "ok": true,[39m
+[2m  }[22m
+
+[36m [2m❯[22m test/permissions-integration.test.ts:[2m241:23[22m[39m
+    [90m239|[39m     for (const program of ['/usr/bin/sh', 'sh', alias]) {
+    [90m240|[39m       const refused = await policy.runTool(task, [program, '-c', 'true…
+    [90m241|[39m       expect(refused).toMatchObject({ ok: false, code: 'command-forbid…
+    [90m   |[39m                       [31m^[39m
+    [90m242|[39m       expect((refused as { reason: string }).reason).toContain(`Rule: …
+    [90m243|[39m     }
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/8]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m test/tool-bounds-integration.test.ts[2m > [22mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22mserializes concurrent Task sandbox inspection with real tool execution
+[31m[1mError[22m: Test timed out in 120000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".[39m
+[36m [2m❯[22m test/tool-bounds-integration.test.ts:[2m165:3[22m[39m
+    [90m163|[39m   });
+    [90m164|[39m
+    [90m165|[39m   it('serializes concurrent Task sandbox inspection with real tool exe…
+    [90m   |[39m   [31m^[39m
+    [90m166|[39m     usePolicy(null);
+    [90m167|[39m     const first = await newTask('Concurrent inspection');
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/8]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m test/tool-bounds-integration.test.ts[2m > [22mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[31m[1mError[22m: Test timed out in 180000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".[39m
+[36m [2m❯[22m test/tool-bounds-integration.test.ts:[2m181:3[22m[39m
+    [90m179|[39m   }, 120_000);
+    [90m180|[39m
+    [90m181|[39m   it('keeps a standard Task inside its folder, read-only system locati…
+    [90m   |[39m   [31m^[39m
+    [90m182|[39m     usePolicy(null);
+    [90m183|[39m     const task = await newTask('Bounded');
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/8]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m test/tool-bounds-integration.test.ts[2m > [22mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22mreaches only the listed destinations through the proxy
+[31m[1mError[22m: Test timed out in 120000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".[39m
+[36m [2m❯[22m test/tool-bounds-integration.test.ts:[2m243:3[22m[39m
+    [90m241|[39m   }, 180_000);
+    [90m242|[39m
+    [90m243|[39m   it('reaches only the listed destinations through the proxy', async (…
+    [90m   |[39m   [31m^[39m
+    [90m244|[39m     usePolicy({ network: 'allowed', allowed_domains: ['example.org'] }…
+    [90m245|[39m     const task = await newTask('Listed destinations');
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/8]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m test/tool-bounds-integration.test.ts[2m > [22mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22mstates the true reach of a permitted Full access mode and runs it without the sandbox
+[31m[1mError[22m: expected success, got: Refused: `C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -NonInteractive -Command 'if (Test-Path -LiteralPath '\''D:\Toolchains\tmp\inquello-test-tool-bounds-xfHDP6\working'\'') { exit 0 } else { exit 1 }'` needs permission, and this Task's No prompt mode never asks. Rule: No command rule matches; decided by this Task's asking behaviour (never asks).[39m
+[36m [2m❯[22m ok test/tool-bounds-integration.test.ts:[2m98:25[22m[39m
+    [90m 96|[39m
+    [90m 97|[39m const ok = <T,>(result: { ok: true; value: T } | { ok: false; reason: …
+    [90m 98|[39m   if (!result.ok) throw new Error(`expected success, got: ${result.rea…
+    [90m   |[39m                         [31m^[39m
+    [90m 99|[39m   return result.value;
+    [90m100|[39m };
+[90m [2m❯[22m run test/tool-bounds-integration.test.ts:[2m105:80[22m[39m
+[90m [2m❯[22m test/tool-bounds-integration.test.ts:[2m288:21[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/8]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m5 failed[39m[22m[2m | [22m[1m[32m109 passed[39m[22m[2m | [22m[33m4 skipped[39m[90m (118)[39m
+[2m      Tests [22m [1m[31m5 failed[39m[22m[2m | [22m[1m[32m2139 passed[39m[22m[2m | [22m[33m32 skipped[39m[90m (2176)[39m
+[2m   Start at [22m 14:31:09
+[2m   Duration [22m 1265.30s[2m (tests 87%, environment 8%, import 4%)[22m
+
+[2m    Isolate [22m [33m118 workers spawned[39m[2m · ~1.08s startup each (spawn + environment, per file)[22m
+[2m            [22m [2mat least ~126.29s faster with [22m[33misolate: false[39m[2m — reuses workers across files instead of one per file[22m
+
+ ELIFECYCLE  Test failed. See above for more details.

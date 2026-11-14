@@ -1,0 +1,17 @@
+Smoke logs: D:\Inquello\tmp\inquello-seeded-smoke-RvZEns
+2026-11-07T07:56:25.669605Z  WARN sqlx::query: slow statement: execution time exceeded alert threshold summary="CREATE DATABASE \"inquello_dev_0bf99d8faa5c4cb4a963fe5163d34200\"" db.statement="" rows_affected=0 rows_returned=0 elapsed=1.1127221s elapsed_secs=1.1127221 slow_threshold=1s
+2026-11-07T07:56:25.790663Z  INFO inquello_service::test_provider: synthetic OIDC provider listening issuer="https://127.0.0.1:62886"
+2026-11-07T07:56:26.289655Z  INFO inquello_service::server: inquello service listening local_addr=127.0.0.1:62889 https=true
+2026-11-07T07:56:26.394560Z  INFO sqlx::postgres::notice: relation "_sqlx_migrations" already exists, skipping
+2026-11-07T07:56:26.444935Z  INFO inquello_service::admin: workspace created by operator workspace_id=e758fed8-c746-4f2f-954d-90031d553109 receipt_id=63ba5548-4458-4e17-b8d4-0efa852a9dca
+2026-11-07T07:56:47.842936Z  INFO inquello_service::login: login transaction created login_transaction_id=1831b435-0f37-4f7e-8c43-8c8b0ecf0380
+2026-11-07T07:56:47.849564Z  INFO inquello_service::test_provider: authorization code issued for the synthetic subject
+2026-11-07T07:56:47.862048Z  INFO inquello_service::test_provider: ID token issued for the synthetic subject
+2026-11-07T07:56:47.934604Z  INFO inquello_service::login: session created principal_id=8b1c6bff-3bbd-43af-971f-b5bf352fbcc0 session_id=4f0ba765-4c2a-4249-aeb9-ebc1cb3e8b0f
+2026-11-07T07:56:48.838991Z  INFO inquello_service::workspaces: invite accepted principal_id=8b1c6bff-3bbd-43af-971f-b5bf352fbcc0 workspace_id=e758fed8-c746-4f2f-954d-90031d553109
+2026-11-07T07:56:55.203093Z  INFO inquello_service::sessions: refresh family revoked principal_id=8b1c6bff-3bbd-43af-971f-b5bf352fbcc0 family_id=8526084f-6c82-4a1e-936d-9f346ead7ce5 reason="logout"
+2026-11-07T07:56:55.221162Z  INFO inquello_service::commands: command applied principal_id=8b1c6bff-3bbd-43af-971f-b5bf352fbcc0 operation_id=logout-a121b226-cfae-4c17-8570-d5fc3d2716ce receipt_id=f09c5162-52d1-42cd-a4f2-fb1ee70d5daa
+{"phase":"tools","exitCode":1,"required":1,"missingOrFailed":["tools-management"],"zeroFixtureCalls":true}
+2026-11-07T07:56:55.387900Z  INFO inquello_dev_topology: dev topology stopping
+{"phase":"tools","phaseResult":{"ok":false,"missing":["tools-management"],"events":[],"cleanupErrors":[]}}
+{"ok":false,"isolatedPhase":"tools","required":1,"missingOrFailed":["tools-management"],"cleanupErrors":[]}

@@ -1,0 +1,10 @@
+1656 1700 0:34 / /mnt/wsl rw,relatime shared:1 - tmpfs none rw
+1657 1656 0:90 /guest-services /mnt/wsl/docker-desktop/shared-sockets/guest-services rw,nosuid,nodev shared:32 - tmpfs none rw,mode=755
+1676 1656 0:90 /host-services /mnt/wsl/docker-desktop/shared-sockets/host-services rw,nosuid,nodev shared:32 - tmpfs none rw,mode=755
+1677 1656 7:0 / /mnt/wsl/docker-desktop/cli-tools ro,relatime shared:2 - iso9660 /dev/loop0 ro,nojoliet,check=s,map=n,blocksize=2048,iocharset=utf8
+1701 1700 0:214 / /mnt/wslg rw,relatime shared:55 - tmpfs none rw
+1704 1701 8:48 / /mnt/wslg/distro ro,relatime shared:56 - ext4 /dev/sdd rw,discard,errors=remount-ro,data=ordered
+1921 1914 0:35 / /proc/sys/fs/binfmt_misc rw,relatime shared:76 - binfmt_misc binfmt_misc rw
+1384 1700 0:214 /.X11-unix /tmp/.X11-unix ro,relatime shared:55 - tmpfs none rw
+1387 1701 0:239 /etc/versions.txt /mnt/wslg/versions.txt rw,relatime shared:54 - overlay none rw,lowerdir=/systemvhd,upperdir=/system/rw/upper,workdir=/system/rw/work,uuid=on
+1389 1701 0:239 /usr/share/doc /mnt/wslg/doc rw,relatime shared:78 - overlay none rw,lowerdir=/systemvhd,upperdir=/system/rw/upper,workdir=/system/rw/work,uuid=on

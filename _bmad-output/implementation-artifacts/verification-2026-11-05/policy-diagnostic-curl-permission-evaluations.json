@@ -1,0 +1,28 @@
+[
+  {
+    "program": "curl",
+    "decision": "prompt",
+    "source": {
+      "behaviour": "on_request",
+      "kind": "approval_behaviour",
+      "revision": null
+    },
+    "programResolution": "unresolved",
+    "created_at_ms": 1793909738477,
+    "expires_at_ms": 1793910338477,
+    "used_at_ms": null
+  },
+  {
+    "program": "curl",
+    "decision": "prompt",
+    "source": {
+      "behaviour": "on_request",
+      "kind": "approval_behaviour",
+      "revision": null
+    },
+    "programResolution": "unresolved",
+    "created_at_ms": 1793909844589,
+    "expires_at_ms": 1793910444589,
+    "used_at_ms": null
+  }
+]

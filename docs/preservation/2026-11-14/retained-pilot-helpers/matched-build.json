@@ -1,0 +1,14 @@
+{
+  "manifestVersion": 2,
+  "createdUtc": "2026-11-09T20:41:59.070Z",
+  "head": "daf2dbae7ff1bc229c0bbc012cb9bc89cb09a7e3",
+  "engineTree": "d2e7f259a8110d7e25cfec6b66f679d075cfd72b",
+  "serviceEngineTree": "d2e7f259a8110d7e25cfec6b66f679d075cfd72b",
+  "runtime": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\codex-app-server.exe",
+  "cli": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\codex.exe",
+  "service": "D:\\Projects\\inquello\\engine\\codex-rs\\target\\debug\\inquello-service.exe",
+  "runtimeSha256": "f2ec0ad1ed69be4603630642e2689a497451246fcf2abff163927d4d8858dcb7",
+  "cliSha256": "ca75a2f119eb7c37741d37a293bdddf7c7056463c18fb938003896786f332fbe",
+  "serviceSha256": "a903ee2e273fb986504fd4600d88c868a315f1c11c822a45188b83efd60b0252",
+  "desktopDistSha256": "c3312e1248fa0ac7c79a29564b745eae03864815a117846460a59457c1c50488"
+}

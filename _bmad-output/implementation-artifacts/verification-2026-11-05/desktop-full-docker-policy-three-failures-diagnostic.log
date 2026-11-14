@@ -1,0 +1,1083 @@
+
+[1m[30m[46m RUN [49m[39m[22m [36mv5.0.5 [39m[90mD:/Projects/inquello/desktop[39m
+
+2026-11-05T20:13:55.428768Z  INFO inquello_service::test_provider: synthetic OIDC provider listening issuer="https://127.0.0.1:57358"
+2026-11-05T20:13:55.808012Z  INFO inquello_service::server: inquello service listening local_addr=127.0.0.1:57361 https=true
+2026-11-05T20:13:55.915177Z  INFO sqlx::postgres::notice: relation "_sqlx_migrations" already exists, skipping
+2026-11-05T20:13:55.962063Z  INFO inquello_service::admin: workspace created by operator workspace_id=ac8fdb21-6220-424c-9001-0e8d1295b11a receipt_id=b611ce06-1311-4d37-9daa-61368ea76d5e
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox
+[22m[39mPOLICY_PHASE {"id":1,"label":"native","name":"start","detail":"","event":"start","at":1793909636695}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox
+[22m[39mPOLICY_PHASE {"id":1,"label":"native","name":"start","detail":"","event":"end","at":1793909637134,"ms":439,"rejected":false}
+
+2026-11-05T20:13:57.925959Z  INFO inquello_service::login: login transaction created login_transaction_id=07ee3c25-68d3-4c1a-8fb8-eb020013bdb5
+2026-11-05T20:13:57.935748Z  INFO inquello_service::test_provider: authorization code issued for the synthetic subject
+2026-11-05T20:13:57.950506Z  INFO inquello_service::test_provider: ID token issued for the synthetic subject
+2026-11-05T20:13:58.012401Z  INFO inquello_service::login: session created principal_id=f3e9a061-1d61-41d6-bc17-f642ef180e70 session_id=670c0696-231a-42f5-9a9e-84b40e28ff6b
+2026-11-05T20:13:58.870897Z  INFO inquello_service::workspaces: invite accepted principal_id=f3e9a061-1d61-41d6-bc17-f642ef180e70 workspace_id=ac8fdb21-6220-424c-9001-0e8d1295b11a
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":2,"label":"native","name":"request","detail":"inquello/session/setPrincipal","event":"start","at":1793909638874}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":2,"label":"native","name":"request","detail":"inquello/session/setPrincipal","event":"end","at":1793909638881,"ms":7,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":3,"label":"native","name":"request","detail":"inquello/task/create","event":"start","at":1793909638924}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":4,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909638928}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":4,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909638971,"ms":43,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":5,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909639172}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":5,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909639205,"ms":33,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":3,"label":"native","name":"request","detail":"inquello/task/create","event":"end","at":1793909639223,"ms":299,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":6,"label":"native","name":"request","detail":"inquello/task/create","event":"start","at":1793909639306}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":7,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909639308}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":7,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909639350,"ms":42,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":8,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909639372}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":8,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909639402,"ms":30,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":6,"label":"native","name":"request","detail":"inquello/task/create","event":"end","at":1793909639419,"ms":113,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":9,"label":"policy","name":"effectiveThreadSettings","detail":"","event":"start","at":1793909639454}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":10,"label":"native","name":"request","detail":"inquello/broadMode/read","event":"start","at":1793909639455}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":11,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909639459}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":11,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909639493,"ms":34,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":12,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909639520}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":12,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909639559,"ms":39,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":10,"label":"native","name":"request","detail":"inquello/broadMode/read","event":"end","at":1793909639580,"ms":125,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":13,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909639580}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":13,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909639620,"ms":39,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":14,"label":"native","name":"request","detail":"inquello/policy/effective","event":"start","at":1793909640749}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":15,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909640754}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":15,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909640784,"ms":30,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":16,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909640818}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":16,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909640849,"ms":31,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":14,"label":"native","name":"request","detail":"inquello/policy/effective","event":"end","at":1793909640866,"ms":117,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":9,"label":"policy","name":"effectiveThreadSettings","detail":"","event":"end","at":1793909652172,"ms":12718,"rejected":false,"ok":true}
+POLICY_PHASE {"id":17,"label":"policy","name":"effectiveThreadSettings","detail":"","event":"start","at":1793909652555}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":18,"label":"native","name":"request","detail":"inquello/broadMode/read","event":"start","at":1793909652555}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":19,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909652560}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":19,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909652597,"ms":37,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":20,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909652616}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":20,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909652644,"ms":28,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":18,"label":"native","name":"request","detail":"inquello/broadMode/read","event":"end","at":1793909652669,"ms":114,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":21,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909652669}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":21,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909652719,"ms":50,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":22,"label":"native","name":"request","detail":"inquello/policy/effective","event":"start","at":1793909653795}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":23,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909653801}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":23,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909653850,"ms":49,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":24,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909653901}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":24,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909653940,"ms":39,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":22,"label":"native","name":"request","detail":"inquello/policy/effective","event":"end","at":1793909653967,"ms":172,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":17,"label":"policy","name":"effectiveThreadSettings","detail":"","event":"end","at":1793909657855,"ms":5300,"rejected":false,"ok":true}
+POLICY_PHASE {"id":25,"label":"task-files","name":"write","detail":"","event":"start","at":1793909659288}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":25,"label":"task-files","name":"write","detail":"","event":"end","at":1793909661666,"ms":2378,"rejected":false}
+POLICY_PHASE {"id":26,"label":"policy","name":"runTool","detail":"/bin/sh","event":"start","at":1793909661666}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":27,"label":"native","name":"request","detail":"inquello/broadMode/read","event":"start","at":1793909661667}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":28,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909661671}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":28,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909661701,"ms":30,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":29,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909661719}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":29,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909661748,"ms":30,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":27,"label":"native","name":"request","detail":"inquello/broadMode/read","event":"end","at":1793909661769,"ms":102,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":30,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909661769}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":30,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909661800,"ms":31,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":31,"label":"native","name":"request","detail":"inquello/policy/effective","event":"start","at":1793909662880}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":32,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909662883}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":32,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909662915,"ms":32,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":33,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909662951}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":33,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909662991,"ms":40,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":31,"label":"native","name":"request","detail":"inquello/policy/effective","event":"end","at":1793909663013,"ms":133,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":34,"label":"native","name":"request","detail":"inquello/tools/exec","event":"start","at":1793909663142}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":35,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909663146}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":35,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909663179,"ms":33,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":36,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909669243}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":36,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909669286,"ms":44,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":34,"label":"native","name":"request","detail":"inquello/tools/exec","event":"end","at":1793909672771,"ms":9629,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":37,"label":"native","name":"request","detail":"inquello/tools/exec","event":"start","at":1793909672859}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":38,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909672865}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":38,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909672895,"ms":30,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":39,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909676435}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":39,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909676552,"ms":117,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":37,"label":"native","name":"request","detail":"inquello/tools/exec","event":"end","at":1793909679746,"ms":6887,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":26,"label":"policy","name":"runTool","detail":"/bin/sh","event":"end","at":1793909679747,"ms":18081,"rejected":false,"ok":true}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":40,"label":"task-files","name":"read","detail":"","event":"start","at":1793909679748}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":40,"label":"task-files","name":"read","detail":"","event":"end","at":1793909680942,"ms":1194,"rejected":false}
+POLICY_PHASE {"id":41,"label":"policy","name":"runTool","detail":"/bin/sh","event":"start","at":1793909680943}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":42,"label":"native","name":"request","detail":"inquello/broadMode/read","event":"start","at":1793909680943}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":43,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909680946}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":43,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909680979,"ms":33,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":44,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909680998}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":44,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909681028,"ms":31,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":42,"label":"native","name":"request","detail":"inquello/broadMode/read","event":"end","at":1793909681047,"ms":104,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":45,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909681047}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":45,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909681081,"ms":34,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":46,"label":"native","name":"request","detail":"inquello/policy/effective","event":"start","at":1793909682126}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":47,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909682130}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":47,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909682163,"ms":33,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":48,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909682199}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":48,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909682229,"ms":29,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":46,"label":"native","name":"request","detail":"inquello/policy/effective","event":"end","at":1793909682247,"ms":121,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":49,"label":"native","name":"request","detail":"inquello/tools/exec","event":"start","at":1793909682371}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":50,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909682375}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":50,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909682404,"ms":29,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":51,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909685855}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":51,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909685891,"ms":36,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":49,"label":"native","name":"request","detail":"inquello/tools/exec","event":"end","at":1793909689163,"ms":6791,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":41,"label":"policy","name":"runTool","detail":"/bin/sh","event":"end","at":1793909689164,"ms":8221,"rejected":false,"ok":true}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":52,"label":"task-files","name":"read","detail":"","event":"start","at":1793909689165}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":52,"label":"task-files","name":"read","detail":"","event":"end","at":1793909690390,"ms":1225,"rejected":false}
+POLICY_PHASE {"id":53,"label":"policy","name":"runTool","detail":"/bin/sh","event":"start","at":1793909690390}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":54,"label":"native","name":"request","detail":"inquello/broadMode/read","event":"start","at":1793909690390}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":55,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909690396}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":55,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909690471,"ms":75,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":56,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909690493}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":56,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909690541,"ms":48,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":54,"label":"native","name":"request","detail":"inquello/broadMode/read","event":"end","at":1793909690570,"ms":180,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":57,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909690571}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":57,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909690606,"ms":35,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":58,"label":"native","name":"request","detail":"inquello/policy/effective","event":"start","at":1793909691673}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":59,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909691676}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":59,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909691705,"ms":28,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":60,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909691737}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":60,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909691768,"ms":31,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":58,"label":"native","name":"request","detail":"inquello/policy/effective","event":"end","at":1793909691786,"ms":113,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":61,"label":"native","name":"request","detail":"inquello/tools/exec","event":"start","at":1793909691916}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":62,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909691920}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":62,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909691951,"ms":32,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":63,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909695535}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":63,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909695581,"ms":46,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":61,"label":"native","name":"request","detail":"inquello/tools/exec","event":"end","at":1793909698902,"ms":6986,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":53,"label":"policy","name":"runTool","detail":"/bin/sh","event":"end","at":1793909698903,"ms":8513,"rejected":false,"ok":true}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":64,"label":"policy","name":"runTool","detail":"/bin/sh","event":"start","at":1793909698903}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":65,"label":"native","name":"request","detail":"inquello/broadMode/read","event":"start","at":1793909698903}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":66,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909698906}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":66,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909698946,"ms":39,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":67,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909698968}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":67,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909699006,"ms":38,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":65,"label":"native","name":"request","detail":"inquello/broadMode/read","event":"end","at":1793909699028,"ms":124,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":68,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909699028}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":68,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909699057,"ms":29,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":69,"label":"native","name":"request","detail":"inquello/policy/effective","event":"start","at":1793909700117}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":70,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909700122}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":70,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909700169,"ms":47,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":71,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909700220}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":71,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909700276,"ms":56,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":69,"label":"native","name":"request","detail":"inquello/policy/effective","event":"end","at":1793909700301,"ms":184,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":72,"label":"native","name":"request","detail":"inquello/tools/exec","event":"start","at":1793909700478}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":73,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909700484}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":73,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909700530,"ms":47,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":74,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909704344}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":74,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909704392,"ms":48,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":72,"label":"native","name":"request","detail":"inquello/tools/exec","event":"end","at":1793909707663,"ms":7185,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":64,"label":"policy","name":"runTool","detail":"/bin/sh","event":"end","at":1793909707663,"ms":8760,"rejected":false,"ok":true}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":75,"label":"policy","name":"runTool","detail":"/bin/cat","event":"start","at":1793909707664}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":76,"label":"native","name":"request","detail":"inquello/broadMode/read","event":"start","at":1793909707664}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":77,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909707667}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":77,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909707703,"ms":36,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":78,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909707723}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":78,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909707752,"ms":29,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":76,"label":"native","name":"request","detail":"inquello/broadMode/read","event":"end","at":1793909707770,"ms":107,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":79,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909707771}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":79,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909707798,"ms":27,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":80,"label":"native","name":"request","detail":"inquello/policy/effective","event":"start","at":1793909708875}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":81,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909708878}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":81,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909708907,"ms":29,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":82,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909708942}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":82,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909708969,"ms":27,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":80,"label":"native","name":"request","detail":"inquello/policy/effective","event":"end","at":1793909708986,"ms":111,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":83,"label":"native","name":"request","detail":"inquello/tools/exec","event":"start","at":1793909709109}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":84,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909709113}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":84,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909709144,"ms":31,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":85,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909712683}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":85,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909712731,"ms":48,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":83,"label":"native","name":"request","detail":"inquello/tools/exec","event":"end","at":1793909716199,"ms":7090,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":75,"label":"policy","name":"runTool","detail":"/bin/cat","event":"end","at":1793909716199,"ms":8536,"rejected":false,"ok":true}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":86,"label":"policy","name":"runTool","detail":"/bin/sh","event":"start","at":1793909716200}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":87,"label":"native","name":"request","detail":"inquello/broadMode/read","event":"start","at":1793909716200}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":88,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909716204}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":88,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909716235,"ms":32,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":89,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909716254}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":89,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909716286,"ms":31,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":87,"label":"native","name":"request","detail":"inquello/broadMode/read","event":"end","at":1793909716305,"ms":105,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":90,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909716306}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":90,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909716335,"ms":30,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":91,"label":"native","name":"request","detail":"inquello/policy/effective","event":"start","at":1793909717440}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":92,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909717444}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":92,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909717471,"ms":27,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":93,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909717509}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":93,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909717545,"ms":36,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":91,"label":"native","name":"request","detail":"inquello/policy/effective","event":"end","at":1793909717574,"ms":134,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":94,"label":"native","name":"request","detail":"inquello/tools/exec","event":"start","at":1793909717698}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":95,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909717702}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":95,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909717732,"ms":30,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":96,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909721483}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":96,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909721523,"ms":40,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":94,"label":"native","name":"request","detail":"inquello/tools/exec","event":"end","at":1793909724843,"ms":7145,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":86,"label":"policy","name":"runTool","detail":"/bin/sh","event":"end","at":1793909724844,"ms":8644,"rejected":false,"ok":true}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":97,"label":"policy","name":"runTool","detail":"/bin/sh","event":"start","at":1793909724844}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":98,"label":"native","name":"request","detail":"inquello/broadMode/read","event":"start","at":1793909724844}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":99,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909724848}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":99,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909724903,"ms":55,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":100,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909724927}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":100,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909724962,"ms":35,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":98,"label":"native","name":"request","detail":"inquello/broadMode/read","event":"end","at":1793909724981,"ms":137,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":101,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909724982}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":101,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909725011,"ms":30,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":102,"label":"native","name":"request","detail":"inquello/policy/effective","event":"start","at":1793909726117}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":103,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909726120}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":103,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909726148,"ms":28,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":104,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909726181}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":104,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909726213,"ms":33,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":102,"label":"native","name":"request","detail":"inquello/policy/effective","event":"end","at":1793909726232,"ms":115,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":105,"label":"native","name":"request","detail":"inquello/tools/exec","event":"start","at":1793909726380}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":106,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909726384}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":106,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909726430,"ms":46,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":107,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909729769}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":107,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909729817,"ms":49,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":105,"label":"native","name":"request","detail":"inquello/tools/exec","event":"end","at":1793909733233,"ms":6853,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":97,"label":"policy","name":"runTool","detail":"/bin/sh","event":"end","at":1793909733233,"ms":8389,"rejected":false,"ok":true}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":108,"label":"policy","name":"runTool","detail":"curl","event":"start","at":1793909733233}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":109,"label":"native","name":"request","detail":"inquello/broadMode/read","event":"start","at":1793909733234}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":110,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909733237}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":110,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909733266,"ms":29,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":111,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909733286}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":111,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909733316,"ms":30,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":109,"label":"native","name":"request","detail":"inquello/broadMode/read","event":"end","at":1793909733335,"ms":102,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":112,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909733335}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":112,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909733385,"ms":49,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":113,"label":"native","name":"request","detail":"inquello/policy/effective","event":"start","at":1793909734508}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":114,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909734512}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":114,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909734543,"ms":31,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":115,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909734577}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":115,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909734604,"ms":26,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":113,"label":"native","name":"request","detail":"inquello/policy/effective","event":"end","at":1793909734623,"ms":115,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":116,"label":"native","name":"request","detail":"inquello/tools/exec","event":"start","at":1793909734766}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":117,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909734769}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":117,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909734798,"ms":29,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":116,"label":"native","name":"request","detail":"inquello/tools/exec","event":"end","at":1793909738402,"ms":3637,"rejected":true}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":118,"label":"native","name":"request","detail":"inquello/permissions/request","event":"start","at":1793909738403}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":119,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909738407}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":119,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909738438,"ms":31,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":120,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909738482}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":120,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909738517,"ms":35,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[22m[39mPOLICY_PHASE {"id":118,"label":"native","name":"request","detail":"inquello/permissions/request","event":"end","at":1793909738536,"ms":133,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mreaches only the listed destinations through the proxy
+[22m[39mPOLICY_PHASE {"id":121,"label":"native","name":"request","detail":"inquello/task/create","event":"start","at":1793909818918}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mreaches only the listed destinations through the proxy
+[22m[39mPOLICY_PHASE {"id":122,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909818920}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mreaches only the listed destinations through the proxy
+[22m[39mPOLICY_PHASE {"id":122,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909818949,"ms":28,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mreaches only the listed destinations through the proxy
+[22m[39mPOLICY_PHASE {"id":123,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909818973}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mreaches only the listed destinations through the proxy
+[22m[39mPOLICY_PHASE {"id":123,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909819006,"ms":33,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mreaches only the listed destinations through the proxy
+[22m[39mPOLICY_PHASE {"id":121,"label":"native","name":"request","detail":"inquello/task/create","event":"end","at":1793909819025,"ms":107,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mreaches only the listed destinations through the proxy
+[22m[39mPOLICY_PHASE {"id":124,"label":"policy","name":"effectiveThreadSettings","detail":"","event":"start","at":1793909819061}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mreaches only the listed destinations through the proxy
+[22m[39mPOLICY_PHASE {"id":125,"label":"native","name":"request","detail":"inquello/broadMode/read","event":"start","at":1793909819061}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mreaches only the listed destinations through the proxy
+[22m[39mPOLICY_PHASE {"id":126,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909819065}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mreaches only the listed destinations through the proxy
+[22m[39mPOLICY_PHASE {"id":126,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909819100,"ms":35,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mreaches only the listed destinations through the proxy
+[22m[39mPOLICY_PHASE {"id":127,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909819118}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mreaches only the listed destinations through the proxy
+[22m[39mPOLICY_PHASE {"id":127,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909819146,"ms":28,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mreaches only the listed destinations through the proxy
+[22m[39mPOLICY_PHASE {"id":125,"label":"native","name":"request","detail":"inquello/broadMode/read","event":"end","at":1793909819162,"ms":101,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mreaches only the listed destinations through the proxy
+[22m[39mPOLICY_PHASE {"id":128,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909819162}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mreaches only the listed destinations through the proxy
+[22m[39mPOLICY_PHASE {"id":128,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909819196,"ms":33,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mreaches only the listed destinations through the proxy
+[22m[39mPOLICY_PHASE {"id":129,"label":"native","name":"request","detail":"inquello/policy/effective","event":"start","at":1793909820303}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mreaches only the listed destinations through the proxy
+[22m[39mPOLICY_PHASE {"id":130,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909820312}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mreaches only the listed destinations through the proxy
+[22m[39mPOLICY_PHASE {"id":130,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909820358,"ms":47,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mreaches only the listed destinations through the proxy
+[22m[39mPOLICY_PHASE {"id":131,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909820410}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mreaches only the listed destinations through the proxy
+[22m[39mPOLICY_PHASE {"id":131,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909820450,"ms":39,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mreaches only the listed destinations through the proxy
+[22m[39mPOLICY_PHASE {"id":129,"label":"native","name":"request","detail":"inquello/policy/effective","event":"end","at":1793909820477,"ms":174,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mreaches only the listed destinations through the proxy
+[22m[39mPOLICY_PHASE {"id":124,"label":"policy","name":"effectiveThreadSettings","detail":"","event":"end","at":1793909831831,"ms":12769,"rejected":false,"ok":true}
+POLICY_PHASE {"id":132,"label":"policy","name":"runTool","detail":"curl","event":"start","at":1793909831831}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mreaches only the listed destinations through the proxy
+[22m[39mPOLICY_PHASE {"id":133,"label":"native","name":"request","detail":"inquello/broadMode/read","event":"start","at":1793909831831}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mreaches only the listed destinations through the proxy
+[22m[39mPOLICY_PHASE {"id":134,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909831834}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mreaches only the listed destinations through the proxy
+[22m[39mPOLICY_PHASE {"id":134,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909831875,"ms":40,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mreaches only the listed destinations through the proxy
+[22m[39mPOLICY_PHASE {"id":135,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909831896}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mreaches only the listed destinations through the proxy
+[22m[39mPOLICY_PHASE {"id":135,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909831942,"ms":46,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mreaches only the listed destinations through the proxy
+[22m[39mPOLICY_PHASE {"id":133,"label":"native","name":"request","detail":"inquello/broadMode/read","event":"end","at":1793909831966,"ms":135,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mreaches only the listed destinations through the proxy
+[22m[39mPOLICY_PHASE {"id":136,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909831967}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mreaches only the listed destinations through the proxy
+[22m[39mPOLICY_PHASE {"id":136,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909831999,"ms":32,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mreaches only the listed destinations through the proxy
+[22m[39mPOLICY_PHASE {"id":137,"label":"native","name":"request","detail":"inquello/policy/effective","event":"start","at":1793909833093}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mreaches only the listed destinations through the proxy
+[22m[39mPOLICY_PHASE {"id":138,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909833097}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mreaches only the listed destinations through the proxy
+[22m[39mPOLICY_PHASE {"id":138,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909833129,"ms":32,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mreaches only the listed destinations through the proxy
+[22m[39mPOLICY_PHASE {"id":139,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909833169}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mreaches only the listed destinations through the proxy
+[22m[39mPOLICY_PHASE {"id":139,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909833202,"ms":33,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mreaches only the listed destinations through the proxy
+[22m[39mPOLICY_PHASE {"id":137,"label":"native","name":"request","detail":"inquello/policy/effective","event":"end","at":1793909833220,"ms":127,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mreaches only the listed destinations through the proxy
+[22m[39mPOLICY_PHASE {"id":140,"label":"native","name":"request","detail":"inquello/tools/exec","event":"start","at":1793909833351}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mreaches only the listed destinations through the proxy
+[22m[39mPOLICY_PHASE {"id":141,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909833354}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mreaches only the listed destinations through the proxy
+[22m[39mPOLICY_PHASE {"id":141,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909833387,"ms":34,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mreaches only the listed destinations through the proxy
+[22m[39mPOLICY_PHASE {"id":142,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909837160}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mreaches only the listed destinations through the proxy
+[22m[39mPOLICY_PHASE {"id":142,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909837197,"ms":38,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mreaches only the listed destinations through the proxy
+[22m[39mPOLICY_PHASE {"id":140,"label":"native","name":"request","detail":"inquello/tools/exec","event":"end","at":1793909840550,"ms":7199,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mreaches only the listed destinations through the proxy
+[22m[39mPOLICY_PHASE {"id":143,"label":"native","name":"request","detail":"inquello/tools/exec","event":"start","at":1793909840607}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mreaches only the listed destinations through the proxy
+[22m[39mPOLICY_PHASE {"id":144,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909840610}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mreaches only the listed destinations through the proxy
+[22m[39mPOLICY_PHASE {"id":144,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909840639,"ms":28,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mreaches only the listed destinations through the proxy
+[22m[39mPOLICY_PHASE {"id":143,"label":"native","name":"request","detail":"inquello/tools/exec","event":"end","at":1793909844521,"ms":3914,"rejected":true}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mreaches only the listed destinations through the proxy
+[22m[39mPOLICY_PHASE {"id":145,"label":"native","name":"request","detail":"inquello/permissions/request","event":"start","at":1793909844521}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mreaches only the listed destinations through the proxy
+[22m[39mPOLICY_PHASE {"id":146,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909844525}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mreaches only the listed destinations through the proxy
+[22m[39mPOLICY_PHASE {"id":146,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909844555,"ms":30,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mreaches only the listed destinations through the proxy
+[22m[39mPOLICY_PHASE {"id":147,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909844594}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mreaches only the listed destinations through the proxy
+[22m[39mPOLICY_PHASE {"id":147,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909844634,"ms":41,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22m[2mreaches only the listed destinations through the proxy
+[22m[39mPOLICY_PHASE {"id":145,"label":"native","name":"request","detail":"inquello/permissions/request","event":"end","at":1793909844652,"ms":131,"rejected":false}
+
+[90mstdout[2m | test/tool-bounds-integration.test.ts[2m > [22m[2mbounded tool reads, writes and network against the real runtime and local sandbox
+[22m[39mPOLICY_NATIVE_TIMINGS {"out":"D:\\Projects\\inquello\\_bmad-output\\implementation-artifacts\\verification-2026-11-05\\tool-bounds-integration-diagnostic-native-events.json","count":23}
+
+2026-11-05T20:18:58.956777Z  INFO inquello_dev_topology: dev topology stopping
+ [31m❯[39m test/tool-bounds-integration.test.ts [2m([22m[2m7 tests[22m[2m | [22m[31m2 failed[39m[2m | [22m[33m5 skipped[39m[2m)[22m[33m 316176[2mms[22m[39m
+   [31m❯[39m bounded tool reads, writes and network against the real runtime and local sandbox [2m(7)[22m
+     [2m[90m↓[39m[22m binds the fixed authenticated policy read to the fixture policy and rejects foreign membership
+     [2m[90m↓[39m[22m serializes concurrent Task sandbox inspection with real tool execution
+[31m     [31m×[31m keeps a standard Task inside its folder, read-only system locations and no destinations[39m[33m 180006[2mms[22m[39m
+[31m     [31m×[31m reaches only the listed destinations through the proxy[39m[33m 120004[2mms[22m[39m
+     [2m[90m↓[39m[22m makes the Task folder read only under a read_only ceiling
+     [2m[90m↓[39m[22m states the true reach of a permitted Full access mode and runs it without the sandbox
+     [2m[90m↓[39m[22m refuses to run, and says so, when the local sandbox cannot be applied
+2026-11-05T20:19:12.037706Z  INFO inquello_service::test_provider: synthetic OIDC provider listening issuer="https://127.0.0.1:49407"
+2026-11-05T20:19:12.371033Z  INFO inquello_service::server: inquello service listening local_addr=127.0.0.1:49410 https=true
+2026-11-05T20:19:12.482095Z  INFO sqlx::postgres::notice: relation "_sqlx_migrations" already exists, skipping
+2026-11-05T20:19:12.530472Z  INFO inquello_service::admin: workspace created by operator workspace_id=2bed2df0-40fb-40ae-ab17-a93f0ef9c5f8 receipt_id=4ac9d6b6-6687-43b3-8348-6053ec1453f3
+[90mstdout[2m | test/permissions-integration.test.ts[2m > [22m[2mpermission to act against the real runtime, its exec-policy matching and the local sandbox
+[22m[39mPOLICY_PHASE {"id":1,"label":"native","name":"start","detail":"","event":"start","at":1793909953304}
+
+[90mstdout[2m | test/permissions-integration.test.ts[2m > [22m[2mpermission to act against the real runtime, its exec-policy matching and the local sandbox
+[22m[39mPOLICY_PHASE {"id":1,"label":"native","name":"start","detail":"","event":"end","at":1793909953736,"ms":432,"rejected":false}
+
+2026-11-05T20:19:14.576334Z  INFO inquello_service::login: login transaction created login_transaction_id=2b60901c-8004-48a6-a8cb-8c56958bd727
+2026-11-05T20:19:14.586737Z  INFO inquello_service::test_provider: authorization code issued for the synthetic subject
+2026-11-05T20:19:14.603438Z  INFO inquello_service::test_provider: ID token issued for the synthetic subject
+2026-11-05T20:19:14.663400Z  INFO inquello_service::login: session created principal_id=2a3bcfef-6159-4d32-b8e6-9ff5891ff25c session_id=ea15befe-bee4-461e-a8d9-1b279aca4cf1
+2026-11-05T20:19:15.479840Z  INFO inquello_service::workspaces: invite accepted principal_id=2a3bcfef-6159-4d32-b8e6-9ff5891ff25c workspace_id=2bed2df0-40fb-40ae-ab17-a93f0ef9c5f8
+[90mstdout[2m | test/permissions-integration.test.ts[2m > [22m[2mpermission to act against the real runtime, its exec-policy matching and the local sandbox[2m > [22m[2mapplies a rule to the resolved program: other paths, the bare name and a symlink alias; no allow through a link or for an unresolved program
+[22m[39mPOLICY_PHASE {"id":2,"label":"native","name":"request","detail":"inquello/session/setPrincipal","event":"start","at":1793909955485}
+
+[90mstdout[2m | test/permissions-integration.test.ts[2m > [22m[2mpermission to act against the real runtime, its exec-policy matching and the local sandbox[2m > [22m[2mapplies a rule to the resolved program: other paths, the bare name and a symlink alias; no allow through a link or for an unresolved program
+[22m[39mPOLICY_PHASE {"id":2,"label":"native","name":"request","detail":"inquello/session/setPrincipal","event":"end","at":1793909955492,"ms":8,"rejected":false}
+
+[90mstdout[2m | test/permissions-integration.test.ts[2m > [22m[2mpermission to act against the real runtime, its exec-policy matching and the local sandbox[2m > [22m[2mapplies a rule to the resolved program: other paths, the bare name and a symlink alias; no allow through a link or for an unresolved program
+[22m[39mPOLICY_PHASE {"id":3,"label":"native","name":"request","detail":"inquello/task/create","event":"start","at":1793909955550}
+
+[90mstdout[2m | test/permissions-integration.test.ts[2m > [22m[2mpermission to act against the real runtime, its exec-policy matching and the local sandbox[2m > [22m[2mapplies a rule to the resolved program: other paths, the bare name and a symlink alias; no allow through a link or for an unresolved program
+[22m[39mPOLICY_PHASE {"id":4,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909955555}
+
+[90mstdout[2m | test/permissions-integration.test.ts[2m > [22m[2mpermission to act against the real runtime, its exec-policy matching and the local sandbox[2m > [22m[2mapplies a rule to the resolved program: other paths, the bare name and a symlink alias; no allow through a link or for an unresolved program
+[22m[39mPOLICY_PHASE {"id":4,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909955599,"ms":44,"rejected":false}
+
+[90mstdout[2m | test/permissions-integration.test.ts[2m > [22m[2mpermission to act against the real runtime, its exec-policy matching and the local sandbox[2m > [22m[2mapplies a rule to the resolved program: other paths, the bare name and a symlink alias; no allow through a link or for an unresolved program
+[22m[39mPOLICY_PHASE {"id":5,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909955815}
+
+[90mstdout[2m | test/permissions-integration.test.ts[2m > [22m[2mpermission to act against the real runtime, its exec-policy matching and the local sandbox[2m > [22m[2mapplies a rule to the resolved program: other paths, the bare name and a symlink alias; no allow through a link or for an unresolved program
+[22m[39mPOLICY_PHASE {"id":5,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909955847,"ms":33,"rejected":false}
+
+[90mstdout[2m | test/permissions-integration.test.ts[2m > [22m[2mpermission to act against the real runtime, its exec-policy matching and the local sandbox[2m > [22m[2mapplies a rule to the resolved program: other paths, the bare name and a symlink alias; no allow through a link or for an unresolved program
+[22m[39mPOLICY_PHASE {"id":3,"label":"native","name":"request","detail":"inquello/task/create","event":"end","at":1793909955865,"ms":315,"rejected":false}
+
+[90mstdout[2m | test/permissions-integration.test.ts[2m > [22m[2mpermission to act against the real runtime, its exec-policy matching and the local sandbox[2m > [22m[2mapplies a rule to the resolved program: other paths, the bare name and a symlink alias; no allow through a link or for an unresolved program
+[22m[39mPOLICY_PHASE {"id":6,"label":"policy","name":"runTool","detail":"/usr/bin/sh","event":"start","at":1793909955907}
+
+[90mstdout[2m | test/permissions-integration.test.ts[2m > [22m[2mpermission to act against the real runtime, its exec-policy matching and the local sandbox[2m > [22m[2mapplies a rule to the resolved program: other paths, the bare name and a symlink alias; no allow through a link or for an unresolved program
+[22m[39mPOLICY_PHASE {"id":7,"label":"native","name":"request","detail":"inquello/broadMode/read","event":"start","at":1793909955908}
+
+[90mstdout[2m | test/permissions-integration.test.ts[2m > [22m[2mpermission to act against the real runtime, its exec-policy matching and the local sandbox[2m > [22m[2mapplies a rule to the resolved program: other paths, the bare name and a symlink alias; no allow through a link or for an unresolved program
+[22m[39mPOLICY_PHASE {"id":8,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909955912}
+
+[90mstdout[2m | test/permissions-integration.test.ts[2m > [22m[2mpermission to act against the real runtime, its exec-policy matching and the local sandbox[2m > [22m[2mapplies a rule to the resolved program: other paths, the bare name and a symlink alias; no allow through a link or for an unresolved program
+[22m[39mPOLICY_PHASE {"id":8,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909955953,"ms":41,"rejected":false}
+
+[90mstdout[2m | test/permissions-integration.test.ts[2m > [22m[2mpermission to act against the real runtime, its exec-policy matching and the local sandbox[2m > [22m[2mapplies a rule to the resolved program: other paths, the bare name and a symlink alias; no allow through a link or for an unresolved program
+[22m[39mPOLICY_PHASE {"id":9,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909955971}
+
+[90mstdout[2m | test/permissions-integration.test.ts[2m > [22m[2mpermission to act against the real runtime, its exec-policy matching and the local sandbox[2m > [22m[2mapplies a rule to the resolved program: other paths, the bare name and a symlink alias; no allow through a link or for an unresolved program
+[22m[39mPOLICY_PHASE {"id":9,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909956004,"ms":33,"rejected":false}
+
+[90mstdout[2m | test/permissions-integration.test.ts[2m > [22m[2mpermission to act against the real runtime, its exec-policy matching and the local sandbox[2m > [22m[2mapplies a rule to the resolved program: other paths, the bare name and a symlink alias; no allow through a link or for an unresolved program
+[22m[39mPOLICY_PHASE {"id":7,"label":"native","name":"request","detail":"inquello/broadMode/read","event":"end","at":1793909956022,"ms":114,"rejected":false}
+
+[90mstdout[2m | test/permissions-integration.test.ts[2m > [22m[2mpermission to act against the real runtime, its exec-policy matching and the local sandbox[2m > [22m[2mapplies a rule to the resolved program: other paths, the bare name and a symlink alias; no allow through a link or for an unresolved program
+[22m[39mPOLICY_PHASE {"id":10,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909956023}
+
+[90mstdout[2m | test/permissions-integration.test.ts[2m > [22m[2mpermission to act against the real runtime, its exec-policy matching and the local sandbox[2m > [22m[2mapplies a rule to the resolved program: other paths, the bare name and a symlink alias; no allow through a link or for an unresolved program
+[22m[39mPOLICY_PHASE {"id":10,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909956064,"ms":42,"rejected":false}
+
+[90mstdout[2m | test/permissions-integration.test.ts[2m > [22m[2mpermission to act against the real runtime, its exec-policy matching and the local sandbox[2m > [22m[2mapplies a rule to the resolved program: other paths, the bare name and a symlink alias; no allow through a link or for an unresolved program
+[22m[39mPOLICY_PHASE {"id":11,"label":"native","name":"request","detail":"inquello/policy/effective","event":"start","at":1793909957152}
+
+[90mstdout[2m | test/permissions-integration.test.ts[2m > [22m[2mpermission to act against the real runtime, its exec-policy matching and the local sandbox[2m > [22m[2mapplies a rule to the resolved program: other paths, the bare name and a symlink alias; no allow through a link or for an unresolved program
+[22m[39mPOLICY_PHASE {"id":12,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909957156}
+
+[90mstdout[2m | test/permissions-integration.test.ts[2m > [22m[2mpermission to act against the real runtime, its exec-policy matching and the local sandbox[2m > [22m[2mapplies a rule to the resolved program: other paths, the bare name and a symlink alias; no allow through a link or for an unresolved program
+[22m[39mPOLICY_PHASE {"id":12,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909957186,"ms":30,"rejected":false}
+
+[90mstdout[2m | test/permissions-integration.test.ts[2m > [22m[2mpermission to act against the real runtime, its exec-policy matching and the local sandbox[2m > [22m[2mapplies a rule to the resolved program: other paths, the bare name and a symlink alias; no allow through a link or for an unresolved program
+[22m[39mPOLICY_PHASE {"id":13,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909957220}
+
+[90mstdout[2m | test/permissions-integration.test.ts[2m > [22m[2mpermission to act against the real runtime, its exec-policy matching and the local sandbox[2m > [22m[2mapplies a rule to the resolved program: other paths, the bare name and a symlink alias; no allow through a link or for an unresolved program
+[22m[39mPOLICY_PHASE {"id":13,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909957254,"ms":34,"rejected":false}
+
+[90mstdout[2m | test/permissions-integration.test.ts[2m > [22m[2mpermission to act against the real runtime, its exec-policy matching and the local sandbox[2m > [22m[2mapplies a rule to the resolved program: other paths, the bare name and a symlink alias; no allow through a link or for an unresolved program
+[22m[39mPOLICY_PHASE {"id":11,"label":"native","name":"request","detail":"inquello/policy/effective","event":"end","at":1793909957272,"ms":120,"rejected":false}
+
+[90mstdout[2m | test/permissions-integration.test.ts[2m > [22m[2mpermission to act against the real runtime, its exec-policy matching and the local sandbox[2m > [22m[2mapplies a rule to the resolved program: other paths, the bare name and a symlink alias; no allow through a link or for an unresolved program
+[22m[39mPOLICY_PHASE {"id":14,"label":"native","name":"request","detail":"inquello/tools/exec","event":"start","at":1793909962566}
+
+[90mstdout[2m | test/permissions-integration.test.ts[2m > [22m[2mpermission to act against the real runtime, its exec-policy matching and the local sandbox[2m > [22m[2mapplies a rule to the resolved program: other paths, the bare name and a symlink alias; no allow through a link or for an unresolved program
+[22m[39mPOLICY_PHASE {"id":15,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909962570}
+
+[90mstdout[2m | test/permissions-integration.test.ts[2m > [22m[2mpermission to act against the real runtime, its exec-policy matching and the local sandbox[2m > [22m[2mapplies a rule to the resolved program: other paths, the bare name and a symlink alias; no allow through a link or for an unresolved program
+[22m[39mPOLICY_PHASE {"id":15,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909962601,"ms":31,"rejected":false}
+
+[90mstdout[2m | test/permissions-integration.test.ts[2m > [22m[2mpermission to act against the real runtime, its exec-policy matching and the local sandbox[2m > [22m[2mapplies a rule to the resolved program: other paths, the bare name and a symlink alias; no allow through a link or for an unresolved program
+[22m[39mPOLICY_PHASE {"id":16,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909968594}
+
+[90mstdout[2m | test/permissions-integration.test.ts[2m > [22m[2mpermission to act against the real runtime, its exec-policy matching and the local sandbox[2m > [22m[2mapplies a rule to the resolved program: other paths, the bare name and a symlink alias; no allow through a link or for an unresolved program
+[22m[39mPOLICY_PHASE {"id":16,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909968645,"ms":52,"rejected":false}
+
+[90mstdout[2m | test/permissions-integration.test.ts[2m > [22m[2mpermission to act against the real runtime, its exec-policy matching and the local sandbox[2m > [22m[2mapplies a rule to the resolved program: other paths, the bare name and a symlink alias; no allow through a link or for an unresolved program
+[22m[39mPOLICY_PHASE {"id":14,"label":"native","name":"request","detail":"inquello/tools/exec","event":"end","at":1793909972100,"ms":9534,"rejected":false}
+
+[90mstdout[2m | test/permissions-integration.test.ts[2m > [22m[2mpermission to act against the real runtime, its exec-policy matching and the local sandbox[2m > [22m[2mapplies a rule to the resolved program: other paths, the bare name and a symlink alias; no allow through a link or for an unresolved program
+[22m[39mPOLICY_PHASE {"id":17,"label":"native","name":"request","detail":"inquello/tools/exec","event":"start","at":1793909972169}
+
+[90mstdout[2m | test/permissions-integration.test.ts[2m > [22m[2mpermission to act against the real runtime, its exec-policy matching and the local sandbox[2m > [22m[2mapplies a rule to the resolved program: other paths, the bare name and a symlink alias; no allow through a link or for an unresolved program
+[22m[39mPOLICY_PHASE {"id":18,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909972173}
+
+[90mstdout[2m | test/permissions-integration.test.ts[2m > [22m[2mpermission to act against the real runtime, its exec-policy matching and the local sandbox[2m > [22m[2mapplies a rule to the resolved program: other paths, the bare name and a symlink alias; no allow through a link or for an unresolved program
+[22m[39mPOLICY_PHASE {"id":18,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909972203,"ms":31,"rejected":false}
+
+[90mstdout[2m | test/permissions-integration.test.ts[2m > [22m[2mpermission to act against the real runtime, its exec-policy matching and the local sandbox[2m > [22m[2mapplies a rule to the resolved program: other paths, the bare name and a symlink alias; no allow through a link or for an unresolved program
+[22m[39mPOLICY_PHASE {"id":19,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"start","at":1793909975992}
+
+[90mstdout[2m | test/permissions-integration.test.ts[2m > [22m[2mpermission to act against the real runtime, its exec-policy matching and the local sandbox[2m > [22m[2mapplies a rule to the resolved program: other paths, the bare name and a symlink alias; no allow through a link or for an unresolved program
+[22m[39mPOLICY_PHASE {"id":19,"label":"authenticated-http","name":"executionPolicy","detail":"","event":"end","at":1793909976047,"ms":55,"rejected":false}
+
+[90mstdout[2m | test/permissions-integration.test.ts[2m > [22m[2mpermission to act against the real runtime, its exec-policy matching and the local sandbox[2m > [22m[2mapplies a rule to the resolved program: other paths, the bare name and a symlink alias; no allow through a link or for an unresolved program
+[22m[39mPOLICY_PHASE {"id":17,"label":"native","name":"request","detail":"inquello/tools/exec","event":"end","at":1793909979487,"ms":7318,"rejected":false}
+
+[90mstdout[2m | test/permissions-integration.test.ts[2m > [22m[2mpermission to act against the real runtime, its exec-policy matching and the local sandbox[2m > [22m[2mapplies a rule to the resolved program: other paths, the bare name and a symlink alias; no allow through a link or for an unresolved program
+[22m[39mPOLICY_PHASE {"id":6,"label":"policy","name":"runTool","detail":"/usr/bin/sh","event":"end","at":1793909979488,"ms":23581,"rejected":false,"ok":true}
+
+[90mstdout[2m | test/permissions-integration.test.ts[2m > [22m[2mpermission to act against the real runtime, its exec-policy matching and the local sandbox
+[22m[39mPOLICY_NATIVE_TIMINGS {"out":"D:\\Projects\\inquello\\_bmad-output\\implementation-artifacts\\verification-2026-11-05\\permissions-integration-diagnostic-native-events.json","count":16}
+
+2026-11-05T20:19:39.574739Z  INFO inquello_dev_topology: dev topology stopping
+ [31m❯[39m test/permissions-integration.test.ts [2m([22m[2m7 tests[22m[2m | [22m[31m1 failed[39m[2m | [22m[33m6 skipped[39m[2m)[22m[33m 31535[2mms[22m[39m
+   [31m❯[39m permission to act against the real runtime, its exec-policy matching and the local sandbox [2m(7)[22m
+     [2m[90m↓[39m[22m binds the fixed authenticated policy read to the fixture policy and rejects foreign membership
+     [2m[90m↓[39m[22m asks before a prompt-rule command; Deny runs nothing, Run runs it once inside the sandbox
+     [2m[90m↓[39m[22m refuses a forbidden command without a card, naming the rule and its source
+[31m     [31m×[31m applies a rule to the resolved program: other paths, the bare name and a symlink alias; no allow through a link or for an unresolved program[39m[33m 24020[2mms[22m[39m
+     [2m[90m↓[39m[22m lets the person's forbid win over a Workspace allow, refuses a person's allow, and records Deny and forbid
+     [2m[90m↓[39m[22m keeps the automatic reviewer off by default and not available without a processing route
+     [2m[90m↓[39m[22m declines a request no one decides in time and runs nothing
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 3 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m test/permissions-integration.test.ts[2m > [22mpermission to act against the real runtime, its exec-policy matching and the local sandbox[2m > [22mapplies a rule to the resolved program: other paths, the bare name and a symlink alias; no allow through a link or for an unresolved program
+[31m[1mAssertionError[22m: resolved program variant: /usr/bin/sh: expected { ok: true, …(1) } to match object { Object (ok, code) }
+(6 matching properties omitted from actual)[39m
+
+[32m- Expected[39m
+[31m+ Received[39m
+
+[2m  {[22m
+[32m-   "code": "command-forbidden",[39m
+[32m-   "ok": false,[39m
+[31m+   "ok": true,[39m
+[2m  }[22m
+
+[36m [2m❯[22m test/permissions-integration.test.ts:[2m258:61[22m[39m
+    [90m256|[39m     for (const program of ['/usr/bin/sh', 'sh', alias]) {
+    [90m257|[39m       const refused = await policy.runTool(task, [program, '-c', 'true…
+    [90m258|[39m       expect(refused, 'resolved program variant: '+program).toMatchObj…
+    [90m   |[39m                                                             [31m^[39m
+    [90m259|[39m       expect((refused as { reason: string }).reason).toContain(`Rule: …
+    [90m260|[39m     }
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m test/tool-bounds-integration.test.ts[2m > [22mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22mkeeps a standard Task inside its folder, read-only system locations and no destinations
+[31m[1mError[22m: Test timed out in 180000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".[39m
+[36m [2m❯[22m test/tool-bounds-integration.test.ts:[2m197:3[22m[39m
+    [90m195|[39m   }, 120_000);
+    [90m196|[39m
+    [90m197|[39m   it('keeps a standard Task inside its folder, read-only system locati…
+    [90m   |[39m   [31m^[39m
+    [90m198|[39m     usePolicy(null);
+    [90m199|[39m     const task = await newTask('Bounded');
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m test/tool-bounds-integration.test.ts[2m > [22mbounded tool reads, writes and network against the real runtime and local sandbox[2m > [22mreaches only the listed destinations through the proxy
+[31m[1mError[22m: Test timed out in 120000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".[39m
+[36m [2m❯[22m test/tool-bounds-integration.test.ts:[2m259:3[22m[39m
+    [90m257|[39m   }, 180_000);
+    [90m258|[39m
+    [90m259|[39m   it('reaches only the listed destinations through the proxy', async (…
+    [90m   |[39m   [31m^[39m
+    [90m260|[39m     usePolicy({ network: 'allowed', allowed_domains: ['example.org'] }…
+    [90m261|[39m     const task = await newTask('Listed destinations');
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m2 failed[39m[22m[90m (2)[39m
+[2m      Tests [22m [1m[31m3 failed[39m[22m[2m | [22m[33m11 skipped[39m[90m (14)[39m
+[2m   Start at [22m 20:13:54
+[2m   Duration [22m 349.01s[2m (tests 100%)[22m
+

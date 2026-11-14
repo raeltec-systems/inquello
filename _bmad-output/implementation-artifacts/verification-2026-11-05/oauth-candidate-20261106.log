@@ -1,0 +1,8 @@
+source-sha256:ed7081ace5323a12d5face0b940dfc612a7194d43e520d97b370c508f35b7a9a
+da492069dc9ba1dc01932a6ed080c7ad7741c711a28c9b781f1dcc4619581563  Cargo.lock
+rustc 1.99.1 (58cf8f9c3 2026-10-13)
+cargo 1.99.1 (5f94df478 2026-08-27)
+error: failed to download `tracing-test v0.2.5`
+
+Caused by:
+  attempting to make an HTTP request, but --offline was specified

@@ -1,0 +1,282 @@
+{
+  "C01": [
+    "Inquello Electron shell plus inherited runtime",
+    "Task UI/native path traced",
+    "Qualify current clients and audit inspection, retain existing shell",
+    "Separate OpenAI desktop distribution is not automatically included",
+    "D; P"
+  ],
+  "C03": [
+    "CLI dispatch and native exec present",
+    "Standalone CLI present; Inquello secondary-client authority unqualified",
+    "Expose/adapt CLI to bound Inquello context",
+    "Auth/model route must be eligible",
+    "I"
+  ],
+  "C04": [
+    "CLI resume/fork/command controls present",
+    "Generic private-thread mutations guarded",
+    "Adapt commands to owned Task operations",
+    "None selected beyond actual route",
+    "I; D"
+  ],
+  "C07": [
+    "Cloud-task HTTP client present",
+    "No hosted execution supplier established by client source",
+    "Supply eligible execution route and qualify",
+    "Hosted backend/auth/entitlement",
+    "P"
+  ],
+  "C10": [
+    "Native execution and worktree/cloud interfaces retained",
+    "Private start currently local-only",
+    "Reuse local path; qualify each additional environment separately",
+    "Cloud/remote supply if used",
+    "I; D; P"
+  ],
+  "C11": [
+    "Core thread/tool loop present",
+    "Start/steer/stop/resume wired into private Tasks",
+    "Qualify supported audit tasks, not rebuild loop",
+    "Selected model/host",
+    "I; D"
+  ],
+  "C13": [
+    "Thread manager/resume/fork present",
+    "Bound same-Task resume; raw mutations guarded",
+    "Adapt alternative history operations preserving ownership",
+    "Selected model/host",
+    "I; D"
+  ],
+  "C14": [
+    "Native turn steering and interrupt present",
+    "UI-to-native steer/stop chain traced",
+    "Qualify race/recovery/effect evidence",
+    "Selected model/host",
+    "D"
+  ],
+  "C15": [
+    "Generic PlanHandler plus private progress handler",
+    "Private path substitutes inquello_progress",
+    "Expose useful plan/progress without false completion",
+    "Selected model/host",
+    "D"
+  ],
+  "C16": [
+    "Runtime task lifecycle/queue/sleep primitives",
+    "Bound resume/start and restrictions traced; sustained scale not proved",
+    "Qualify long work and reconciled coverage/recovery",
+    "Host/app/data availability",
+    "I; D; P"
+  ],
+  "C17": [
+    "Runtime task/queue primitives",
+    "Current private tools restricted; broader parallelism unqualified",
+    "Adapt protected concurrent work and effect ownership",
+    "Host/model availability",
+    "I; D; P"
+  ],
+  "C19": [
+    "Core shell execution implementation",
+    "Private exec_command remains allowed, unified_exec disabled",
+    "Reuse executor; qualify sandbox and analysis procedures",
+    "OS/WSL executable path",
+    "D"
+  ],
+  "C33": [
+    "Tool registry and handlers present",
+    "Private allowlist exactly exec_command, inquello_progress, request_user_input",
+    "Expose supported tools only through protected authority",
+    "Tool-specific dependencies",
+    "D"
+  ],
+  "C34": [
+    "Apps mechanisms and inventory APIs present",
+    "Management wired; private invocation feature disabled",
+    "Adapt authorised Task invocation separately from configuration",
+    "App identity/endpoint/auth/entitlement",
+    "I; D"
+  ],
+  "C35": [
+    "MCP connection/tool mechanisms present",
+    "Management wired; private endpoints disabled and checked",
+    "Adapt bound connection/permissions and verify use",
+    "MCP server/auth",
+    "I; D"
+  ],
+  "C36": [
+    "Plugin/marketplace mechanisms present",
+    "Management wired; private plugins disabled",
+    "Retain compatible mechanisms; no new broad marketplace supply obligation",
+    "Package/source compatibility; supplier if used",
+    "I; D"
+  ],
+  "C37": [
+    "Skills module and loading mechanism present",
+    "Not exhaustively traced for private skill use",
+    "Qualify actual loading/authority; no assumption all disabled",
+    "Skill dependencies and policy",
+    "I; D"
+  ],
+  "C40": [
+    "Hook runtime events present",
+    "Private hooks disabled",
+    "Adapt bounded hook invocation and enforcement",
+    "Hook command dependencies",
+    "I; D"
+  ],
+  "C41": [
+    "App-server protocol and native handlers present",
+    "Main-owned stdio transport wired; generic private operations guarded",
+    "Reuse protocol, qualify protected named operations",
+    "No automatic WebSocket/Unix/secondary-client enablement",
+    "I; D"
+  ],
+  "C43": [
+    "TypeScript CLI/JSONL and Python app-server SDKs present",
+    "Inquello identity/context integration not qualified",
+    "Adapt supported SDK/noninteractive entry; separately verify GitHub Action portion",
+    "CI/provider/service identity where selected",
+    "I; D"
+  ],
+  "C45": [
+    "Subagent spawn/input handlers present",
+    "Current private tool allowlist excludes spawn/input tools",
+    "Adapt child mandate/grants/lineage/costs/evidence; retain engine",
+    "Model/host",
+    "I; D"
+  ],
+  "C46": [
+    "Fork/resume handlers and thread manager present",
+    "Generic cold fork/resume/new turns rejected in private store mode",
+    "Expose owned private fork/reference paths; preserve lineage",
+    "Model/host",
+    "I; D"
+  ],
+  "C48": [
+    "Compaction and memory implementation present",
+    "Private background compaction restricted",
+    "Adapt scoped authority and preserve evidence across compaction",
+    "Model/host",
+    "I; D"
+  ],
+  "C49": [
+    "Native history/resume implementation present",
+    "Bound same-Task retained history path traced",
+    "Qualify ownership/current-grant persistence and recovery",
+    "Retained-data policy",
+    "I; D"
+  ],
+  "C50": [
+    "Runtime memories mechanisms present",
+    "Private memory generation/use disabled",
+    "Adapt admitted team context and current-grant retrieval",
+    "Shared authority/retained data",
+    "I; D"
+  ],
+  "C51": [
+    "Runtime memory does not prove app/site capture",
+    "Ambient activity capture not separately source-audited",
+    "Investigate reusable capture then adapt consent/scope/retention",
+    "OS/app capture capability",
+    "I; P"
+  ],
+  "C53": [
+    "Responses configuration/catalog/auth and Messages adapter present",
+    "Model picker/catalog/resolve/select wired",
+    "Qualify each documented API/model/provider and usage behavior",
+    "Model/provider account and per-route eligibility",
+    "I; D; P"
+  ],
+  "C54": [
+    "Bedrock provider constructor/auth present",
+    "Constructor uses Responses; arbitrary native API compatibility not proved",
+    "Qualify exact supported model/API/gateway route",
+    "AWS service/auth/policy",
+    "P"
+  ],
+  "C54A": [
+    "Generic provider base URL/auth route machinery present",
+    "Exact Azure native/model path not independently qualified",
+    "Qualify exact supported route rather than infer from config",
+    "Azure service/auth/policy",
+    "P"
+  ],
+  "C55": [
+    "Base URL/catalog/gateway auth/headers/retry config present",
+    "Actual organisational route not supplied by fork",
+    "Configure/adapt then qualify",
+    "Organisation gateway/auth/policy",
+    "P"
+  ],
+  "C56": [
+    "Local provider/config capability retained",
+    "Current priority remains later integration; no automatic fallback",
+    "Qualify permitted model/protocol; retain V1 target",
+    "Installed model/runtime hardware and policy",
+    "P"
+  ],
+  "C57": [
+    "SDK/auth/service route primitives present",
+    "Secondary client/service Task authority not established",
+    "Adapt bound service identity/mandate; qualify each route",
+    "Service identities/auth/entitlements",
+    "I; D; P"
+  ],
+  "C59": [
+    "Durable queue/mailbox/sleep state and clock.sleep implementation",
+    "Private allowlist excludes clock tool; full recurrence lifecycle unqualified",
+    "Reuse primitives, adapt recurrence/mandate and missed-run/restart handling",
+    "Host/app availability; no implicit cloud continuation",
+    "P; D"
+  ],
+  "C60": [
+    "Realtime protocol/transport/session/audio handlers present",
+    "Private Task audio UI/authority and full flow unqualified",
+    "Expose/adapt permitted audio, retention and route",
+    "Eligible backend and client/OS audio",
+    "I; D; P"
+  ],
+  "C65": [
+    "Native sandbox/policy mechanisms retained",
+    "Private task requires managed sandbox; current path local-only",
+    "Qualify actual OS/WSL execution and privacy controls",
+    "OS enforcement and tool availability",
+    "D"
+  ],
+  "C66": [
+    "Permission response path present",
+    "Desktop permission UI/IPC/native binding traced",
+    "Qualify actual request/result and denial flows",
+    "Policy/account eligibility",
+    "D"
+  ],
+  "C70": [
+    "Managed policy/config mechanisms present",
+    "Private invocation restrictions explicitly enforced",
+    "Preserve current protections while qualifying each exposure",
+    "Organisation policy; service if needed",
+    "D; P"
+  ],
+  "C76": [
+    "Task lifecycle core and Inquello binding",
+    "Start/steer/stop/resume direct chain verified in source",
+    "Reuse and extend audit-specific continuity; verify runtime",
+    "Model/host/shared authority as applicable",
+    "D"
+  ],
+  "C77": [
+    "Pinned public Codex subtree implementation",
+    "Deliberately patched engine integrated with owned Electron shell",
+    "Preserve fork; track source/patch/effective config per feature",
+    "Separately supplied services remain distinct",
+    "I; D; P"
+  ],
+  "C78": [
+    "Audit domain/workflow planned over runtime",
+    "No full audit-lifecycle runtime acceptance established",
+    "Add only required audit semantics using existing mechanisms",
+    "Selected pilot inputs/method and authority",
+    "D; current PRFAQ"
+  ]
+}

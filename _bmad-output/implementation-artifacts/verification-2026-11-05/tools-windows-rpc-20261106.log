@@ -1,0 +1,81 @@
+   Compiling codex-rmcp-client v0.165.0 (D:\Projects\inquello\engine\codex-rs\rmcp-client)
+   Compiling codex-app-server v0.165.0 (D:\Projects\inquello\engine\codex-rs\app-server)
+   Compiling codex-mcp v0.165.0 (D:\Projects\inquello\engine\codex-rs\codex-mcp)
+   Compiling codex-extension-api v0.165.0 (D:\Projects\inquello\engine\codex-rs\ext\extension-api)
+   Compiling codex-core-plugins v0.165.0 (D:\Projects\inquello\engine\codex-rs\core-plugins)
+   Compiling codex-agent-message-board-client v0.165.0 (D:\Projects\inquello\engine\codex-rs\agent-message-board-client)
+   Compiling codex-skills-extension v0.165.0 (D:\Projects\inquello\engine\codex-rs\ext\skills)
+   Compiling codex-guardian-reviewer v0.165.0 (D:\Projects\inquello\engine\codex-rs\ext\guardian-reviewer)
+   Compiling codex-agent-message-board-extension v0.165.0 (D:\Projects\inquello\engine\codex-rs\ext\agent-message-board)
+   Compiling codex-home v0.165.0 (D:\Projects\inquello\engine\codex-rs\codex-home)
+   Compiling codex-multi-env-copy-file v0.165.0 (D:\Projects\inquello\engine\codex-rs\ext\multi-env-copy-file)
+   Compiling codex-git-attribution v0.165.0 (D:\Projects\inquello\engine\codex-rs\ext\git-attribution)
+   Compiling codex-connectors-extension v0.165.0 (D:\Projects\inquello\engine\codex-rs\ext\connectors)
+   Compiling codex-core v0.165.0 (D:\Projects\inquello\engine\codex-rs\core)
+   Compiling codex-guardian-v2 v0.165.0 (D:\Projects\inquello\engine\codex-rs\ext\guardian-v2)
+   Compiling codex-app-server-transport v0.165.0 (D:\Projects\inquello\engine\codex-rs\app-server-transport)
+   Compiling codex-memories-write v0.165.0 (D:\Projects\inquello\engine\codex-rs\memories\write)
+   Compiling codex-external-agent-migration v0.165.0 (D:\Projects\inquello\engine\codex-rs\external-agent-migration)
+   Compiling codex-app-server-daemon v0.165.0 (D:\Projects\inquello\engine\codex-rs\app-server-daemon)
+   Compiling codex-mcp-extension v0.165.0 (D:\Projects\inquello\engine\codex-rs\ext\mcp)
+   Compiling codex-image-generation-extension v0.165.0 (D:\Projects\inquello\engine\codex-rs\ext\image-generation)
+   Compiling codex-web-search-extension v0.165.0 (D:\Projects\inquello\engine\codex-rs\ext\web-search)
+   Compiling codex-agent-extension v0.165.0 (D:\Projects\inquello\engine\codex-rs\ext\agent)
+   Compiling codex-memories-extension v0.165.0 (D:\Projects\inquello\engine\codex-rs\ext\memories)
+   Compiling codex-goal-extension v0.165.0 (D:\Projects\inquello\engine\codex-rs\ext\goal)
+   Compiling codex-chatgpt v0.165.0 (D:\Projects\inquello\engine\codex-rs\chatgpt)
+   Compiling codex-queue-extension v0.165.0 (D:\Projects\inquello\engine\codex-rs\ext\queue)
+   Compiling codex-history-notes-extension v0.165.0 (D:\Projects\inquello\engine\codex-rs\ext\history-notes)
+   Compiling core_test_support v0.165.0 (D:\Projects\inquello\engine\codex-rs\core\tests\common)
+   Compiling app_test_support v0.165.0 (D:\Projects\inquello\engine\codex-rs\app-server\tests\common)
+warning: fields `cwd` and `search_path` are never read
+    --> app-server\src\request_processors\inquello_processor.rs:1270:16
+     |
+1269 | pub(crate) struct ExecLookup<'a> {
+     |                   ---------- fields in this struct
+1270 |     pub(crate) cwd: Option<&'a std::path::Path>,
+     |                ^^^
+1271 |     pub(crate) search_path: Option<&'a std::ffi::OsStr>,
+     |                ^^^^^^^^^^^
+     |
+     = note: `ExecLookup` has derived impls for the traits `Debug` and `Clone`, but these are intentionally ignored during dead code analysis
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `codex-app-server` (lib) generated 1 warning
+    Finished `test` profile [unoptimized] target(s) in 5m 23s
+     Running tests\all.rs (target\debug\deps\all-968eccf483f90366.exe)
+
+running 1 test
+test suite::v2::mcp_server_status::oauth_cancel_rpc_selects_exact_attempt_and_prevents_late_token_persistence ... writing message to stdin: Request(JSONRPCRequest { id: Integer(0), method: "initialize", params: Some(Object {"capabilities": Object {"experimentalApi": Bool(true), "optOutNotificationMethods": Null, "requestAttestation": Bool(false)}, "clientInfo": Object {"name": String("codex-app-server-tests"), "title": Null, "version": String("0.1.0")}}), trace: None })
+read message from stdout: Response(JSONRPCResponse { id: Integer(0), result: Object {"codexHome": String("D:\\Toolchains\\tmp\\.tmpd3J1OG"), "platformFamily": String("windows"), "platformOs": String("windows"), "userAgent": String("codex-app-server-tests/0.165.0 (Windows 10.0.26100; x86_64) WindowsTerminal (codex-app-server-tests; 0.1.0)")} })
+writing message to stdin: Notification(JSONRPCNotification { method: "initialized", params: None })
+writing message to stdin: Request(JSONRPCRequest { id: Integer(1), method: "mcpServer/oauth/login", params: Some(Object {"name": String("cancel_fixture"), "timeoutSecs": Number(20)}), trace: None })
+in read_stream_until_response_message(Integer(1))
+read message from stdout: Notification(JSONRPCNotification { method: "remoteControl/status/changed", params: Some(Object {"environmentId": Null, "installationId": String("8c88aa24-6c19-48e3-8298-9c1dcc09a64a"), "serverName": String("EC2AMAZ-FVVDJ21"), "status": String("disabled")}) })
+[mcp stderr] [2m2026-11-06T17:02:54.196825Z[0m [33m WARN[0m [2mrmcp::transport::auth[0m[2m:[0m authorization server metadata omits code_challenge_methods_supported; proceeding with an S256 challenge anyway
+read message from stdout: Response(JSONRPCResponse { id: Integer(1), result: Object {"authorizationUrl": String("http://127.0.0.1:58779/authorize?response_type=code&client_id=isolated-client&state=W8l8cRRU3QpaW3yrDLeecw&code_challenge=jXDrDj2EBHbeiJwF4nBJY1AOYbFfOOWVoHO2318GgXw&code_challenge_method=S256&redirect_uri=http%3A%2F%2F127.0.0.1%3A58784%2Fcallback%2Ffqg6oLUthJKx&resource=http%3A%2F%2F127.0.0.1%3A58779%2Fmcp"), "loginId": String("01a1b1d0-32f5-7a22-b533-4548bc3def5b")} })
+writing message to stdin: Request(JSONRPCRequest { id: Integer(2), method: "mcpServer/oauth/cancel", params: Some(Object {"loginId": String("stale-attempt"), "name": String("cancel_fixture")}), trace: None })
+in read_stream_until_response_message(Integer(2))
+read message from stdout: Response(JSONRPCResponse { id: Integer(2), result: Object {"status": String("notFound")} })
+writing message to stdin: Request(JSONRPCRequest { id: Integer(3), method: "mcpServer/oauth/cancel", params: Some(Object {"loginId": String("01a1b1d0-32f5-7a22-b533-4548bc3def5b"), "name": String("cancel_fixture")}), trace: None })
+in read_stream_until_response_message(Integer(3))
+read message from stdout: Response(JSONRPCResponse { id: Integer(3), result: Object {"status": String("cancelled")} })
+in read_stream_until_notification_message(mcpServer/oauthLogin/completed)
+[mcp stderr] Failed to complete OAuth login for 'cancel_fixture': MCP OAuth sign-in cancelled
+read message from stdout: Notification(JSONRPCNotification { method: "mcpServer/oauthLogin/completed", params: Some(Object {"error": String("MCP OAuth sign-in cancelled"), "loginId": String("01a1b1d0-32f5-7a22-b533-4548bc3def5b"), "name": String("cancel_fixture"), "success": Bool(false), "threadId": Null}) })
+writing message to stdin: Request(JSONRPCRequest { id: Integer(4), method: "mcpServer/oauth/login", params: Some(Object {"name": String("cancel_fixture"), "timeoutSecs": Number(20)}), trace: None })
+in read_stream_until_response_message(Integer(4))
+[mcp stderr] [2m2026-11-06T17:02:58.441134Z[0m [33m WARN[0m [2mrmcp::transport::auth[0m[2m:[0m authorization server metadata omits code_challenge_methods_supported; proceeding with an S256 challenge anyway
+read message from stdout: Response(JSONRPCResponse { id: Integer(4), result: Object {"authorizationUrl": String("http://127.0.0.1:58779/authorize?response_type=code&client_id=isolated-client&state=XArjZme7oSWDSUUOtdc-KA&code_challenge=XGt5q4n9BspjjM1IOWYdgP1M71S0gnEb4MSbXMB7Q2I&code_challenge_method=S256&redirect_uri=http%3A%2F%2F127.0.0.1%3A58790%2Fcallback%2Ffqg6oLUthJKx&resource=http%3A%2F%2F127.0.0.1%3A58779%2Fmcp"), "loginId": String("01a1b1d0-4389-74a1-a2d8-24c114afda04")} })
+writing message to stdin: Request(JSONRPCRequest { id: Integer(5), method: "mcpServer/oauth/cancel", params: Some(Object {"loginId": String("01a1b1d0-32f5-7a22-b533-4548bc3def5b"), "name": String("cancel_fixture")}), trace: None })
+in read_stream_until_response_message(Integer(5))
+read message from stdout: Response(JSONRPCResponse { id: Integer(5), result: Object {"status": String("notFound")} })
+in read_stream_until_notification_message(mcpServer/oauthLogin/completed)
+read message from stdout: Notification(JSONRPCNotification { method: "mcpServer/oauthLogin/completed", params: Some(Object {"loginId": String("01a1b1d0-4389-74a1-a2d8-24c114afda04"), "name": String("cancel_fixture"), "success": Bool(true), "threadId": Null}) })
+writing message to stdin: Request(JSONRPCRequest { id: Integer(6), method: "mcpServer/oauth/cancel", params: Some(Object {"loginId": String("01a1b1d0-4389-74a1-a2d8-24c114afda04"), "name": String("cancel_fixture")}), trace: None })
+in read_stream_until_response_message(Integer(6))
+read message from stdout: Response(JSONRPCResponse { id: Integer(6), result: Object {"status": String("completed")} })
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1561 filtered out; finished in 7.74s
+

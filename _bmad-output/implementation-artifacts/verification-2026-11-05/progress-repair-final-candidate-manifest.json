@@ -1,0 +1,743 @@
+{
+  "created": "2026-11-05T17:57:38.215Z",
+  "head": "c407483170e93ad9bea0f2d1c36e9d32693b0c44",
+  "status": "Focused 282-test gate, current native/desktop builds and two sequential unchanged clean visual journeys passed; full acceptance gates remain open.",
+  "files": [
+    {
+      "path": "desktop/src/main/identity/session.ts",
+      "sha256": "4286bbf72e6678c92163876c7329e16ed03586315bd753deeff9d31bde9d8f15"
+    },
+    {
+      "path": "desktop/src/main/policy/service.ts",
+      "sha256": "ba1e26b84cccdb6c17e48143dcb4edfef069ed165fc0327d2da9f02dbd07d9a6"
+    },
+    {
+      "path": "desktop/src/main/tasks/service.ts",
+      "sha256": "4856d31ec965ffeccfb4ea362bc29f72fe122f4455c929e5215566dc6639795b"
+    },
+    {
+      "path": "desktop/src/renderer/Shell/task-observation.ts",
+      "sha256": "93bc2ae6166dea3d7bd07550ccda80236e4a4b50db5c7e1f11cf95c37914a7be"
+    },
+    {
+      "path": "desktop/test/identity-session.test.ts",
+      "sha256": "3e9f7be195280534e51ba4384ba270755d6e38aa3fbaf90b05345613ff71a59f"
+    },
+    {
+      "path": "desktop/test/policy-units.test.ts",
+      "sha256": "3369f3369b962869c55f3a05c0df4fb2cf3014261d31e1592570b9e8e97302be"
+    },
+    {
+      "path": "desktop/test/tasks-progress.test.ts",
+      "sha256": "b03cf8ce706a8f9286acfb3394c30ce0cc3e1111d0579c87b0541b6dfb03cda1"
+    },
+    {
+      "path": "desktop/test/live-conversation.test.tsx",
+      "sha256": "4ab81a3dff71eaa3c0985fff446cb7793562298252407a1e3437740319077297"
+    },
+    {
+      "path": "desktop/src/main/usage/service.ts",
+      "sha256": "ddd938ca420a1d911af0f160f450eac29d8f9d77e2dd6b6829de0c9aab375399"
+    },
+    {
+      "path": "desktop/src/main/main.ts",
+      "sha256": "950e239960880d38a329eb20be0e94e35681aefb59e61bcd972b33b6e261e44e"
+    },
+    {
+      "path": "desktop/test/usage-observation.test.ts",
+      "sha256": "8821a6f7d3d65e11864e0b38b1a84654e2671d8cd2e2c2e6635911bda4f90316"
+    }
+  ],
+  "diagnosticOnlyFilesClean": [
+    "desktop/src/main/smoke-probe.ts",
+    "desktop/scripts/run-seeded-smoke.cjs",
+    "engine/codex-rs/app-server/src/request_processors/inquello_tasks.rs",
+    "engine/codex-rs/app-server/src/request_processors/thread_processor.rs",
+    "engine/codex-rs/app-server/src/request_processors/thread_lifecycle.rs",
+    "engine/codex-rs/inquello-adapters/src/tasks.rs"
+  ],
+  "diff": "D:/Projects/inquello/_bmad-output/implementation-artifacts/verification-2026-11-05/progress-repair-final-candidate.diff",
+  "diffSha256": "1b9e505db4434ebb2955807ea5d832288494f88978dfc6f10e1702e0e7763ce6",
+  "focused": {
+    "files": 5,
+    "passed": 214,
+    "failed": 0,
+    "skipped": 0,
+    "seconds": 146.04,
+    "log": "D:/Projects/inquello/_bmad-output/implementation-artifacts/verification-2026-11-05/progress-repair-focused-final.log",
+    "scope": "Earlier standalone 214-test result on the original eight-file candidate. All this coverage was rerun on the final source in combinedFocused (282 tests across nine files)."
+  },
+  "builds": [
+    {
+      "log": "D:/Projects/inquello/_bmad-output/implementation-artifacts/verification-2026-11-05/fixture-build-progress-final.log",
+      "passed": true,
+      "scope": "Prior eight-file candidate; native fingerprint must be rebuilt for latest desktop sources."
+    },
+    {
+      "log": "D:/Projects/inquello/_bmad-output/implementation-artifacts/verification-2026-11-05/desktop-build-progress-final.log",
+      "passed": true,
+      "scope": "Prior eight-file candidate; native fingerprint must be rebuilt for latest desktop sources."
+    }
+  ],
+  "phases": [
+    {
+      "tag": "progress-final-1",
+      "dir": "DVZ0CC",
+      "status": "failed",
+      "kind": "clean candidate",
+      "reason": "Exact main-bridge selection did not atomically align its saved settings",
+      "phase": "D:/Inquello/tmp/inquello-seeded-smoke-DVZ0CC/visual",
+      "log": "D:/Projects/inquello/_bmad-output/implementation-artifacts/verification-2026-11-05/visual-smoke-docker-progress-final-1.log",
+      "fixture": {
+        "calls": 2,
+        "bCalls": 1,
+        "totalCalls": 3,
+        "invalidCalls": 0,
+        "heldCancelled": false,
+        "heldTimedOut": false,
+        "contextMatches": [
+          true,
+          true
+        ]
+      },
+      "captures": [
+        "D:/Inquello/tmp/inquello-seeded-smoke-DVZ0CC/visual/captures/01-home-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-DVZ0CC/visual/captures/01b-home-collapsed-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-DVZ0CC/visual/captures/01c-account-workspace-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-DVZ0CC/visual/captures/01d-multiline-unsent-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-DVZ0CC/visual/captures/02-completed-conversation-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-DVZ0CC/visual/captures/02b-narrow-conversation-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-DVZ0CC/visual/captures/02c-independent-sol-and-reopened-terra-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-DVZ0CC/visual/captures/03-followup-conversation-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-DVZ0CC/visual/captures/failure-synthetic.png"
+      ]
+    },
+    {
+      "tag": "switch-diagnostic-1",
+      "dir": "zzO8EW",
+      "status": "passed",
+      "kind": "temporary result diagnostics",
+      "reason": null,
+      "phase": "D:/Inquello/tmp/inquello-seeded-smoke-zzO8EW/visual",
+      "log": "D:/Projects/inquello/_bmad-output/implementation-artifacts/verification-2026-11-05/visual-smoke-docker-switch-diagnostic-1.log",
+      "fixture": {
+        "calls": 4,
+        "bCalls": 1,
+        "totalCalls": 5,
+        "invalidCalls": 0,
+        "heldCancelled": true,
+        "heldTimedOut": false,
+        "contextMatches": [
+          true,
+          true,
+          true,
+          true
+        ]
+      },
+      "captures": [
+        "D:/Inquello/tmp/inquello-seeded-smoke-zzO8EW/visual/captures/01-home-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-zzO8EW/visual/captures/01b-home-collapsed-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-zzO8EW/visual/captures/01c-account-workspace-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-zzO8EW/visual/captures/01d-multiline-unsent-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-zzO8EW/visual/captures/02-completed-conversation-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-zzO8EW/visual/captures/02b-narrow-conversation-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-zzO8EW/visual/captures/02c-independent-sol-and-reopened-terra-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-zzO8EW/visual/captures/03-followup-conversation-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-zzO8EW/visual/captures/03b-live-streaming-conversation-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-zzO8EW/visual/captures/04-interrupted-conversation-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-zzO8EW/visual/captures/04a-readable-composer-narrow-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-zzO8EW/visual/captures/04b-reader-jump-narrow-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-zzO8EW/visual/captures/05-reopened-conversation-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-zzO8EW/visual/captures/06-resumed-conversation-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-zzO8EW/visual/captures/07-task-details-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-zzO8EW/visual/captures/08-settings-processing-routes.png"
+      ]
+    },
+    {
+      "tag": "switch-diagnostic-2",
+      "dir": "MyVJdT",
+      "status": "failed",
+      "kind": "temporary result diagnostics",
+      "reason": "Completed conversation follow-up did not render; native WSL exec-server transport closed before turn dispatch",
+      "phase": "D:/Inquello/tmp/inquello-seeded-smoke-MyVJdT/visual",
+      "log": "D:/Projects/inquello/_bmad-output/implementation-artifacts/verification-2026-11-05/visual-smoke-docker-switch-diagnostic-2.log",
+      "fixture": {
+        "calls": 1,
+        "bCalls": 1,
+        "totalCalls": 2,
+        "invalidCalls": 0,
+        "heldCancelled": false,
+        "heldTimedOut": false,
+        "contextMatches": [
+          true
+        ]
+      },
+      "captures": [
+        "D:/Inquello/tmp/inquello-seeded-smoke-MyVJdT/visual/captures/01-home-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-MyVJdT/visual/captures/01b-home-collapsed-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-MyVJdT/visual/captures/01c-account-workspace-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-MyVJdT/visual/captures/01d-multiline-unsent-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-MyVJdT/visual/captures/02-completed-conversation-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-MyVJdT/visual/captures/02b-narrow-conversation-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-MyVJdT/visual/captures/02c-independent-sol-and-reopened-terra-synthetic.png",
+        "D:/Inquello/tmp/inquello-seeded-smoke-MyVJdT/visual/captures/failure-synthetic.png"
+      ]
+    }
+  ],
+  "final1PersistedAtomicAlignment": {
+    "routes": [
+      {
+        "task_id": "b239a45a-2d33-4ae7-ad2b-50b09fe8a880",
+        "revision": 2,
+        "principal_id": "853899ad-e2df-4f39-bf91-2d1c428b3517",
+        "route_id": "codex-responses",
+        "configuration_revision": 2,
+        "recorded_at_ms": 1793898954007
+      }
+    ],
+    "settings": [
+      {
+        "task_id": "b239a45a-2d33-4ae7-ad2b-50b09fe8a880",
+        "revision": 2,
+        "record": "{\"revision\":2,\"route_revision\":2,\"choices\":{\"reasoning\":\"default\",\"speed\":\"default\"}}"
+      }
+    ],
+    "receipt": [
+      {
+        "operation_id": "32163349-37d3-450e-9b2a-50861c94e110",
+        "command": "set_task_route",
+        "scope_id": "b239a45a-2d33-4ae7-ad2b-50b09fe8a880",
+        "expected_revision": 1,
+        "resulting_revision": 2,
+        "status": "applied",
+        "recorded_at_ms": 1793898954007
+      }
+    ]
+  },
+  "diagnostic2NativeFailure": [
+    {
+      "ts": 1793900079,
+      "level": "WARN",
+      "target": "codex_app_server::request_processors::thread_processor",
+      "feedback_log_body": "app_server.request{otel.kind=\"server\" otel.name=\"inquello/tasks/resume\" rpc.system=\"jsonrpc\" rpc.method=\"inquello/tasks/resume\" rpc.transport=\"stdio\" rpc.request_id=585 app_server.connection_id=0 app_server.api_version=\"v2\" app_server.client_name=\"inquello_desktop\" app_server.client_version=\"0.0.0\"}: Linux Task executor unavailable: Linux isolated executor connection failed: exec-server transport closed"
+    }
+  ],
+  "open": [
+    "Full desktop suite on the final candidate remains required; earlier independent baseline failures are not dismissed.",
+    "Full 18-report seeded smoke on the final candidate remains required.",
+    "Real-provider qualification and conditional SQLite writer-contention residual remain open."
+  ],
+  "ownedExecution": "No active owned process. Build/visual chain PID 34904 completed exit 0, runtime 495.85s.",
+  "usageReconstruction": {
+    "before": {
+      "passed": 0,
+      "failed": 1,
+      "seconds": 0.936,
+      "log": "D:/Projects/inquello/_bmad-output/implementation-artifacts/verification-2026-11-05/usage-observation-before.log",
+      "source": "D:/Projects/inquello/_bmad-output/implementation-artifacts/verification-2026-11-05/usage-observation-before.test.ts.txt"
+    },
+    "after": {
+      "files": 4,
+      "passed": 68,
+      "failed": 0,
+      "skipped": 0,
+      "newTests": 20,
+      "seconds": 9.11,
+      "log": "D:/Projects/inquello/_bmad-output/implementation-artifacts/verification-2026-11-05/usage-observation-focused-1.log"
+    },
+    "build": {
+      "passed": true,
+      "log": "D:/Projects/inquello/_bmad-output/implementation-artifacts/verification-2026-11-05/desktop-build-usage-reconstruction.log"
+    },
+    "causeClaim": "Deterministically reproduced observation-only invalidation defect; not claimed as proven final-1 cause."
+  },
+  "combinedFocused": {
+    "files": 9,
+    "passed": 282,
+    "failed": 0,
+    "skipped": 0,
+    "seconds": 135.59,
+    "log": "D:/Projects/inquello/_bmad-output/implementation-artifacts/verification-2026-11-05/progress-final-combined-focused.log",
+    "scope": "Exact current 11-file candidate, including usage reconstruction."
+  },
+  "updated": "2026-11-05T18:43:14.970Z",
+  "currentGuest": {
+    "receipt": "D:/Projects/inquello/.tmp/guest-activation-verified-20261105.json",
+    "receiptSha256": "b55f8d614269ce71db9e8fc62ee8bcf9422027113425ba8a1624f01c68c3652c",
+    "sourceArchiveSha256": "9e8f47c61315ccf013a4fbb0616418de2d5c7de69c731ce1e855eff8ce4deeb3",
+    "installedVerification": "PASS"
+  },
+  "currentBuilds": [
+    {
+      "log": "D:/Projects/inquello/_bmad-output/implementation-artifacts/verification-2026-11-05/fixture-build-current-guest.log",
+      "passed": true,
+      "elapsed": "2m57s",
+      "binary": "D:/Inquello/cache/fixture-20261105/debug/codex-app-server.exe",
+      "sha256": "4bf084e98b3b16d97c889fcc9025a68e3058528827e31e42fabe9da90930a6d1"
+    },
+    {
+      "log": "D:/Projects/inquello/_bmad-output/implementation-artifacts/verification-2026-11-05/desktop-build-current-guest.log",
+      "passed": true
+    }
+  ],
+  "cleanVisualRuns": [
+    {
+      "tag": "current-guest-clean-1",
+      "status": "passed",
+      "phase": "D:/Inquello/tmp/inquello-seeded-smoke-jfwj3K/visual",
+      "log": "D:/Projects/inquello/_bmad-output/implementation-artifacts/verification-2026-11-05/visual-smoke-docker-current-guest-clean-1.log",
+      "logSha256": "c7fef7940d431469648314e8d0ec1b626cb6db2120ef96d1822d44d13dbd53e7",
+      "logFileElapsedSeconds": 155.64036865234374,
+      "fixture": {
+        "calls": 4,
+        "bCalls": 1,
+        "totalCalls": 5,
+        "invalidCalls": 0,
+        "heldCancelled": true,
+        "heldTimedOut": false,
+        "contextMatches": [
+          true,
+          true,
+          true,
+          true
+        ]
+      },
+      "handshake": {
+        "event": "handshake",
+        "state": "ready",
+        "versionCheck": "passed",
+        "schema": {
+          "runtimeVersion": "0.165.0",
+          "forkTreeHash": "36b40fe2ea3f578e2a8a1cd334a809d61aea2b9f"
+        },
+        "initialize": {
+          "userAgent": "inquello_desktop/0.165.0 (Windows 10.0.26100; x86_64) WindowsTerminal (inquello_desktop; 0.0.0)",
+          "codexHome": "D:\\Inquello\\tmp\\inquello-smoke-91353352-3153-4773-a873-a63033bcb4a7\\runtime-home",
+          "platformFamily": "windows",
+          "platformOs": "windows"
+        }
+      },
+      "journey": {
+        "event": "visual-conversation",
+        "ok": true,
+        "failures": [],
+        "synthetic": true,
+        "settingsSurface": "implemented-settings",
+        "captures": [
+          {
+            "name": "01-home-synthetic",
+            "path": "D:\\Inquello\\tmp\\inquello-seeded-smoke-jfwj3K\\visual\\captures\\01-home-synthetic.png",
+            "width": 2400,
+            "height": 1500
+          },
+          {
+            "name": "01b-home-collapsed-synthetic",
+            "path": "D:\\Inquello\\tmp\\inquello-seeded-smoke-jfwj3K\\visual\\captures\\01b-home-collapsed-synthetic.png",
+            "width": 2400,
+            "height": 1500
+          },
+          {
+            "name": "01c-account-workspace-synthetic",
+            "path": "D:\\Inquello\\tmp\\inquello-seeded-smoke-jfwj3K\\visual\\captures\\01c-account-workspace-synthetic.png",
+            "width": 2400,
+            "height": 1500
+          },
+          {
+            "name": "01d-multiline-unsent-synthetic",
+            "path": "D:\\Inquello\\tmp\\inquello-seeded-smoke-jfwj3K\\visual\\captures\\01d-multiline-unsent-synthetic.png",
+            "width": 2400,
+            "height": 1500
+          },
+          {
+            "name": "02c-independent-sol-and-reopened-terra-synthetic",
+            "path": "D:\\Inquello\\tmp\\inquello-seeded-smoke-jfwj3K\\visual\\captures\\02c-independent-sol-and-reopened-terra-synthetic.png",
+            "width": 2400,
+            "height": 1500
+          },
+          {
+            "name": "02-completed-conversation-synthetic",
+            "path": "D:\\Inquello\\tmp\\inquello-seeded-smoke-jfwj3K\\visual\\captures\\02-completed-conversation-synthetic.png",
+            "width": 2400,
+            "height": 1500
+          },
+          {
+            "name": "02b-narrow-conversation-synthetic",
+            "path": "D:\\Inquello\\tmp\\inquello-seeded-smoke-jfwj3K\\visual\\captures\\02b-narrow-conversation-synthetic.png",
+            "width": 875,
+            "height": 1125
+          },
+          {
+            "name": "03-followup-conversation-synthetic",
+            "path": "D:\\Inquello\\tmp\\inquello-seeded-smoke-jfwj3K\\visual\\captures\\03-followup-conversation-synthetic.png",
+            "width": 2400,
+            "height": 1500
+          },
+          {
+            "name": "03b-live-streaming-conversation-synthetic",
+            "path": "D:\\Inquello\\tmp\\inquello-seeded-smoke-jfwj3K\\visual\\captures\\03b-live-streaming-conversation-synthetic.png",
+            "width": 2400,
+            "height": 1500
+          },
+          {
+            "name": "04-interrupted-conversation-synthetic",
+            "path": "D:\\Inquello\\tmp\\inquello-seeded-smoke-jfwj3K\\visual\\captures\\04-interrupted-conversation-synthetic.png",
+            "width": 2400,
+            "height": 1500
+          },
+          {
+            "name": "04a-readable-composer-narrow-synthetic",
+            "path": "D:\\Inquello\\tmp\\inquello-seeded-smoke-jfwj3K\\visual\\captures\\04a-readable-composer-narrow-synthetic.png",
+            "width": 1125,
+            "height": 875
+          },
+          {
+            "name": "04b-reader-jump-narrow-synthetic",
+            "path": "D:\\Inquello\\tmp\\inquello-seeded-smoke-jfwj3K\\visual\\captures\\04b-reader-jump-narrow-synthetic.png",
+            "width": 1125,
+            "height": 875
+          },
+          {
+            "name": "05-reopened-conversation-synthetic",
+            "path": "D:\\Inquello\\tmp\\inquello-seeded-smoke-jfwj3K\\visual\\captures\\05-reopened-conversation-synthetic.png",
+            "width": 2400,
+            "height": 1500
+          },
+          {
+            "name": "06-resumed-conversation-synthetic",
+            "path": "D:\\Inquello\\tmp\\inquello-seeded-smoke-jfwj3K\\visual\\captures\\06-resumed-conversation-synthetic.png",
+            "width": 2400,
+            "height": 1500
+          },
+          {
+            "name": "07-task-details-synthetic",
+            "path": "D:\\Inquello\\tmp\\inquello-seeded-smoke-jfwj3K\\visual\\captures\\07-task-details-synthetic.png",
+            "width": 2400,
+            "height": 1500
+          },
+          {
+            "name": "08-settings-processing-routes",
+            "path": "D:\\Inquello\\tmp\\inquello-seeded-smoke-jfwj3K\\visual\\captures\\08-settings-processing-routes.png",
+            "width": 2400,
+            "height": 1500
+          }
+        ]
+      },
+      "readerJump": {
+        "event": "visual-reader-jump",
+        "ok": true,
+        "phase": "jumped",
+        "viewportWidth": 900,
+        "viewportHeight": 700,
+        "threadHeight": 376,
+        "overflow": 174,
+        "conversationTarget": 118.00000095367432,
+        "initialTop": 118.4000015258789,
+        "readerTop": 0
+      },
+      "captures": [
+        {
+          "path": "D:/Inquello/tmp/inquello-seeded-smoke-jfwj3K/visual/captures/01-home-synthetic.png",
+          "sha256": "317f9c460ebc731991ac676209c2c5790fd16ce9c821241f9221759447e08cfe"
+        },
+        {
+          "path": "D:/Inquello/tmp/inquello-seeded-smoke-jfwj3K/visual/captures/01b-home-collapsed-synthetic.png",
+          "sha256": "7b8d4174c49aea1f5f735bf5433299a5502edf84398408675d9819efb1f8730f"
+        },
+        {
+          "path": "D:/Inquello/tmp/inquello-seeded-smoke-jfwj3K/visual/captures/01c-account-workspace-synthetic.png",
+          "sha256": "d1de7daebce0c4d3dd9a800c902982f8efd2dc603801594b6f6ca1a8f2150479"
+        },
+        {
+          "path": "D:/Inquello/tmp/inquello-seeded-smoke-jfwj3K/visual/captures/01d-multiline-unsent-synthetic.png",
+          "sha256": "a2dc9a4bf99581967f7d3a9c55ed6aaf2fe21c122bcc8f5ee4ad47c85d9aade2"
+        },
+        {
+          "path": "D:/Inquello/tmp/inquello-seeded-smoke-jfwj3K/visual/captures/02-completed-conversation-synthetic.png",
+          "sha256": "d0f16a5519af21be14dfabfc78b87eb838c72af3f9c94d0bf93954d18a4a3a89"
+        },
+        {
+          "path": "D:/Inquello/tmp/inquello-seeded-smoke-jfwj3K/visual/captures/02b-narrow-conversation-synthetic.png",
+          "sha256": "bdc2fa03a3fb4ede1692f905e3a82b050c8eb535ee2d13bda07717428a587e9b"
+        },
+        {
+          "path": "D:/Inquello/tmp/inquello-seeded-smoke-jfwj3K/visual/captures/02c-independent-sol-and-reopened-terra-synthetic.png",
+          "sha256": "d0f16a5519af21be14dfabfc78b87eb838c72af3f9c94d0bf93954d18a4a3a89"
+        },
+        {
+          "path": "D:/Inquello/tmp/inquello-seeded-smoke-jfwj3K/visual/captures/03-followup-conversation-synthetic.png",
+          "sha256": "ebdda4f90c21a2cdb1aec5aa8827ab5209d9061c3841173250896c4e2620f208"
+        },
+        {
+          "path": "D:/Inquello/tmp/inquello-seeded-smoke-jfwj3K/visual/captures/03b-live-streaming-conversation-synthetic.png",
+          "sha256": "87486129afe86b354ddc0899c76193b921ddd08621ed2905efe8066628c98435"
+        },
+        {
+          "path": "D:/Inquello/tmp/inquello-seeded-smoke-jfwj3K/visual/captures/04-interrupted-conversation-synthetic.png",
+          "sha256": "d378f2ee6be4da179f347522b50e60eb43477109ce72c6337ebcdd3c457e8ca8"
+        },
+        {
+          "path": "D:/Inquello/tmp/inquello-seeded-smoke-jfwj3K/visual/captures/04a-readable-composer-narrow-synthetic.png",
+          "sha256": "39d3736052149fc17eb4b4f488c0ac6bd3492188738a613f24fdee37e11ecbac"
+        },
+        {
+          "path": "D:/Inquello/tmp/inquello-seeded-smoke-jfwj3K/visual/captures/04b-reader-jump-narrow-synthetic.png",
+          "sha256": "39d3736052149fc17eb4b4f488c0ac6bd3492188738a613f24fdee37e11ecbac"
+        },
+        {
+          "path": "D:/Inquello/tmp/inquello-seeded-smoke-jfwj3K/visual/captures/05-reopened-conversation-synthetic.png",
+          "sha256": "d837953f8bf1209b3476df00cb732212f6b3c065506d59f5e8b0c0502c8294ea"
+        },
+        {
+          "path": "D:/Inquello/tmp/inquello-seeded-smoke-jfwj3K/visual/captures/06-resumed-conversation-synthetic.png",
+          "sha256": "0dd6ec8d0b942f696078cb13947d9e093f3e2ba9ac928caee5810d1646d0b2f5"
+        },
+        {
+          "path": "D:/Inquello/tmp/inquello-seeded-smoke-jfwj3K/visual/captures/07-task-details-synthetic.png",
+          "sha256": "8890e05caa12a06b069e133dd48583fe2c1df22d307d7c81ee7ea0dfdcf07056"
+        },
+        {
+          "path": "D:/Inquello/tmp/inquello-seeded-smoke-jfwj3K/visual/captures/08-settings-processing-routes.png",
+          "sha256": "1e757a57878992ce5f594eaffd4516b8ce7032605316e671efb79680fdcb5602"
+        }
+      ]
+    },
+    {
+      "tag": "current-guest-clean-2",
+      "status": "passed",
+      "phase": "D:/Inquello/tmp/inquello-seeded-smoke-b7DUR0/visual",
+      "log": "D:/Projects/inquello/_bmad-output/implementation-artifacts/verification-2026-11-05/visual-smoke-docker-current-guest-clean-2.log",
+      "logSha256": "6620f0c6ea104c598e885b060a5330e0e29f6791b8059007484697b390d95224",
+      "logFileElapsedSeconds": 148.28367749023437,
+      "fixture": {
+        "calls": 4,
+        "bCalls": 1,
+        "totalCalls": 5,
+        "invalidCalls": 0,
+        "heldCancelled": true,
+        "heldTimedOut": false,
+        "contextMatches": [
+          true,
+          true,
+          true,
+          true
+        ]
+      },
+      "handshake": {
+        "event": "handshake",
+        "state": "ready",
+        "versionCheck": "passed",
+        "schema": {
+          "runtimeVersion": "0.165.0",
+          "forkTreeHash": "36b40fe2ea3f578e2a8a1cd334a809d61aea2b9f"
+        },
+        "initialize": {
+          "userAgent": "inquello_desktop/0.165.0 (Windows 10.0.26100; x86_64) WindowsTerminal (inquello_desktop; 0.0.0)",
+          "codexHome": "D:\\Inquello\\tmp\\inquello-smoke-5c98de06-8f77-4f2e-ba56-37d8304936d4\\runtime-home",
+          "platformFamily": "windows",
+          "platformOs": "windows"
+        }
+      },
+      "journey": {
+        "event": "visual-conversation",
+        "ok": true,
+        "failures": [],
+        "synthetic": true,
+        "settingsSurface": "implemented-settings",
+        "captures": [
+          {
+            "name": "01-home-synthetic",
+            "path": "D:\\Inquello\\tmp\\inquello-seeded-smoke-b7DUR0\\visual\\captures\\01-home-synthetic.png",
+            "width": 2400,
+            "height": 1500
+          },
+          {
+            "name": "01b-home-collapsed-synthetic",
+            "path": "D:\\Inquello\\tmp\\inquello-seeded-smoke-b7DUR0\\visual\\captures\\01b-home-collapsed-synthetic.png",
+            "width": 2400,
+            "height": 1500
+          },
+          {
+            "name": "01c-account-workspace-synthetic",
+            "path": "D:\\Inquello\\tmp\\inquello-seeded-smoke-b7DUR0\\visual\\captures\\01c-account-workspace-synthetic.png",
+            "width": 2400,
+            "height": 1500
+          },
+          {
+            "name": "01d-multiline-unsent-synthetic",
+            "path": "D:\\Inquello\\tmp\\inquello-seeded-smoke-b7DUR0\\visual\\captures\\01d-multiline-unsent-synthetic.png",
+            "width": 2400,
+            "height": 1500
+          },
+          {
+            "name": "02c-independent-sol-and-reopened-terra-synthetic",
+            "path": "D:\\Inquello\\tmp\\inquello-seeded-smoke-b7DUR0\\visual\\captures\\02c-independent-sol-and-reopened-terra-synthetic.png",
+            "width": 2400,
+            "height": 1500
+          },
+          {
+            "name": "02-completed-conversation-synthetic",
+            "path": "D:\\Inquello\\tmp\\inquello-seeded-smoke-b7DUR0\\visual\\captures\\02-completed-conversation-synthetic.png",
+            "width": 2400,
+            "height": 1500
+          },
+          {
+            "name": "02b-narrow-conversation-synthetic",
+            "path": "D:\\Inquello\\tmp\\inquello-seeded-smoke-b7DUR0\\visual\\captures\\02b-narrow-conversation-synthetic.png",
+            "width": 875,
+            "height": 1125
+          },
+          {
+            "name": "03-followup-conversation-synthetic",
+            "path": "D:\\Inquello\\tmp\\inquello-seeded-smoke-b7DUR0\\visual\\captures\\03-followup-conversation-synthetic.png",
+            "width": 2400,
+            "height": 1500
+          },
+          {
+            "name": "03b-live-streaming-conversation-synthetic",
+            "path": "D:\\Inquello\\tmp\\inquello-seeded-smoke-b7DUR0\\visual\\captures\\03b-live-streaming-conversation-synthetic.png",
+            "width": 2400,
+            "height": 1500
+          },
+          {
+            "name": "04-interrupted-conversation-synthetic",
+            "path": "D:\\Inquello\\tmp\\inquello-seeded-smoke-b7DUR0\\visual\\captures\\04-interrupted-conversation-synthetic.png",
+            "width": 2400,
+            "height": 1500
+          },
+          {
+            "name": "04a-readable-composer-narrow-synthetic",
+            "path": "D:\\Inquello\\tmp\\inquello-seeded-smoke-b7DUR0\\visual\\captures\\04a-readable-composer-narrow-synthetic.png",
+            "width": 1125,
+            "height": 875
+          },
+          {
+            "name": "04b-reader-jump-narrow-synthetic",
+            "path": "D:\\Inquello\\tmp\\inquello-seeded-smoke-b7DUR0\\visual\\captures\\04b-reader-jump-narrow-synthetic.png",
+            "width": 1125,
+            "height": 875
+          },
+          {
+            "name": "05-reopened-conversation-synthetic",
+            "path": "D:\\Inquello\\tmp\\inquello-seeded-smoke-b7DUR0\\visual\\captures\\05-reopened-conversation-synthetic.png",
+            "width": 2400,
+            "height": 1500
+          },
+          {
+            "name": "06-resumed-conversation-synthetic",
+            "path": "D:\\Inquello\\tmp\\inquello-seeded-smoke-b7DUR0\\visual\\captures\\06-resumed-conversation-synthetic.png",
+            "width": 2400,
+            "height": 1500
+          },
+          {
+            "name": "07-task-details-synthetic",
+            "path": "D:\\Inquello\\tmp\\inquello-seeded-smoke-b7DUR0\\visual\\captures\\07-task-details-synthetic.png",
+            "width": 2400,
+            "height": 1500
+          },
+          {
+            "name": "08-settings-processing-routes",
+            "path": "D:\\Inquello\\tmp\\inquello-seeded-smoke-b7DUR0\\visual\\captures\\08-settings-processing-routes.png",
+            "width": 2400,
+            "height": 1500
+          }
+        ]
+      },
+      "readerJump": {
+        "event": "visual-reader-jump",
+        "ok": true,
+        "phase": "jumped",
+        "viewportWidth": 900,
+        "viewportHeight": 700,
+        "threadHeight": 376,
+        "overflow": 174,
+        "conversationTarget": 118.00000095367432,
+        "initialTop": 118.4000015258789,
+        "readerTop": 0
+      },
+      "captures": [
+        {
+          "path": "D:/Inquello/tmp/inquello-seeded-smoke-b7DUR0/visual/captures/01-home-synthetic.png",
+          "sha256": "317f9c460ebc731991ac676209c2c5790fd16ce9c821241f9221759447e08cfe"
+        },
+        {
+          "path": "D:/Inquello/tmp/inquello-seeded-smoke-b7DUR0/visual/captures/01b-home-collapsed-synthetic.png",
+          "sha256": "7b8d4174c49aea1f5f735bf5433299a5502edf84398408675d9819efb1f8730f"
+        },
+        {
+          "path": "D:/Inquello/tmp/inquello-seeded-smoke-b7DUR0/visual/captures/01c-account-workspace-synthetic.png",
+          "sha256": "d1de7daebce0c4d3dd9a800c902982f8efd2dc603801594b6f6ca1a8f2150479"
+        },
+        {
+          "path": "D:/Inquello/tmp/inquello-seeded-smoke-b7DUR0/visual/captures/01d-multiline-unsent-synthetic.png",
+          "sha256": "a2dc9a4bf99581967f7d3a9c55ed6aaf2fe21c122bcc8f5ee4ad47c85d9aade2"
+        },
+        {
+          "path": "D:/Inquello/tmp/inquello-seeded-smoke-b7DUR0/visual/captures/02-completed-conversation-synthetic.png",
+          "sha256": "d0f16a5519af21be14dfabfc78b87eb838c72af3f9c94d0bf93954d18a4a3a89"
+        },
+        {
+          "path": "D:/Inquello/tmp/inquello-seeded-smoke-b7DUR0/visual/captures/02b-narrow-conversation-synthetic.png",
+          "sha256": "bdc2fa03a3fb4ede1692f905e3a82b050c8eb535ee2d13bda07717428a587e9b"
+        },
+        {
+          "path": "D:/Inquello/tmp/inquello-seeded-smoke-b7DUR0/visual/captures/02c-independent-sol-and-reopened-terra-synthetic.png",
+          "sha256": "631597caa3b769ca9c5ee2d9c138726ee0ce3496695051dbb5f349a1701ea069"
+        },
+        {
+          "path": "D:/Inquello/tmp/inquello-seeded-smoke-b7DUR0/visual/captures/03-followup-conversation-synthetic.png",
+          "sha256": "2dad7b4a317dafa6534213313771b46503ce89b0e45add0601ccb2cd7d664365"
+        },
+        {
+          "path": "D:/Inquello/tmp/inquello-seeded-smoke-b7DUR0/visual/captures/03b-live-streaming-conversation-synthetic.png",
+          "sha256": "8f9654eb77b4a7ef4a1f10fd4c15fb09173c9ae218b54715b8cf791cb7dab4ae"
+        },
+        {
+          "path": "D:/Inquello/tmp/inquello-seeded-smoke-b7DUR0/visual/captures/04-interrupted-conversation-synthetic.png",
+          "sha256": "6cf1d1f2f227348af45e3f94dd8c471104d887c7a82d70257bc71e065ce2fda0"
+        },
+        {
+          "path": "D:/Inquello/tmp/inquello-seeded-smoke-b7DUR0/visual/captures/04a-readable-composer-narrow-synthetic.png",
+          "sha256": "39d3736052149fc17eb4b4f488c0ac6bd3492188738a613f24fdee37e11ecbac"
+        },
+        {
+          "path": "D:/Inquello/tmp/inquello-seeded-smoke-b7DUR0/visual/captures/04b-reader-jump-narrow-synthetic.png",
+          "sha256": "39d3736052149fc17eb4b4f488c0ac6bd3492188738a613f24fdee37e11ecbac"
+        },
+        {
+          "path": "D:/Inquello/tmp/inquello-seeded-smoke-b7DUR0/visual/captures/05-reopened-conversation-synthetic.png",
+          "sha256": "65992f7065027d6550d84c1af33f026aed57ca612a1c0f162a96ddb7a23438c8"
+        },
+        {
+          "path": "D:/Inquello/tmp/inquello-seeded-smoke-b7DUR0/visual/captures/06-resumed-conversation-synthetic.png",
+          "sha256": "0bc66d4421722bd35ca3cd3ae3594c1268e688f2603348f1003d502fc8acc440"
+        },
+        {
+          "path": "D:/Inquello/tmp/inquello-seeded-smoke-b7DUR0/visual/captures/07-task-details-synthetic.png",
+          "sha256": "9a81e888bcb4b3215fb187fab8077e8108a75edf7dbcad4af9cf246410ea42a7"
+        },
+        {
+          "path": "D:/Inquello/tmp/inquello-seeded-smoke-b7DUR0/visual/captures/08-settings-processing-routes.png",
+          "sha256": "1e757a57878992ce5f594eaffd4516b8ce7032605316e671efb79680fdcb5602"
+        }
+      ]
+    }
+  ],
+  "visualInspection": {
+    "actualWindowsImages": true,
+    "firstRun": [
+      "03-followup-conversation-synthetic.png",
+      "04-interrupted-conversation-synthetic.png",
+      "06-resumed-conversation-synthetic.png"
+    ],
+    "secondRun": [
+      "03-followup-conversation-synthetic.png",
+      "04a-readable-composer-narrow-synthetic.png",
+      "06-resumed-conversation-synthetic.png"
+    ],
+    "finding": "Retained follow-up/resume answers readable, explicit interruption/Resume, Finished/worked-for retained, narrow composer readable with no overlapping controls. Synthetic not-qualified provider label remains truthful."
+  },
+  "validationLimitations": [
+    "Two clean synthetic journeys do not establish live provider qualification or universal absence of intermittent failures.",
+    "Original final-1 composite observation failure code was not retained; separate deterministic usage regression was repaired without claiming that exact historical cause."
+  ]
+}

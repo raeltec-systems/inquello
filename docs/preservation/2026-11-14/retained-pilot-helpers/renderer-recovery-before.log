@@ -1,0 +1,1308 @@
+
+ RUN  v5.0.5 D:/Projects/inquello/desktop
+
+ ❯ test/navigation-recovery-shell.test.tsx (9 tests | 5 failed) 5530ms
+   ❯ explicit recovery from a partial tree with no open Task (5)
+     × keeps permitted rows and the unsent draft, then keyboard recovery reads fresh work without execution 1199ms
+     × preserves refusal without claiming hidden work was restored or reading it again 1015ms
+     × suppresses repeated activation while the same explicit check is pending 1011ms
+     × discards late partial-tree recovery after current identity changes 1012ms
+     × discards late partial-tree recovery after current workspace changes 1010ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 5 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  test/navigation-recovery-shell.test.tsx > explicit recovery from a partial tree with no open Task > keeps permitted rows and the unsent draft, then keyboard recovery reads fresh work without execution
+TestingLibraryElementError: Unable to find role="button" and name "Refresh workspace"
+
+Ignored nodes: comments, script, style
+<body>
+  <div>
+    <div
+      class="iq-shell iq-shell--full iq-shell--nav-sidebar"
+      data-artifact-fits="true"
+      data-artifact-open="false"
+      data-layout-mode="full"
+      data-nav-presentation="sidebar"
+      data-shell="true"
+      data-work-view="conversation"
+      style="--iq-thread-min-width: 480px; --sidebar-width: 320px;"
+    >
+      <nav
+        aria-label="Workspace navigation"
+        class="iq-sidebar iq-sidebar--sidebar"
+        data-nav-presentation="sidebar"
+        data-shared-service="available"
+        data-sidebar="true"
+        data-sidebar-state="ready"
+      >
+        <div
+          class="iq-rail"
+          data-rail="true"
+        >
+          <span
+            class="iq-rail-item"
+          >
+            <button
+              aria-expanded="true"
+              aria-label="Close navigation"
+              class="iq-rail-logo"
+              data-action="expand-nav"
+              type="button"
+            >
+              <img
+                alt=""
+                aria-hidden="true"
+                src="/src/renderer/design/assets/logo/inquello-symbol.svg"
+              />
+            </button>
+            <span
+              aria-hidden="true"
+              class="iq-rail-tip"
+            >
+              Close navigation
+            </span>
+          </span>
+          <span
+            class="iq-rail-item"
+          >
+            <span
+              class="iq-action"
+            >
+              <button
+                aria-label="Engagements"
+                class="iq-icon-button iq-icon-button--ghost"
+                data-rail-workspace="22222222-2222-4222-8222-222222222222"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  fill="none"
+                  focusable="false"
+                  height="16"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.75"
+                  style="display: block; flex: 0 0 auto;"
+                  viewBox="0 0 24 24"
+                  width="16"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
+                  />
+                </svg>
+              </button>
+            </span>
+            <span
+              aria-hidden="true"
+              class="iq-rail-tip"
+            >
+              Engagements
+            </span>
+          </span>
+          <span
+            class="iq-rail-item"
+          >
+            <span
+              class="iq-rail-count"
+            >
+              <span
+                class="iq-action"
+              >
+                <button
+                  aria-label="Inbox · attention unavailable"
+                  class="iq-icon-button iq-icon-button--ghost"
+                  type="button"
+                >
+                  <svg
+                    aria-hidden="true"
+                    fill="none"
+                    focusable="false"
+                    height="16"
+                    stroke="currentColor"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="1.75"
+                    style="display: block; flex: 0 0 auto;"
+                    viewBox="0 0 24 24"
+                    width="16"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <polyline
+                      points="22 12 16 12 14 15 10 15 8 12 2 12"
+                    />
+                    <path
+                      d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+                    />
+                  </svg>
+                </button>
+              </span>
+              <span
+                aria-hidden="true"
+                class="iq-inbox-unavailable"
+              >
+                !
+              </span>
+            </span>
+            <span
+              aria-hidden="true"
+              class="iq-rail-tip"
+            >
+              Inbox · attention unavailable
+            </span>
+          </span>
+          <span
+            class="iq-rail-item"
+          >
+            <span
+              class="iq-rail-count"
+            >
+              <span
+                class="iq-action"
+              >
+                <button
+                  aria-current="true"
+                  aria-label="Tasks"
+                  class="iq-icon-button iq-icon-button--active"
+                  data-rail-surface="tasks"
+                  t...
+
+Ignored nodes: comments, script, style
+<body>
+  <div>
+    <div
+      class="iq-shell iq-shell--full iq-shell--nav-sidebar"
+      data-artifact-fits="true"
+      data-artifact-open="false"
+      data-layout-mode="full"
+      data-nav-presentation="sidebar"
+      data-shell="true"
+      data-work-view="conversation"
+      style="--iq-thread-min-width: 480px; --sidebar-width: 320px;"
+    >
+      <nav
+        aria-label="Workspace navigation"
+        class="iq-sidebar iq-sidebar--sidebar"
+        data-nav-presentation="sidebar"
+        data-shared-service="available"
+        data-sidebar="true"
+        data-sidebar-state="ready"
+      >
+        <div
+          class="iq-rail"
+          data-rail="true"
+        >
+          <span
+            class="iq-rail-item"
+          >
+            <button
+              aria-expanded="true"
+              aria-label="Close navigation"
+              class="iq-rail-logo"
+              data-action="expand-nav"
+              type="button"
+            >
+              <img
+                alt=""
+                aria-hidden="true"
+                src="/src/renderer/design/assets/logo/inquello-symbol.svg"
+              />
+            </button>
+            <span
+              aria-hidden="true"
+              class="iq-rail-tip"
+            >
+              Close navigation
+            </span>
+          </span>
+          <span
+            class="iq-rail-item"
+          >
+            <span
+              class="iq-action"
+            >
+              <button
+                aria-label="Engagements"
+                class="iq-icon-button iq-icon-button--ghost"
+                data-rail-workspace="22222222-2222-4222-8222-222222222222"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  fill="none"
+                  focusable="false"
+                  height="16"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.75"
+                  style="display: block; flex: 0 0 auto;"
+                  viewBox="0 0 24 24"
+                  width="16"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
+                  />
+                </svg>
+              </button>
+            </span>
+            <span
+              aria-hidden="true"
+              class="iq-rail-tip"
+            >
+              Engagements
+            </span>
+          </span>
+          <span
+            class="iq-rail-item"
+          >
+            <span
+              class="iq-rail-count"
+            >
+              <span
+                class="iq-action"
+              >
+                <button
+                  aria-label="Inbox · attention unavailable"
+                  class="iq-icon-button iq-icon-button--ghost"
+                  type="button"
+                >
+                  <svg
+                    aria-hidden="true"
+                    fill="none"
+                    focusable="false"
+                    height="16"
+                    stroke="currentColor"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="1.75"
+                    style="display: block; flex: 0 0 auto;"
+                    viewBox="0 0 24 24"
+                    width="16"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <polyline
+                      points="22 12 16 12 14 15 10 15 8 12 2 12"
+                    />
+                    <path
+                      d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+                    />
+                  </svg>
+                </button>
+              </span>
+              <span
+                aria-hidden="true"
+                class="iq-inbox-unavailable"
+              >
+                !
+              </span>
+            </span>
+            <span
+              aria-hidden="true"
+              class="iq-rail-tip"
+            >
+              Inbox · attention unavailable
+            </span>
+          </span>
+          <span
+            class="iq-rail-item"
+          >
+            <span
+              class="iq-rail-count"
+            >
+              <span
+                class="iq-action"
+              >
+                <button
+                  aria-current="true"
+                  aria-label="Tasks"
+                  class="iq-icon-button iq-icon-button--active"
+                  data-rail-surface="tasks"
+                  t...
+ ❯ waitForWrapper node_modules/.pnpm/@testing-library+dom@10.4.2/node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ node_modules/.pnpm/@testing-library+dom@10.4.2/node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ test/navigation-recovery-shell.test.tsx:27:29
+     25|   expect(await screen.findByRole('link',{name:permittedTask.title})).t…
+     26|   expect(document.querySelector('[data-task-view]')).toBeNull();
+     27|   const button=await screen.findByRole('button',{name:'Refresh workspa…
+       |                             ^
+     28|   expect(h.recoverNavigation).not.toHaveBeenCalled();expect(document.b…
+     29|   const draft=await screen.findByRole('textbox');await user.type(draft…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/5]⎯
+
+ FAIL  test/navigation-recovery-shell.test.tsx > explicit recovery from a partial tree with no open Task > preserves refusal without claiming hidden work was restored or reading it again
+TestingLibraryElementError: Unable to find role="button" and name "Refresh workspace"
+
+Ignored nodes: comments, script, style
+<body>
+  <div>
+    <div
+      class="iq-shell iq-shell--full iq-shell--nav-sidebar"
+      data-artifact-fits="true"
+      data-artifact-open="false"
+      data-layout-mode="full"
+      data-nav-presentation="sidebar"
+      data-shell="true"
+      data-work-view="conversation"
+      style="--iq-thread-min-width: 480px; --sidebar-width: 320px;"
+    >
+      <nav
+        aria-label="Workspace navigation"
+        class="iq-sidebar iq-sidebar--sidebar"
+        data-nav-presentation="sidebar"
+        data-shared-service="available"
+        data-sidebar="true"
+        data-sidebar-state="ready"
+      >
+        <div
+          class="iq-rail"
+          data-rail="true"
+        >
+          <span
+            class="iq-rail-item"
+          >
+            <button
+              aria-expanded="true"
+              aria-label="Close navigation"
+              class="iq-rail-logo"
+              data-action="expand-nav"
+              type="button"
+            >
+              <img
+                alt=""
+                aria-hidden="true"
+                src="/src/renderer/design/assets/logo/inquello-symbol.svg"
+              />
+            </button>
+            <span
+              aria-hidden="true"
+              class="iq-rail-tip"
+            >
+              Close navigation
+            </span>
+          </span>
+          <span
+            class="iq-rail-item"
+          >
+            <span
+              class="iq-action"
+            >
+              <button
+                aria-label="Engagements"
+                class="iq-icon-button iq-icon-button--ghost"
+                data-rail-workspace="22222222-2222-4222-8222-222222222222"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  fill="none"
+                  focusable="false"
+                  height="16"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.75"
+                  style="display: block; flex: 0 0 auto;"
+                  viewBox="0 0 24 24"
+                  width="16"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
+                  />
+                </svg>
+              </button>
+            </span>
+            <span
+              aria-hidden="true"
+              class="iq-rail-tip"
+            >
+              Engagements
+            </span>
+          </span>
+          <span
+            class="iq-rail-item"
+          >
+            <span
+              class="iq-rail-count"
+            >
+              <span
+                class="iq-action"
+              >
+                <button
+                  aria-label="Inbox · attention unavailable"
+                  class="iq-icon-button iq-icon-button--ghost"
+                  type="button"
+                >
+                  <svg
+                    aria-hidden="true"
+                    fill="none"
+                    focusable="false"
+                    height="16"
+                    stroke="currentColor"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="1.75"
+                    style="display: block; flex: 0 0 auto;"
+                    viewBox="0 0 24 24"
+                    width="16"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <polyline
+                      points="22 12 16 12 14 15 10 15 8 12 2 12"
+                    />
+                    <path
+                      d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+                    />
+                  </svg>
+                </button>
+              </span>
+              <span
+                aria-hidden="true"
+                class="iq-inbox-unavailable"
+              >
+                !
+              </span>
+            </span>
+            <span
+              aria-hidden="true"
+              class="iq-rail-tip"
+            >
+              Inbox · attention unavailable
+            </span>
+          </span>
+          <span
+            class="iq-rail-item"
+          >
+            <span
+              class="iq-rail-count"
+            >
+              <span
+                class="iq-action"
+              >
+                <button
+                  aria-current="true"
+                  aria-label="Tasks"
+                  class="iq-icon-button iq-icon-button--active"
+                  data-rail-surface="tasks"
+                  t...
+
+Ignored nodes: comments, script, style
+<body>
+  <div>
+    <div
+      class="iq-shell iq-shell--full iq-shell--nav-sidebar"
+      data-artifact-fits="true"
+      data-artifact-open="false"
+      data-layout-mode="full"
+      data-nav-presentation="sidebar"
+      data-shell="true"
+      data-work-view="conversation"
+      style="--iq-thread-min-width: 480px; --sidebar-width: 320px;"
+    >
+      <nav
+        aria-label="Workspace navigation"
+        class="iq-sidebar iq-sidebar--sidebar"
+        data-nav-presentation="sidebar"
+        data-shared-service="available"
+        data-sidebar="true"
+        data-sidebar-state="ready"
+      >
+        <div
+          class="iq-rail"
+          data-rail="true"
+        >
+          <span
+            class="iq-rail-item"
+          >
+            <button
+              aria-expanded="true"
+              aria-label="Close navigation"
+              class="iq-rail-logo"
+              data-action="expand-nav"
+              type="button"
+            >
+              <img
+                alt=""
+                aria-hidden="true"
+                src="/src/renderer/design/assets/logo/inquello-symbol.svg"
+              />
+            </button>
+            <span
+              aria-hidden="true"
+              class="iq-rail-tip"
+            >
+              Close navigation
+            </span>
+          </span>
+          <span
+            class="iq-rail-item"
+          >
+            <span
+              class="iq-action"
+            >
+              <button
+                aria-label="Engagements"
+                class="iq-icon-button iq-icon-button--ghost"
+                data-rail-workspace="22222222-2222-4222-8222-222222222222"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  fill="none"
+                  focusable="false"
+                  height="16"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.75"
+                  style="display: block; flex: 0 0 auto;"
+                  viewBox="0 0 24 24"
+                  width="16"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
+                  />
+                </svg>
+              </button>
+            </span>
+            <span
+              aria-hidden="true"
+              class="iq-rail-tip"
+            >
+              Engagements
+            </span>
+          </span>
+          <span
+            class="iq-rail-item"
+          >
+            <span
+              class="iq-rail-count"
+            >
+              <span
+                class="iq-action"
+              >
+                <button
+                  aria-label="Inbox · attention unavailable"
+                  class="iq-icon-button iq-icon-button--ghost"
+                  type="button"
+                >
+                  <svg
+                    aria-hidden="true"
+                    fill="none"
+                    focusable="false"
+                    height="16"
+                    stroke="currentColor"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="1.75"
+                    style="display: block; flex: 0 0 auto;"
+                    viewBox="0 0 24 24"
+                    width="16"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <polyline
+                      points="22 12 16 12 14 15 10 15 8 12 2 12"
+                    />
+                    <path
+                      d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+                    />
+                  </svg>
+                </button>
+              </span>
+              <span
+                aria-hidden="true"
+                class="iq-inbox-unavailable"
+              >
+                !
+              </span>
+            </span>
+            <span
+              aria-hidden="true"
+              class="iq-rail-tip"
+            >
+              Inbox · attention unavailable
+            </span>
+          </span>
+          <span
+            class="iq-rail-item"
+          >
+            <span
+              class="iq-rail-count"
+            >
+              <span
+                class="iq-action"
+              >
+                <button
+                  aria-current="true"
+                  aria-label="Tasks"
+                  class="iq-icon-button iq-icon-button--active"
+                  data-rail-surface="tasks"
+                  t...
+ ❯ waitForWrapper node_modules/.pnpm/@testing-library+dom@10.4.2/node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ node_modules/.pnpm/@testing-library+dom@10.4.2/node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ test/navigation-recovery-shell.test.tsx:37:72
+     35|  });
+     36|  it('preserves refusal without claiming hidden work was restored or re…
+     37|   const h=setup(true),user=userEvent.setup();const button=await screen…
+       |                                                                        ^
+     38|   h.recoverNavigation.mockResolvedValueOnce({ok:false,code:'failed',re…
+     39|   await user.click(button);await screen.findByText(/Workspace access c…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/5]⎯
+
+ FAIL  test/navigation-recovery-shell.test.tsx > explicit recovery from a partial tree with no open Task > suppresses repeated activation while the same explicit check is pending
+TestingLibraryElementError: Unable to find role="button" and name "Refresh workspace"
+
+Ignored nodes: comments, script, style
+<body>
+  <div>
+    <div
+      class="iq-shell iq-shell--full iq-shell--nav-sidebar"
+      data-artifact-fits="true"
+      data-artifact-open="false"
+      data-layout-mode="full"
+      data-nav-presentation="sidebar"
+      data-shell="true"
+      data-work-view="conversation"
+      style="--iq-thread-min-width: 480px; --sidebar-width: 320px;"
+    >
+      <nav
+        aria-label="Workspace navigation"
+        class="iq-sidebar iq-sidebar--sidebar"
+        data-nav-presentation="sidebar"
+        data-shared-service="available"
+        data-sidebar="true"
+        data-sidebar-state="ready"
+      >
+        <div
+          class="iq-rail"
+          data-rail="true"
+        >
+          <span
+            class="iq-rail-item"
+          >
+            <button
+              aria-expanded="true"
+              aria-label="Close navigation"
+              class="iq-rail-logo"
+              data-action="expand-nav"
+              type="button"
+            >
+              <img
+                alt=""
+                aria-hidden="true"
+                src="/src/renderer/design/assets/logo/inquello-symbol.svg"
+              />
+            </button>
+            <span
+              aria-hidden="true"
+              class="iq-rail-tip"
+            >
+              Close navigation
+            </span>
+          </span>
+          <span
+            class="iq-rail-item"
+          >
+            <span
+              class="iq-action"
+            >
+              <button
+                aria-label="Engagements"
+                class="iq-icon-button iq-icon-button--ghost"
+                data-rail-workspace="22222222-2222-4222-8222-222222222222"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  fill="none"
+                  focusable="false"
+                  height="16"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.75"
+                  style="display: block; flex: 0 0 auto;"
+                  viewBox="0 0 24 24"
+                  width="16"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
+                  />
+                </svg>
+              </button>
+            </span>
+            <span
+              aria-hidden="true"
+              class="iq-rail-tip"
+            >
+              Engagements
+            </span>
+          </span>
+          <span
+            class="iq-rail-item"
+          >
+            <span
+              class="iq-rail-count"
+            >
+              <span
+                class="iq-action"
+              >
+                <button
+                  aria-label="Inbox · attention unavailable"
+                  class="iq-icon-button iq-icon-button--ghost"
+                  type="button"
+                >
+                  <svg
+                    aria-hidden="true"
+                    fill="none"
+                    focusable="false"
+                    height="16"
+                    stroke="currentColor"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="1.75"
+                    style="display: block; flex: 0 0 auto;"
+                    viewBox="0 0 24 24"
+                    width="16"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <polyline
+                      points="22 12 16 12 14 15 10 15 8 12 2 12"
+                    />
+                    <path
+                      d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+                    />
+                  </svg>
+                </button>
+              </span>
+              <span
+                aria-hidden="true"
+                class="iq-inbox-unavailable"
+              >
+                !
+              </span>
+            </span>
+            <span
+              aria-hidden="true"
+              class="iq-rail-tip"
+            >
+              Inbox · attention unavailable
+            </span>
+          </span>
+          <span
+            class="iq-rail-item"
+          >
+            <span
+              class="iq-rail-count"
+            >
+              <span
+                class="iq-action"
+              >
+                <button
+                  aria-current="true"
+                  aria-label="Tasks"
+                  class="iq-icon-button iq-icon-button--active"
+                  data-rail-surface="tasks"
+                  t...
+
+Ignored nodes: comments, script, style
+<body>
+  <div>
+    <div
+      class="iq-shell iq-shell--full iq-shell--nav-sidebar"
+      data-artifact-fits="true"
+      data-artifact-open="false"
+      data-layout-mode="full"
+      data-nav-presentation="sidebar"
+      data-shell="true"
+      data-work-view="conversation"
+      style="--iq-thread-min-width: 480px; --sidebar-width: 320px;"
+    >
+      <nav
+        aria-label="Workspace navigation"
+        class="iq-sidebar iq-sidebar--sidebar"
+        data-nav-presentation="sidebar"
+        data-shared-service="available"
+        data-sidebar="true"
+        data-sidebar-state="ready"
+      >
+        <div
+          class="iq-rail"
+          data-rail="true"
+        >
+          <span
+            class="iq-rail-item"
+          >
+            <button
+              aria-expanded="true"
+              aria-label="Close navigation"
+              class="iq-rail-logo"
+              data-action="expand-nav"
+              type="button"
+            >
+              <img
+                alt=""
+                aria-hidden="true"
+                src="/src/renderer/design/assets/logo/inquello-symbol.svg"
+              />
+            </button>
+            <span
+              aria-hidden="true"
+              class="iq-rail-tip"
+            >
+              Close navigation
+            </span>
+          </span>
+          <span
+            class="iq-rail-item"
+          >
+            <span
+              class="iq-action"
+            >
+              <button
+                aria-label="Engagements"
+                class="iq-icon-button iq-icon-button--ghost"
+                data-rail-workspace="22222222-2222-4222-8222-222222222222"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  fill="none"
+                  focusable="false"
+                  height="16"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.75"
+                  style="display: block; flex: 0 0 auto;"
+                  viewBox="0 0 24 24"
+                  width="16"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
+                  />
+                </svg>
+              </button>
+            </span>
+            <span
+              aria-hidden="true"
+              class="iq-rail-tip"
+            >
+              Engagements
+            </span>
+          </span>
+          <span
+            class="iq-rail-item"
+          >
+            <span
+              class="iq-rail-count"
+            >
+              <span
+                class="iq-action"
+              >
+                <button
+                  aria-label="Inbox · attention unavailable"
+                  class="iq-icon-button iq-icon-button--ghost"
+                  type="button"
+                >
+                  <svg
+                    aria-hidden="true"
+                    fill="none"
+                    focusable="false"
+                    height="16"
+                    stroke="currentColor"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="1.75"
+                    style="display: block; flex: 0 0 auto;"
+                    viewBox="0 0 24 24"
+                    width="16"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <polyline
+                      points="22 12 16 12 14 15 10 15 8 12 2 12"
+                    />
+                    <path
+                      d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+                    />
+                  </svg>
+                </button>
+              </span>
+              <span
+                aria-hidden="true"
+                class="iq-inbox-unavailable"
+              >
+                !
+              </span>
+            </span>
+            <span
+              aria-hidden="true"
+              class="iq-rail-tip"
+            >
+              Inbox · attention unavailable
+            </span>
+          </span>
+          <span
+            class="iq-rail-item"
+          >
+            <span
+              class="iq-rail-count"
+            >
+              <span
+                class="iq-action"
+              >
+                <button
+                  aria-current="true"
+                  aria-label="Tasks"
+                  class="iq-icon-button iq-icon-button--active"
+                  data-rail-surface="tasks"
+                  t...
+ ❯ waitForWrapper node_modules/.pnpm/@testing-library+dom@10.4.2/node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ node_modules/.pnpm/@testing-library+dom@10.4.2/node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ test/navigation-recovery-shell.test.tsx:44:72
+     42|  });
+     43|  it('suppresses repeated activation while the same explicit check is p…
+     44|   const h=setup(true),user=userEvent.setup();const button=await screen…
+       |                                                                        ^
+     45|   let resolve!:(value:unknown)=>void;h.recoverNavigation.mockImplement…
+     46|   await user.dblClick(button);expect(h.recoverNavigation).toHaveBeenCa…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/5]⎯
+
+ FAIL  test/navigation-recovery-shell.test.tsx > explicit recovery from a partial tree with no open Task > discards late partial-tree recovery after current identity changes
+ FAIL  test/navigation-recovery-shell.test.tsx > explicit recovery from a partial tree with no open Task > discards late partial-tree recovery after current workspace changes
+TestingLibraryElementError: Unable to find role="button" and name "Refresh workspace"
+
+Ignored nodes: comments, script, style
+<body>
+  <div>
+    <div
+      class="iq-shell iq-shell--full iq-shell--nav-sidebar"
+      data-artifact-fits="true"
+      data-artifact-open="false"
+      data-layout-mode="full"
+      data-nav-presentation="sidebar"
+      data-shell="true"
+      data-work-view="conversation"
+      style="--iq-thread-min-width: 480px; --sidebar-width: 320px;"
+    >
+      <nav
+        aria-label="Workspace navigation"
+        class="iq-sidebar iq-sidebar--sidebar"
+        data-nav-presentation="sidebar"
+        data-shared-service="available"
+        data-sidebar="true"
+        data-sidebar-state="ready"
+      >
+        <div
+          class="iq-rail"
+          data-rail="true"
+        >
+          <span
+            class="iq-rail-item"
+          >
+            <button
+              aria-expanded="true"
+              aria-label="Close navigation"
+              class="iq-rail-logo"
+              data-action="expand-nav"
+              type="button"
+            >
+              <img
+                alt=""
+                aria-hidden="true"
+                src="/src/renderer/design/assets/logo/inquello-symbol.svg"
+              />
+            </button>
+            <span
+              aria-hidden="true"
+              class="iq-rail-tip"
+            >
+              Close navigation
+            </span>
+          </span>
+          <span
+            class="iq-rail-item"
+          >
+            <span
+              class="iq-action"
+            >
+              <button
+                aria-label="Engagements"
+                class="iq-icon-button iq-icon-button--ghost"
+                data-rail-workspace="22222222-2222-4222-8222-222222222222"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  fill="none"
+                  focusable="false"
+                  height="16"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.75"
+                  style="display: block; flex: 0 0 auto;"
+                  viewBox="0 0 24 24"
+                  width="16"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
+                  />
+                </svg>
+              </button>
+            </span>
+            <span
+              aria-hidden="true"
+              class="iq-rail-tip"
+            >
+              Engagements
+            </span>
+          </span>
+          <span
+            class="iq-rail-item"
+          >
+            <span
+              class="iq-rail-count"
+            >
+              <span
+                class="iq-action"
+              >
+                <button
+                  aria-label="Inbox · attention unavailable"
+                  class="iq-icon-button iq-icon-button--ghost"
+                  type="button"
+                >
+                  <svg
+                    aria-hidden="true"
+                    fill="none"
+                    focusable="false"
+                    height="16"
+                    stroke="currentColor"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="1.75"
+                    style="display: block; flex: 0 0 auto;"
+                    viewBox="0 0 24 24"
+                    width="16"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <polyline
+                      points="22 12 16 12 14 15 10 15 8 12 2 12"
+                    />
+                    <path
+                      d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+                    />
+                  </svg>
+                </button>
+              </span>
+              <span
+                aria-hidden="true"
+                class="iq-inbox-unavailable"
+              >
+                !
+              </span>
+            </span>
+            <span
+              aria-hidden="true"
+              class="iq-rail-tip"
+            >
+              Inbox · attention unavailable
+            </span>
+          </span>
+          <span
+            class="iq-rail-item"
+          >
+            <span
+              class="iq-rail-count"
+            >
+              <span
+                class="iq-action"
+              >
+                <button
+                  aria-current="true"
+                  aria-label="Tasks"
+                  class="iq-icon-button iq-icon-button--active"
+                  data-rail-surface="tasks"
+                  t...
+
+Ignored nodes: comments, script, style
+<body>
+  <div>
+    <div
+      class="iq-shell iq-shell--full iq-shell--nav-sidebar"
+      data-artifact-fits="true"
+      data-artifact-open="false"
+      data-layout-mode="full"
+      data-nav-presentation="sidebar"
+      data-shell="true"
+      data-work-view="conversation"
+      style="--iq-thread-min-width: 480px; --sidebar-width: 320px;"
+    >
+      <nav
+        aria-label="Workspace navigation"
+        class="iq-sidebar iq-sidebar--sidebar"
+        data-nav-presentation="sidebar"
+        data-shared-service="available"
+        data-sidebar="true"
+        data-sidebar-state="ready"
+      >
+        <div
+          class="iq-rail"
+          data-rail="true"
+        >
+          <span
+            class="iq-rail-item"
+          >
+            <button
+              aria-expanded="true"
+              aria-label="Close navigation"
+              class="iq-rail-logo"
+              data-action="expand-nav"
+              type="button"
+            >
+              <img
+                alt=""
+                aria-hidden="true"
+                src="/src/renderer/design/assets/logo/inquello-symbol.svg"
+              />
+            </button>
+            <span
+              aria-hidden="true"
+              class="iq-rail-tip"
+            >
+              Close navigation
+            </span>
+          </span>
+          <span
+            class="iq-rail-item"
+          >
+            <span
+              class="iq-action"
+            >
+              <button
+                aria-label="Engagements"
+                class="iq-icon-button iq-icon-button--ghost"
+                data-rail-workspace="22222222-2222-4222-8222-222222222222"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  fill="none"
+                  focusable="false"
+                  height="16"
+                  stroke="currentColor"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="1.75"
+                  style="display: block; flex: 0 0 auto;"
+                  viewBox="0 0 24 24"
+                  width="16"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
+                  />
+                </svg>
+              </button>
+            </span>
+            <span
+              aria-hidden="true"
+              class="iq-rail-tip"
+            >
+              Engagements
+            </span>
+          </span>
+          <span
+            class="iq-rail-item"
+          >
+            <span
+              class="iq-rail-count"
+            >
+              <span
+                class="iq-action"
+              >
+                <button
+                  aria-label="Inbox · attention unavailable"
+                  class="iq-icon-button iq-icon-button--ghost"
+                  type="button"
+                >
+                  <svg
+                    aria-hidden="true"
+                    fill="none"
+                    focusable="false"
+                    height="16"
+                    stroke="currentColor"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="1.75"
+                    style="display: block; flex: 0 0 auto;"
+                    viewBox="0 0 24 24"
+                    width="16"
+                    xmlns="http://www.w3.org/2000/svg"
+                  >
+                    <polyline
+                      points="22 12 16 12 14 15 10 15 8 12 2 12"
+                    />
+                    <path
+                      d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+                    />
+                  </svg>
+                </button>
+              </span>
+              <span
+                aria-hidden="true"
+                class="iq-inbox-unavailable"
+              >
+                !
+              </span>
+            </span>
+            <span
+              aria-hidden="true"
+              class="iq-rail-tip"
+            >
+              Inbox · attention unavailable
+            </span>
+          </span>
+          <span
+            class="iq-rail-item"
+          >
+            <span
+              class="iq-rail-count"
+            >
+              <span
+                class="iq-action"
+              >
+                <button
+                  aria-current="true"
+                  aria-label="Tasks"
+                  class="iq-icon-button iq-icon-button--active"
+                  data-rail-surface="tasks"
+                  t...
+ ❯ waitForWrapper node_modules/.pnpm/@testing-library+dom@10.4.2/node_modules/@testing-library/dom/dist/wait-for.js:163:27
+ ❯ node_modules/.pnpm/@testing-library+dom@10.4.2/node_modules/@testing-library/dom/dist/query-helpers.js:86:33
+ ❯ test/navigation-recovery-shell.test.tsx:52:72
+     50|  });
+     51|  it.each(['identity','workspace'] as const)('discards late partial-tre…
+     52|   const h=setup(true),user=userEvent.setup();const button=await screen…
+       |                                                                        ^
+     53|   let resolve!:(value:unknown)=>void;h.recoverNavigation.mockImplement…
+     54|   await user.click(button);await waitFor(()=>expect(h.recoverNavigatio…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/5]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  5 failed | 4 passed (9)
+   Start at  21:12:41
+   Duration  13.14s (tests 43%, environment 35%, import 16%, transform 6%)
+
